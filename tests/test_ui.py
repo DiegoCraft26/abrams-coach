@@ -81,6 +81,18 @@ def main():
     if not (os.environ.get("WAYLAND_DISPLAY") or os.environ.get("DISPLAY")):
         print("  (saltado: sin servidor gráfico)")
     else:
+        # Si hay coach corriendo se exige una captura con contenido (más pesada); si no,
+        # basta con que la ventana se pinte y se avisa de que está vacía.
+        try:
+            import urllib.request
+            with urllib.request.urlopen("http://127.0.0.1:8090/api/estado", timeout=2):
+                con_datos = True
+        except Exception:                                # noqa: BLE001
+            con_datos = False
+        minimo_kb = 60 if con_datos else 20
+        print(f"  (servidor con datos: {'sí' if con_datos else 'no'}; "
+              f"mínimo {minimo_kb} KB por captura)")
+
         with tempfile.TemporaryDirectory() as tmp:
             cmd = [sys.executable, os.path.join(RAIZ, "herramientas", "capturar_ui.py"),
                    "--salida", tmp, "--tamanos", ",".join(TAMANOS)]
@@ -99,7 +111,7 @@ def main():
                     for tam in TAMANOS:
                         ruta_png = os.path.join(tmp, f"ui-{tam}.png")
                         peso = os.path.getsize(ruta_png) if os.path.exists(ruta_png) else 0
-                        if peso < 20_000:
+                        if peso < minimo_kb * 1024:
                             print(f"  FALLA {tam}: PNG ausente o vacío ({peso} B)")
                             fallos += 1
                         else:

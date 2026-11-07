@@ -49,6 +49,18 @@ def main():
                     help="abre el copiloto y le hace esta pregunta antes de capturar")
     a = ap.parse_args()
 
+    # Aviso honesto: sin servidor el panel pinta su estado vacío y la captura no vale
+    # como prueba de contenido (sí como prueba de que la ventana se construye).
+    import json as _json
+    import urllib.request as _url
+    try:
+        with _url.urlopen(a.url.rstrip("/") + "/api/estado", timeout=3) as r:
+            _json.load(r)
+        print(f"servidor con datos: {a.url}")
+    except Exception:                                    # noqa: BLE001
+        print(f"AVISO: no hay servidor con datos en {a.url}: "
+              f"las capturas saldrán con el panel vacío")
+
     os.makedirs(a.salida, exist_ok=True)
     tamanos = []
     for trozo in a.tamanos.split(","):
