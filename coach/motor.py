@@ -2,7 +2,7 @@
 import json
 import os
 
-from .decision import explicador, patrones, situacionales
+from .decision import explicador, heroe as heroes, patrones, situacionales
 from .estado import Estado
 
 _RAIZ = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -215,7 +215,10 @@ def fase_flujo(t_s, conoc):
     return actual, mezcla
 
 
-def apertura_ids(conoc):
+def apertura_ids(conoc, heroe=None):
+    """Ítems de apertura: primero los del héroe, si no los de la base general."""
+    if heroe is not None and heroe.apertura:
+        return set(heroe.apertura)
     return {a["id"] for a in (conoc.get("flujo") or {}).get("apertura", [])}
 
 
@@ -236,7 +239,7 @@ def peso_apertura(t_s, cfg=CFG_DEFECTO):
     return (hasta - t_s) / (hasta - desde)
 
 
-def candidatos(estado: Estado, conoc, cat, cfg=CFG_DEFECTO, limite=3):
+def candidatos(estado: Estado, conoc, cat, cfg=CFG_DEFECTO, limite=3, heroe=None):
     econ = economia(estado)
     almas = estado.yo.almas or 0
     poseidos = {str(i) for i in estado.yo.items}
@@ -252,11 +255,11 @@ def candidatos(estado: Estado, conoc, cat, cfg=CFG_DEFECTO, limite=3):
     # 10 s, "casi el mismo momento" da exactamente la misma recomendación.
     t_efectivo = (int(max(0.0, float(estado.t))) // 10) * 10.0
     col, en_fase = fase_flujo(t_efectivo, conoc)
-    apertura = apertura_ids(conoc)
+    apertura = apertura_ids(conoc, heroe)
     peso_ap = peso_apertura(t_efectivo, cfg) if apertura else 0.0
 
     # --- contexto de fase económica (power spikes del build de Abrams) ---
-    hito = patrones.hito_siguiente(almas)
+    hito = patrones.hito_siguiente(almas, heroe)
     faltan_fase = (hito - almas) if hito else 0
     pct_vs_enemigos = econ.get("delta_pct")
     atras = (pct_vs_enemigos is not None and pct_vs_enemigos <= -cfg["umbral_ventaja"])
@@ -364,7 +367,7 @@ def candidatos(estado: Estado, conoc, cat, cfg=CFG_DEFECTO, limite=3):
             contexto=ctx_razones.get(iid), presupuesto=(
                 f"cabe en lo que falta para el hito de {hito:,} almas" if (
                     hito and costo <= faltan_fase) else None),
-            t_s=t_efectivo, almas=almas, faltan_fase=faltan_fase)
+            t_s=t_efectivo, almas=almas, faltan_fase=faltan_fase, heroe=heroe)
 
         filas.append({"id": iid, "nombre": d["nombre"], "costo": costo, "slot": slot,
                       "score": round(score, 4), "residual": residual, "n": d["n"],
@@ -443,11 +446,14 @@ def sugerir_venta(estado: Estado, conoc, cat, cfg=CFG_DEFECTO):
 
 def recomendar(estado: Estado, conoc, cat, cfg=None):
     cfg = cfg or CFG_DEFECTO
+    # El héroe sale del estado. Si no hay datos suyos en data/heroes/, se usan los de
+    # Abrams: la app nunca se queda sin decidir.
+    h = heroes.cargar(estado.yo.heroe or "abrams")
     econ = economia(estado)
     tactico = estado_tactico(estado, econ, cfg)
     # 10 candidatos: el panel filtra por oro y así puede ofrecer algo comprable
     # en vez de enseñar siempre un tier 4 que no alcanza.
-    top, _ = candidatos(estado, conoc, cat, cfg, limite=10)
+    top, _ = candidatos(estado, conoc, cat, cfg, limite=10, heroe=h)
     venta = sugerir_venta(estado, conoc, cat, cfg)
     # objetivo: lo mejor que todavía no puedes pagar
     objetivo = None
@@ -494,7 +500,7 @@ def recomendar(estado: Estado, conoc, cat, cfg=None):
         inventario.append({"id": str(iid), "nombre": info["nombre"],
                            "valor": round(info["lift_residual"]*100, 2),
                            "slot": info["slot"], "icono": f"/icono/{iid}"})
-    contexto_fase = explicador.explicar_estado(econ, tactico, estado.t, estado.yo.almas)
+    contexto_fase = explicador.explicar_estado(econ, tactico, estado.t, estado.yo.almas, h)
     # Consejo de composición: va aparte del ranking porque los datos de residual de estos
     # ítems son negativos (los compra quien va perdiendo). Se muestran con su fuente.
     contra = situacionales.sugerencias_composicion(
@@ -504,7 +510,8 @@ def recomendar(estado: Estado, conoc, cat, cfg=None):
         "estado": tactico,
         "contexto_fase": contexto_fase,
         "contra_composicion": contra,
-        "fase_economica": patrones.fase_economica(estado.yo.almas),
+        "fase_economica": patrones.fase_economica(estado.yo.almas, h),
+        "heroe_datos": h.datos.get("clave") if hasattr(h, "datos") else None,
         "economia": econ,
         "recomendaciones": top,
         "venta": venta,

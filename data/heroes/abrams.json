@@ -1,0 +1,16 @@
+{
+  "id": 6,
+  "nombre": "Abrams",
+  "clave": "abrams",
+  "apertura": {
+    "items": ["3862866912", "1437614329", "1342610602", "4139877411", "4204808176"],
+    "fuente": "https://deadlocked.gg/heroes/abrams/",
+    "fecha": "2026-11-07"
+  },
+  "hitos_almas": [[600, 7600], [1500, 25000]],
+  "hitos_fuente": "https://blitz.gg/tr/deadlock/heroes/abrams/builds (build del 2026-10-31)",
+  "fases": [["EARLY", 8000], ["MID", 13600], ["LATE", 22400]],
+  "fases_fuente": "https://deadlocked.gg/heroes/abrams/ (parche 2026-10-30)",
+  "ritmo_esperado_por_min": 1000,
+  "notas": "Solo Abrams por ahora. Para otro héroe hace falta su apertura, sus hitos y sus counters medidos con al menos 500 partidas."
+}

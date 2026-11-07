@@ -16,11 +16,12 @@ Fuentes (consultadas el 2026-11-07):
     https://deadlock-boosting.com/blog/deadlock-spawn-times
 """
 
-# Hitos de almas del build de Abrams, medidos sobre builds reales.
-HITOS = ((600, 7600), (1500, 25000))          # (segundo de partida, almas esperadas)
+from . import heroe as _heroe
 
-# Fases por coste total acumulado (deadlocked.gg, 2026-10-30).
-FASES = (("EARLY", 8000), ("MID", 13600), ("LATE", 22400))
+# Hitos y fases salen de `data/heroes/<clave>.json`. Se mantienen los nombres HITOS y
+# FASES por compatibilidad con lo que ya los importaba.
+HITOS = _heroe.cargar("abrams").hitos
+FASES = _heroe.cargar("abrams").fases
 
 # Economía por evento (almas). Se usan para traducir déficits a objetivos.
 ECONOMIA = {
@@ -36,44 +37,46 @@ ECONOMIA = {
 }
 
 
-def benchmark_almas(t_s):
+def benchmark_almas(t_s, heroe=None):
     """Almas que un build de Abrams debería tener en el segundo t (interpolado).
 
     Es una referencia de comunidad (Blitz.gg), no una verdad del juego: se usa para decir
     "vas por debajo del build", nunca para decidir por sí sola.
     """
+    hitos = heroe.hitos if heroe is not None else HITOS
     t = max(0.0, float(t_s or 0))
-    if t <= HITOS[0][0]:
-        return HITOS[0][1] * t / HITOS[0][0]
-    for (t0, a0), (t1, a1) in zip(HITOS, HITOS[1:]):
+    if t <= hitos[0][0]:
+        return hitos[0][1] * t / hitos[0][0]
+    for (t0, a0), (t1, a1) in zip(hitos, hitos[1:]):
         if t <= t1:
             return a0 + (a1 - a0) * (t - t0) / (t1 - t0)
-    return HITOS[-1][1]
+    return hitos[-1][1]
 
 
-def desvio(t_s, almas):
+def desvio(t_s, almas, heroe=None):
     """Cuánto se aparta el jugador del benchmark: positivo = por delante."""
     if almas is None:
         return None
-    return float(almas) - benchmark_almas(t_s)
+    return float(almas) - benchmark_almas(t_s, heroe)
 
 
-def fase_economica(almas):
+def fase_economica(almas, heroe=None):
     """EARLY / MID / LATE / CIERRE según el coste acumulado del build."""
     if almas is None:
         return "DESCONOCIDA"
+    fases = heroe.fases if heroe is not None else FASES
     valor = float(almas)
-    for nombre, tope in FASES:
+    for nombre, tope in fases:
         if valor < tope:
             return nombre
     return "CIERRE"
 
 
-def hito_siguiente(almas):
+def hito_siguiente(almas, heroe=None):
     """Almas del siguiente hito de build que aún no se alcanza (o None si ya está todo)."""
     if almas is None:
         return None
-    for _, tope in FASES:
+    for _, tope in (heroe.fases if heroe is not None else FASES):
         if float(almas) < tope:
             return tope
     return None

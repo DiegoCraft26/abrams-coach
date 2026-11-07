@@ -10,7 +10,8 @@ from . import patrones
 
 def razones(residual=0.0, counter=0.0, pareja=0.0, cadena=0.0, info_fase=None,
             min_compra=None, distancia_t=None, requiere_venta=False, slot="",
-            contexto=None, presupuesto=None, t_s=None, almas=None, faltan_fase=None):
+            contexto=None, presupuesto=None, t_s=None, almas=None, faltan_fase=None,
+            heroe=None):
     """Lista de razones legibles. Nunca vacía."""
     salida = []
 
@@ -36,14 +37,15 @@ def razones(residual=0.0, counter=0.0, pareja=0.0, cadena=0.0, info_fase=None,
 
     # Contexto de fase económica: ayuda a decidir cuándo parar de ahorrar.
     if t_s is not None and almas is not None:
-        fase = patrones.fase_economica(almas)
-        hito = patrones.hito_siguiente(almas)
-        desvio = patrones.desvio(t_s, almas)
+        fase = patrones.fase_economica(almas, heroe)
+        hito = patrones.hito_siguiente(almas, heroe)
+        desvio = patrones.desvio(t_s, almas, heroe)
         if faltan_fase is not None and faltan_fase > 0 and hito:
             salida.append(f"fase de build {fase}: faltan {int(faltan_fase):,} almas "
                           f"para el siguiente hito")
         elif desvio is not None and desvio > 0:
-            salida.append(f"vas {int(desvio):,} almas por delante del build de Abrams")
+            nombre_heroe = getattr(heroe, "nombre", "Abrams") if heroe else "Abrams"
+            salida.append(f"vas {int(desvio):,} almas por delante del build de {nombre_heroe}")
 
     if not salida:
         salida.append(f"lo mejor disponible ahora en {slot}: "
@@ -51,13 +53,13 @@ def razones(residual=0.0, counter=0.0, pareja=0.0, cadena=0.0, info_fase=None,
     return salida
 
 
-def explicar_estado(econ, tactico, t_s, almas):
+def explicar_estado(econ, tactico, t_s, almas, heroe=None):
     """Una línea de contexto para la tarjeta: fase de build y desvío del benchmark."""
     partes = []
-    fase = patrones.fase_economica(almas)
+    fase = patrones.fase_economica(almas, heroe)
     if fase != "DESCONOCIDA":
         partes.append(f"fase de build {fase} (por almas, no por minuto)")
-    desvio = patrones.desvio(t_s, almas)
+    desvio = patrones.desvio(t_s, almas, heroe)
     if desvio is not None:
         if desvio >= 0:
             partes.append(f"{int(desvio):,} almas por delante del build")

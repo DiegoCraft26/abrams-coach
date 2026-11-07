@@ -58,7 +58,7 @@ ya es genérico; lo que falta es el dato por héroe.
 
 | Paso | Qué | Salida medible |
 |---|---|---|
-| F4.1 | Separar `data/heroes/abrams.json` del código | el motor lee el héroe de la partida, no un nombre fijo |
+| F4.1 | ~~Separar `data/heroes/abrams.json` del código~~ | **hecho**: el motor lee el héroe del estado y cae a Abrams si no hay datos |
 | F4.2 | Segunda base: 3 héroes con datos completos | apertura, hitos y counters por héroe |
 | F4.3 | Selector de héroe en la app (auto por cuenta, manual si falla) | detecta el héroe del broadcast |
 | F4.4 | Cobertura de 10 héroes | ≥ 1,000 partidas reales por héroe |
