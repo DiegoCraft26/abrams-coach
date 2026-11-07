@@ -54,7 +54,10 @@ def main():
         os.unlink(ruta)
 
     print("breakpoints")
+    # En un runner sin GTK (CI de GitHub) estas dos partes se saltan y se dice. El gate
+    # completo solo corre en la máquina de desarrollo, que es donde se usa el panel.
     try:
+        import gi  # noqa: F401
         from coach.ui.app import ANCHO_AMPLIO, ANCHO_ANGOSTO, Panel
         casos = [(640, "angosto"), (800, "medio"), (1099, "medio"),
                  (1100, "amplio"), (1920, "amplio")]
@@ -66,6 +69,10 @@ def main():
         else:
             print(f"  ok   {len(casos)} anchos clasifican bien "
                   f"({ANCHO_ANGOSTO}/{ANCHO_AMPLIO})")
+    except ImportError:
+        print("  (saltado: PyGObject no está instalado en este entorno)")
+        print("\nui: OK parcial (sin GTK)")
+        return 0
     except Exception as exc:                                # noqa: BLE001
         print(f"  FALLA no se pudo importar el panel: {exc}")
         fallos += 1

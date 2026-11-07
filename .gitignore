@@ -30,3 +30,6 @@ experimentos/**/crops/
 # Grabaciones del juego: 5 GB, se quedan fuera del repo (solo se indexan en la BD).
 grabaciones/
 datos/coach.db
+
+# Registros de cada sesión: cambian en cada partida y su copia durable es la BD.
+salida/*.jsonl
