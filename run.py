@@ -242,7 +242,7 @@ def bucle_ocr(a, analizar):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--fuente", default="simulado", choices=["simulado", "ocr", "vivo"])
+    ap.add_argument("--fuente", default="simulado", choices=["simulado", "ocr", "vivo", "auto"])
     ap.add_argument("--puerto", type=int, default=8090)
     ap.add_argument("--captura", default="auto", choices=["auto", "bufer", "spectacle"],
                     help="fuente de imagen: reutilizar el bufer de pantalla o capturar aparte")
@@ -305,6 +305,19 @@ def main():
             time.sleep(max(0.2, a.intervalo))
     elif a.fuente == "vivo":
         bucle_vivo(a, analizar)
+    elif a.fuente == "auto":
+        # Decide al arrancar: si tu cuenta está en una partida, el broadcast da todo
+        # (almas por jugador, héroes, KDA) sin depender del marcador; si no, se lee la
+        # pantalla como siempre.
+        from coach import en_vivo
+        match = a.match or en_vivo.partida_activa(a.cuenta)
+        if match:
+            print(f"automático: partida en vivo {match} -> broadcast")
+            a.match = match
+            bucle_vivo(a, analizar)
+        else:
+            print("automático: sin partida en vivo -> lectura por pantalla")
+            bucle_ocr(a, analizar)
     else:
         bucle_ocr(a, analizar)
 
