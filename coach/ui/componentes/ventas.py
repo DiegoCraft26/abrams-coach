@@ -28,16 +28,14 @@ class Ventas(Gtk.Box):
             self.append(self.lbl_vacio)
             return
         caja = fila(8)
-        for tipo, ident, rotulo in (("sale", venta.get("vender"), "vende"),
-                                    ("entra", venta.get("comprar"), "entra")):
-            sub = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=2)
-            pb = pixbuf(ident, "items", 26)
+        for ident, rotulo in ((venta.get("vender"), "vende"), (venta.get("comprar"), "entra")):
+            pb = pixbuf(ident, "items", 22)
             icono = Gtk.Image.new_from_pixbuf(pb) if pb else Gtk.Image.new_from_icon_name("image-missing")
             if not pb:
-                icono.set_pixel_size(16)
-            sub.append(icono)
-            sub.append(etiqueta(rotulo, "t11 tenue"))
-            caja.append(sub)
+                icono.set_pixel_size(14)
+            icono.set_valign(Gtk.Align.START)
+            caja.append(icono)
+            caja.append(etiqueta(rotulo, "t11 tenue"))
         texto = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=2)
         texto.set_hexpand(True)
         motivo = etiqueta(venta.get("motivo") or "", "t12 tenue")

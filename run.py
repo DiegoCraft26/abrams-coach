@@ -524,7 +524,14 @@ def main():
 
     def analizar(d):
         e = m.estado_desde(d)
-        return con_historial(est.procesar(e, m.analizar_dict(d)))
+        salida = con_historial(est.procesar(e, m.analizar_dict(d)))
+        # El marcador de 12 almas se arma en un solo sitio: así el demo y las
+        # inyecciones de prueba muestran lo mismo que el modo vivo.
+        if not salida.get("almas_12"):
+            doce = ([e.yo.almas] + [j.almas for j in e.aliados]
+                    + [j.almas for j in e.enemigos])
+            salida["almas_12"] = (doce + [None] * 12)[:12]
+        return salida
 
     servidor.arrancar(a.puerto, analizador=analizar)
 

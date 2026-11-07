@@ -1,7 +1,8 @@
-"""Equipo: las almas de los 12 jugadores, en dos bloques claros.
+"""Tu equipo: los aliados con sus almas y KDA.
 
-Usa `almas_12` (el mismo campo que ya llenan los modos OCR y vivo) y, si el payload trae
-`aliados`, sus nombres y KDA. Nunca inventa: si solo hay 12 números, se muestran números.
+Los enemigos ya tienen su propia sección arriba, así que aquí solo van los compañeros.
+Antes se armaba partiendo `almas_12` en dos bloques de seis, y con equipos incompletos
+mezclaba rivales con aliados; ahora usa las listas de jugadores, que traen nombre.
 """
 from gi.repository import Gtk
 
@@ -9,36 +10,40 @@ from ..iconos import pixbuf
 from .base import etiqueta, fila, fmt_num, vaciar
 
 
+def _clave(heroe):
+    return str(heroe or "").lower().replace(" ", "_").replace("-", "_")
+
+
 class Equipo(Gtk.Box):
     def __init__(self):
         super().__init__(orientation=Gtk.Orientation.VERTICAL, spacing=4)
         self._firma = None
-        self.lbl_vacio = etiqueta("sin marcador", "vacio")
+        self.lbl_vacio = etiqueta("sin datos del equipo", "vacio")
         self.append(self.lbl_vacio)
 
     def actualizar(self, d):
-        doce = (d or {}).get("almas_12") or []
-        aliados = (d or {}).get("aliados") or []
-        firma = (tuple(doce), tuple(a.get("heroe") for a in aliados))
+        aliados = [a for a in ((d or {}).get("aliados") or []) if a.get("heroe") or a.get("almas")]
+        firma = tuple((a.get("heroe"), a.get("almas"), a.get("bajas")) for a in aliados)
         if firma == self._firma:
             return
         self._firma = firma
         vaciar(self)
-        if not any(x is not None for x in doce):
+        if not aliados:
             self.append(self.lbl_vacio)
             return
-        mios = [x for x in doce[1:6] if x is not None]
-        suyos = [x for x in doce[6:12] if x is not None]
-        self.append(self._bloque("ALIADOS", mios, "acento"))
-        self.append(self._bloque("ENEMIGOS", suyos, "error"))
-
-    def _bloque(self, rotulo, valores, clase):
-        caja = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=2)
-        caja.append(etiqueta(rotulo, "t11 tenue"))
-        linea = fila(6)
-        if not valores:
-            linea.append(etiqueta("—", "vacio"))
-        for v in valores:
-            linea.append(etiqueta(fmt_num(v), f"t12 num {clase}"))
-        caja.append(linea)
-        return caja
+        for a in aliados:
+            caja = fila(6)
+            pb = pixbuf(_clave(a.get("heroe")), "heroes", 22)
+            icono = Gtk.Image.new_from_pixbuf(pb) if pb else Gtk.Image.new_from_icon_name("avatar-default")
+            if not pb:
+                icono.set_pixel_size(14)
+            caja.append(icono)
+            nombre = etiqueta(str(a.get("heroe") or "?").capitalize(), "t12 fuerte")
+            nombre.set_size_request(70, -1)
+            nombre.set_ellipsize(3)
+            caja.append(nombre)
+            caja.append(etiqueta(fmt_num(a.get("almas")), "t12 num tenue"))
+            if a.get("bajas") is not None:
+                caja.append(etiqueta(f"· {a['bajas']}/{a.get('muertes', 0)}/"
+                                     f"{a.get('asistencias', 0)}", "t11 tenue"))
+            self.append(caja)

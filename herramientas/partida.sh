@@ -146,7 +146,13 @@ fin() {
   # config/coach.yaml). Si falla, se avisa y no se pierde la grabación.
   if python3 -c "import sys; sys.path.insert(0,'$BASE'); from coach.config import cargar; sys.exit(0 if cargar().flags.get('archivado_auto', True) else 1)" 2>/dev/null; then
     echo "Archivando partida en datos/coach.db…"
-    archivar || echo "AVISO: el archivado falló; los .jsonl siguen en salida/"
+    if archivar; then
+      # El informe se genera solo: sin teclado, como el resto de la app.
+      python3 "$BASE/herramientas/informe_partida.py" --ultimas 1 >/dev/null 2>&1 \
+        && echo "Informe: informes/partidas/ (la última partida)"
+    else
+      echo "AVISO: el archivado falló; los .jsonl siguen en salida/"
+    fi
   fi
   for f in "$PID_PANEL" "$PID_COACH"; do
     if vivo "$f"; then kill "$(cat "$f")" 2>/dev/null || true; rm -f "$f"; fi

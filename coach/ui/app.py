@@ -37,6 +37,7 @@ from .componentes.ventas import Ventas
 
 ANCHO_ANGOSTO = 760
 ANCHO_AMPLIO = 1100
+ALTO_COMPACTO = 720      # por debajo de esto se ocultan las secciones secundarias
 
 
 def _leer_css():
@@ -160,6 +161,10 @@ class Panel(Gtk.ApplicationWindow):
         caja.append(widget)
         return caja
 
+    def _es_compacto(self):
+        alto = self.get_height() or (self.get_default_size()[1] if self.get_default_size() else 0)
+        return bool(alto and alto < ALTO_COMPACTO)
+
     def _relleno(self):
         """Empuja el contenido hacia arriba cuando la ventana es más alta que el panel."""
         caja = Gtk.Box()
@@ -176,9 +181,10 @@ class Panel(Gtk.ApplicationWindow):
     def _aplicar_modo(self, modo):
         """Reparte los componentes según el ancho. Solo se hace al cambiar de modo."""
         modo = modo or "angosto"
-        if modo == self._modo:
+        if modo == self._modo and getattr(self, "_compacto", None) == self._es_compacto():
             return
         self._modo = modo
+        self._compacto = self._es_compacto()
 
         from .componentes.base import desacoplar, vaciar
         vaciar(self.cuerpo)
@@ -208,8 +214,14 @@ class Panel(Gtk.ApplicationWindow):
         seccion_plan = self._seccion("PLAN", self.plan)
         seccion_comp = self._seccion("COMPRAS", self.compras)
         seccion_venta = self._seccion("VENTAS", self.ventas)
-        seccion_equipo = self._seccion("EQUIPO", self.equipo)
+        seccion_equipo = self._seccion("TU EQUIPO", self.equipo)
         seccion_contra = self._seccion("CONTRA SU COMPOSICIÓN", self.contra)
+
+        # Con la ventana baja, las secciones secundarias se ocultan en vez de quedar
+        # cortadas a media frase (pasaba a 800x600).
+        compacto = self._es_compacto()
+        for seccion in (seccion_venta, seccion_equipo, seccion_contra):
+            seccion.set_visible(not compacto)
 
         if modo == "angosto":
             principal.append(self.recomendacion)
@@ -336,6 +348,10 @@ class Panel(Gtk.ApplicationWindow):
             modo = self._modo_por_ancho(self._ancho_actual())
             if modo != self._modo:
                 self._aplicar_modo(modo)
+            elif self._es_compacto() != self._compacto:
+                # cambió el alto: se recompone para no dejar secciones cortadas
+                self._compacto = self._es_compacto()
+                self._aplicar_modo(None)
         datos, error, firma = self.sondeo.ultimo()
         if datos is None:
             self.cabecera.actualizar(None)
