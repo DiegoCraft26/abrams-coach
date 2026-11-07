@@ -96,4 +96,5 @@ python3 herramientas/capturar_ui.py          # 4 capturas + gate de pintado
 python3 herramientas/evaluar_motor.py --partidas 200
 ```
 
-Puertas de calidad: [`CALIDAD.md`](CALIDAD.md). Relevo: [`RELEVO.md`](RELEVO.md).
+Puertas de calidad: [`CALIDAD.md`](CALIDAD.md). Guía de uso: [`docs/GUIA.md`](docs/GUIA.md).
+Relevo: [`RELEVO.md`](RELEVO.md). Validación del motor: [`docs/VALIDACION.md`](docs/VALIDACION.md).
