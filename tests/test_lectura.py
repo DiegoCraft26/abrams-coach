@@ -344,6 +344,16 @@ def main():
         problemas.append(f"verdad terreno: {p}")
         print(f"\nVERDAD TERRENO\n  {p}")
 
+    # Las capturas de calibración son de la máquina de desarrollo y no se versionan: si la
+    # verdad terreno apunta a archivos que no están, la suite se salta (no finge verde
+    # ni se pone roja por un dato que no viaja en el repo).
+    faltan_capturas = bool(errs_verdad) and all(
+        "no existe la captura" in p or "no existe la carpeta" in p for p in errs_verdad)
+    if not entradas and faltan_capturas:
+        print("\nSALTADO: la verdad terreno apunta a capturas que no están en este árbol.")
+        print("  Las capturas viven en salida/calibracion/ y no se versionan.")
+        return 0
+
     if err_lector:
         print("\nNo se puede evaluar nada: el contrato no está implementado todavía.")
         print("  Se espera: def leer_captura(ruta) -> dict  en coach/marcador.py")

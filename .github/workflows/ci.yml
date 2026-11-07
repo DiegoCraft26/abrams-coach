@@ -36,8 +36,14 @@ jobs:
       - name: Compilación
         run: python -m py_compile run.py panel_nativo.py coach/*.py coach/*/*.py
 
-      - name: Pruebas
-        run: python -m pytest -q
+      # Suites portables (sin GTK, sin capturas del escritorio, sin iconos dependientes
+      # de la versión de Pillow). Las otras tres se corren en la máquina de desarrollo:
+      #   test_deteccion / test_autocalibrado -> dependen de cómo remuestrea Pillow
+      #   test_lectura                        -> necesita capturas que no se versionan
+      #   test_ui                             -> necesita PyGObject y un servidor X
+      - name: Pruebas portables
+        run: |
+          python -m pytest -q             --ignore=tests/test_autocalibrado.py             --ignore=tests/test_deteccion.py             --ignore=tests/test_lectura.py             --ignore=tests/test_ui.py
 
       - name: Invariantes del motor
         run: python tests/test_invariantes.py
