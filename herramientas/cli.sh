@@ -6,6 +6,7 @@
 #   abrams-coach estado    qué corre, RAM, VRAM y última lectura
 #   abrams-coach archivar  importa la sesión a la base local
 #   abrams-coach informe   resumen de la última partida archivada
+#   abrams-coach esperar   arranca solo cuando abres Deadlock y archiva al salir
 #   abrams-coach medir     mide la cadena de latencia
 #   abrams-coach parar     cierra coach, panel y grabadora
 set -uo pipefail
@@ -61,6 +62,10 @@ PY
   medir)
     shift
     exec "$PY" herramientas/medir_latencia.py "$@"
+    ;;
+  esperar)
+    shift
+    exec "$PY" herramientas/vigilar.py "$@"
     ;;
   capturas)
     shift

@@ -21,6 +21,7 @@ El instalador dice cuál falta y no toca nada más.
 ## Uso
 
 ```bash
+abrams-coach esperar         # arranca solo cuando abres Deadlock y archiva al salir
 abrams-coach demo            # panel con datos de ejemplo, sin abrir el juego
 abrams-coach jugar           # prepara la máquina, abre el coach y el panel
 abrams-coach estado          # qué corre, cuánta RAM usa, qué leyó
