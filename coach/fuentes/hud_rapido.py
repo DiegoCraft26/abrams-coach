@@ -12,7 +12,9 @@ import os
 import re
 import subprocess
 import tempfile
+import threading
 import time
+from concurrent.futures import ThreadPoolExecutor
 
 from PIL import Image, ImageOps
 
@@ -90,28 +92,42 @@ def leer(cuadro, cajas=None, color_oro=None, tolerancia=40):
     salida = {"t": None, "oro": None, "caja_oro": "fija",
               "ms_reloj": None, "ms_oro": None}
 
-    t0 = time.perf_counter()
-    texto = _ocr(cuadro, _escalar(cajas["reloj"], tamano), 6, "0123456789:", "7")
-    m = re.search(r"(\d{1,2}):(\d{2})", texto)
-    if m:
-        salida["t"] = int(m.group(1)) * 60 + int(m.group(2))
-    salida["ms_reloj"] = round((time.perf_counter() - t0) * 1000, 1)
+    # Reloj y oro son dos recortes independientes: se leen en paralelo. Tesseract tarda
+    # ~90 ms solo en arrancar, así que en serie el ciclo era 269 ms y en paralelo baja a
+    # lo que tarda el más lento.
+    def _reloj():
+        t0 = time.perf_counter()
+        texto = _ocr(cuadro, _escalar(cajas["reloj"], tamano), 6, "0123456789:", "7")
+        m = re.search(r"(\d{1,2}):(\d{2})", texto)
+        return (int(m.group(1)) * 60 + int(m.group(2)) if m else None,
+                round((time.perf_counter() - t0) * 1000, 1))
 
-    t0 = time.perf_counter()
-    caja = detectar_bloque_oro(cuadro, _escalar(cajas["banda_oro"], tamano),
-                               color_oro, tolerancia)
-    if caja:
-        salida["caja_oro"] = "color"
-    else:
-        caja = _escalar(cajas["oro"], tamano)
-    texto = _ocr(cuadro, caja, 4, "0123456789,", "7")
-    numeros = [n for n in re.findall(r"\d[\d,]*", texto) if len(n.replace(",", "")) >= 1]
-    if numeros:
-        try:
-            salida["oro"] = int(numeros[-1].replace(",", ""))
-        except ValueError:
-            salida["oro"] = None
-    salida["ms_oro"] = round((time.perf_counter() - t0) * 1000, 1)
+    def _oro():
+        t0 = time.perf_counter()
+        caja = detectar_bloque_oro(cuadro, _escalar(cajas["banda_oro"], tamano),
+                                   color_oro, tolerancia)
+        origen = "color" if caja else "fija"
+        if not caja:
+            caja = _escalar(cajas["oro"], tamano)
+        texto = _ocr(cuadro, caja, 4, "0123456789,", "7")
+        numeros = [n for n in re.findall(r"\d[\d,]*", texto)
+                   if len(n.replace(",", "")) >= 1]
+        valor = None
+        if numeros:
+            try:
+                valor = int(numeros[-1].replace(",", ""))
+            except ValueError:
+                valor = None
+        return valor, origen, round((time.perf_counter() - t0) * 1000, 1)
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        f_reloj = pool.submit(_reloj)
+        f_oro = pool.submit(_oro)
+        t, ms_reloj = f_reloj.result()
+        oro, origen, ms_oro = f_oro.result()
+
+    salida.update({"t": t, "oro": oro, "caja_oro": origen,
+                   "ms_reloj": ms_reloj, "ms_oro": ms_oro})
     return salida
 
 

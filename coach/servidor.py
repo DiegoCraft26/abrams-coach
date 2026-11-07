@@ -147,7 +147,12 @@ class Manejador(BaseHTTPRequestHandler):
             try:
                 estado = json.loads(cuerpo or b"{}")
                 EST.manual_ts = time.time()
-                EST.publicar(analizador(estado))
+                salida = analizador(estado)
+                # Gancho de depuración: permite inyectar el bloque `latencia` para
+                # revisar cómo se ve el pie sin tener una partida real corriendo.
+                if isinstance(estado, dict) and isinstance(estado.get("latencia"), dict):
+                    salida["latencia"] = estado["latencia"]
+                EST.publicar(salida)
                 self._enviar(200, {"ok": True})
             except Exception as e:
                 self._enviar(400, {"error": str(e)})

@@ -71,7 +71,7 @@ Qué viene: [`ROADMAP.md`](ROADMAP.md).
 | Qué | Número | Cómo |
 |---|---|---|
 | Captura de pantalla | 415–514 ms por cuadro (4480×1440) | `herramientas/medir_latencia.py` |
-| Lectura del HUD | 147 ms reloj, 122 ms oro | el mismo comando |
+| Lectura del HUD | 127 ms reloj y oro en paralelo (7.9 lecturas/s) | el mismo comando |
 | Latencia del broadcast | 20–25 s (del TV de Valve, no nuestra) | reloj del HUD contra reloj del broadcast |
 | Motor de decisión | 4.5 ms medio, 8.6 ms máximo | 2,156 estados de 200 partidas reales |
 | Panel | 127 MB de RAM, 0.2 % de CPU | `ps` y `/proc/<pid>/stat` |
