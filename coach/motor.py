@@ -429,14 +429,6 @@ def recomendar(estado: Estado, conoc, cat, cfg=None):
         clave = str(j.heroe).lower().replace(" ", "_").replace("-", "_")
         enemigos.append({"heroe": j.heroe, "icono": f"/icono-heroe/{clave}",
                          "almas": j.almas})
-    # Los aliados también salen: el panel mostraba sólo los enemigos y se perdía la
-    # comparación de economía con el propio equipo (QA de UI, 2026-11-07).
-    aliados = []
-    for j in estado.aliados:
-        clave = str(j.heroe).lower().replace(" ", "_").replace("-", "_") if j.heroe else None
-        aliados.append({"heroe": j.heroe,
-                        "icono": f"/icono-heroe/{clave}" if clave else None,
-                        "almas": j.almas})
     inventario = []
     for iid in estado.yo.items:
         info = conoc["items"].get(str(iid))
@@ -456,7 +448,6 @@ def recomendar(estado: Estado, conoc, cat, cfg=None):
         "plan": plan,
         "objetivo": objetivo,
         "enemigos": enemigos,
-        "aliados": aliados,
         "inventario": inventario,
         "almas": estado.yo.almas,
         "confianza": estado.confianza,

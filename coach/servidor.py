@@ -6,6 +6,11 @@ from urllib.parse import urlparse, parse_qs
 AQUI = os.path.dirname(os.path.abspath(__file__))
 UI = os.path.join(AQUI, "ui", "index.html")
 
+# Cuántos segundos sin publicar antes de avisar que los datos están viejos.
+# run.py lo sube según --intervalo: con intervalo 10 s, 8 s fijos marcaban
+# "congelado" en cada ciclo aunque todo funcionara.
+UMBRAL_RANCIO_S = 8.0
+
 class Estado:
     def __init__(self):
         self.lock = threading.Lock()
@@ -24,6 +29,16 @@ class Estado:
     def leer(self):
         with self.lock:
             return self.ultimo, self.version
+
+    def encuesta(self):
+        """Payload, versión y edad bajo el MISMO lock.
+
+        Con dos llamadas separadas (`leer` y `edad_s`) una publicación en medio empareja
+        el payload viejo con edad 0 y dice "fresco" justo cuando no lo está.
+        """
+        with self.lock:
+            edad = (time.time() - self.ts) if self.ts else None
+            return self.ultimo, self.version, edad
 
     def edad_s(self):
         """Segundos desde la última publicación.
@@ -62,12 +77,11 @@ class Manejador(BaseHTTPRequestHandler):
             with open(UI, "rb") as f:
                 self._enviar(200, f.read(), "text/html; charset=utf-8")
         elif ruta == "/api/estado":
-            datos, _ = EST.leer()
-            edad = EST.edad_s()
+            datos, _, edad = EST.encuesta()
             if isinstance(datos, dict):
                 datos = dict(datos)
                 datos["edad_s"] = round(edad, 1) if edad is not None else None
-                datos["rancio"] = bool(edad is not None and edad > 8)
+                datos["rancio"] = bool(edad is not None and edad > UMBRAL_RANCIO_S)
             self._enviar(200, datos)
         elif ruta.startswith("/icono/"):
             iid = ruta.split("/")[-1].replace(".webp", "").replace(".png", "")

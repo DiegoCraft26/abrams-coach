@@ -139,18 +139,20 @@ def bucle_vivo(a, analizar):
                                                   f"({escucha.error or 'sin datos'})"})
                 time.sleep(3.0)
                 continue
-            # Si el tick no cambia, el stream dejó de mandar datos. Republicar el estado
-            # viejo lo haría parecer fresco y anularía el aviso de "datos congelados".
+            # Si el tick no cambia, el stream dejó de mandar datos. Mientras no avance
+            # NO se publica el estado viejo: republicarlo actualizaría la marca de tiempo
+            # y anularía el aviso de "datos congelados" (bug que encontró el revisor).
             if est.get("tick") != tick_previo:
                 tick_previo, tick_desde, avisado = est.get("tick"), time.time(), False
-            elif time.time() - tick_desde > 12 and not avisado:
-                servidor.EST.publicar({
-                    "listo": False,
-                    "fuente": "en_vivo",
-                    "mensaje": ("el broadcast dejó de mandar datos (último tick "
-                                f"{tick_previo}); reintentando"),
-                })
-                avisado = True
+            else:
+                if time.time() - tick_desde > 12 and not avisado:
+                    servidor.EST.publicar({
+                        "listo": False,
+                        "fuente": "en_vivo",
+                        "mensaje": ("el broadcast dejó de mandar datos (último tick "
+                                    f"{tick_previo}); reintentando"),
+                    })
+                    avisado = True
                 time.sleep(max(1.0, a.intervalo))
                 continue
             if not est.get("yo"):
@@ -170,9 +172,12 @@ def bucle_vivo(a, analizar):
             salida = analizar(crudo)
             # Las 12 almas del marcador, en el mismo campo que usa el modo OCR, para
             # que los dos paneles muestren lo mismo sin importar la fuente.
-            salida["almas_12"] = ([crudo["yo"].get("almas")]
-                                  + [j.get("almas") for j in crudo["aliados"]]
-                                  + [j.get("almas") for j in crudo["enemigos"]])
+            doce = ([crudo["yo"].get("almas")]
+                    + [j.get("almas") for j in crudo["aliados"]]
+                    + [j.get("almas") for j in crudo["enemigos"]])
+            # El broadcast puede traer menos de 12 filas: se fija la longitud para que
+            # quien lo consuma pueda indexar 0..11 sin sorpresas.
+            salida["almas_12"] = (doce + [None] * 12)[:12]
             servidor.EST.publicar(salida)
         except Exception as exc:                                    # noqa: BLE001
             servidor.EST.publicar({"listo": False, "mensaje": f"error en vivo: {exc}"})
@@ -267,8 +272,12 @@ def main():
                          "(para probar sin el juego abierto)")
     a = ap.parse_args()
 
-    if a.fuente in ("ocr", "vivo"):
+    if a.fuente in ("ocr", "vivo", "auto"):
         aviso_vram()
+
+    # El aviso de "datos congelados" tiene que ser más lento que la cadencia real de
+    # publicación, o con --intervalo alto el panel parpadearía sin nada roto.
+    servidor.UMBRAL_RANCIO_S = max(8.0, 3.0 * max(0.2, a.intervalo))
 
     print("cargando conocimiento…")
     m = Motor()
