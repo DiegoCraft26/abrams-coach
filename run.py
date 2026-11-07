@@ -113,6 +113,7 @@ def estado_desde_vivo(est, cuenta=None):
 
 
 _FLAGS = {}
+_CFG = {}          # configuración cargada en main(), visible desde los bucles
 
 
 def bucle_vivo(a, analizar):
@@ -120,22 +121,35 @@ def bucle_vivo(a, analizar):
     from coach import en_vivo, registro
     estado_hud = {"t": None, "oro": None, "ts": 0.0}
 
+    hud_cfg = _CFG.get("hud") or {}
     if not getattr(a, "sin_hud", False) and _FLAGS.get("hud_ocr", True):
         def _hilo_hud():
-            from coach import hud
+            """Lee reloj y oro del último cuadro de la captura compartida.
+
+            Antes capturaba por su cuenta en cada vuelta: 415 ms de `spectacle` por ciclo
+            solo para el HUD. Ahora hay un único hilo capturando (coach/fuentes/captura.py)
+            y este consume el último cuadro.
+            """
+            from coach.fuentes import hud_rapido
+            intervalo = 1.0 / max(0.5, float(hud_cfg.get("frecuencia_hz") or 2))
             while True:
                 if not juego_abierto():
                     time.sleep(5)
                     continue
                 try:
-                    d = hud.leer_hud()
-                except Exception as exc:      # noqa: BLE001
-                    print(f"HUD OCR error: {exc}", flush=True)
+                    d = hud_rapido.leer_actual(
+                        hud_cfg.get("max_edad_s", 2.0),
+                        hud_cfg.get("cajas") or None,
+                        hud_cfg.get("color_oro"))
+                except Exception as exc:                        # noqa: BLE001
+                    print(f"HUD error: {type(exc).__name__}: {exc}", flush=True)
                     d = None
                 if d and d.get("t") is not None:
                     estado_hud.update(d)
-                time.sleep(1.5)
+                time.sleep(intervalo)
 
+        from coach.fuentes import captura
+        captura.global_()
         threading.Thread(target=_hilo_hud, daemon=True).start()
 
     def _publicar_hud():
@@ -280,6 +294,20 @@ def bucle_vivo(a, analizar):
                 time.sleep(max(1.0, a.intervalo))
                 continue
             crudo = estado_desde_vivo(est, a.cuenta)
+            # Métricas de captura: si la captura compartida no está arriba (tests, o
+            # sesión sin pantalla) esto queda en None y no rompe nada.
+            try:
+                from coach.fuentes import captura as _cap
+                metricas_captura = _cap.global_().metricas()
+            except Exception:                                  # noqa: BLE001
+                metricas_captura = {}
+            latencias = {
+                "captura_ms": metricas_captura.get("ms_mediana"),
+                "capturas": metricas_captura.get("capturas"),
+                "lectura_ms": None,
+                "edad_hud_s": None,
+                "broadcast_s": None,
+            }
             # El broadcast llega 20-70 s tarde (y más si hubo pausa). El HUD por
             # OCR da el reloj y el oro reales; el patrimonio se reconstruye con
             # el gasto que ya trae el broadcast.
@@ -292,6 +320,13 @@ def bucle_vivo(a, analizar):
                 # (el broadcast incluye el tiempo previo, por eso el margen amplio).
                 if h_t is not None and abs(h_t - api_t) <= 180:
                     crudo["t"] = h_t
+                    # Diferencia real entre lo que ve el jugador y lo que manda el TV de
+                    # Valve: es la latencia del broadcast, medida, no estimada.
+                    latencias["broadcast_s"] = round(h_t - api_t, 1)
+                    latencias["edad_hud_s"] = round(time.time() - estado_hud["ts"], 2)
+                    latencias["lectura_ms"] = round(
+                        sum(x for x in (estado_hud.get("ms_reloj"),
+                                        estado_hud.get("ms_oro")) if x) or 0, 1)
                     nota = f"HUD OCR: reloj {h_t//60}:{h_t%60:02d}"
                 else:
                     nota = "reloj del broadcast"
@@ -321,6 +356,7 @@ def bucle_vivo(a, analizar):
                 items_previos[cta] = act
             del compras[:-3]
             salida = analizar(crudo)
+            salida["latencia"] = latencias
             salida["compras"] = list(compras)
             registro.anotar(salida, crudo)
             # El motor razona con patrimonio (almas totales), pero para "compra ahora"
@@ -462,6 +498,7 @@ def main():
     from coach.config import cargar as cargar_config
     cfg = cargar_config()
     _FLAGS.update(cfg.flags)
+    _CFG.update({"fuentes": cfg.fuentes, "hud": (cfg.fuentes or {}).get("hud") or {}})
     cfg_motor = dict(cfg.motor)
     if not cfg.flags.get("patrones_nuevos", True):
         # Rollback de los patrones nuevos sin tocar código.
@@ -490,20 +527,6 @@ def main():
         return con_historial(est.procesar(e, m.analizar_dict(d)))
 
     servidor.arrancar(a.puerto, analizador=analizar)
-
-    # Copiloto (solo lectura). Si falta el paquete o la credencial, el panel sigue
-    # funcionando y el drawer dice "no configurado": nada de esto puede tumbar el vivo.
-    try:
-        if not cfg.flags.get("copiloto", True):
-            raise RuntimeError("copiloto apagado en config/coach.yaml")
-        from coach.agente.copiloto import Copiloto
-        ruta_db = os.path.join(os.path.dirname(os.path.abspath(__file__)),
-                               "datos", "coach.db")
-        copiloto = Copiloto(estado_fn=lambda: servidor.EST.leer()[0], db_ruta=ruta_db)
-        servidor.configurar_copiloto(copiloto)
-        print("copiloto: listo (DS 4.1 Flash con respaldo a Hugging Face)")
-    except Exception as exc:                                   # noqa: BLE001
-        print(f"copiloto no disponible: {type(exc).__name__}: {exc}")
 
     print(f"panel: http://127.0.0.1:{a.puerto}")
 

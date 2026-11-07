@@ -2,7 +2,7 @@
 
 No comprueba píxeles: comprueba que la ventana **se construye y se pinta** en los cuatro
 tamaños del pedido. Eso ya habría atrapado el fallo del 2026-11-07, cuando el drawer del
-copiloto se construía con una variable fuera de ámbito y el panel entero dejaba de abrir.
+el panel entero dejaba de abrir por una variable fuera de ámbito en un componente.
 
 Si no hay servidor gráfico, la suite se salta la parte de pintado y lo dice (no se inventa
 un verde).

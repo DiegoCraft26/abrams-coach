@@ -20,6 +20,11 @@ class StatusBar(Gtk.Box):
         self.lbl_fuente = etiqueta("fuente —", "pie")
         self.append(self.lbl_fuente)
 
+        # Latencia por eslabón: cuánto tarda la captura, cuánto la lectura de pantalla y
+        # cuánto va el TV de Valve por detrás. Sin esto no se puede saber qué está lento.
+        self.lbl_latencia = etiqueta("", "pie")
+        self.append(self.lbl_latencia)
+
         relleno = Gtk.Box()
         relleno.set_hexpand(True)
         self.append(relleno)
@@ -36,6 +41,15 @@ class StatusBar(Gtk.Box):
         self.lbl_confianza.set_label(
             f"confianza {conf*100:.0f}%" if conf is not None else "confianza —")
         self.lbl_fuente.set_label(f"fuente {d.get('fuente') or '—'}")
+        la = d.get("latencia") or {}
+        piezas = []
+        if la.get("captura_ms") is not None:
+            piezas.append(f"captura {la['captura_ms']:.0f} ms")
+        if la.get("lectura_ms"):
+            piezas.append(f"lectura {la['lectura_ms']:.0f} ms")
+        if la.get("broadcast_s") is not None:
+            piezas.append(f"TV {la['broadcast_s']:+.1f} s")
+        self.lbl_latencia.set_label(" · ".join(piezas))
         if d.get("lectura_dudosa"):
             self.lbl_aviso.set_label("lectura dudosa: mantengo la última buena")
         elif d.get("estable") is False:

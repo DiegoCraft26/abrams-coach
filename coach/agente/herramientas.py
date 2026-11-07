@@ -106,7 +106,7 @@ def explicar_recomendacion(estado: dict) -> dict:
         if costo is not None and almas is not None:
             alcanza = costo <= almas
         # Las alternativas van con sus propias razones y su score: si solo se manda el
-        # nombre, el copiloto no puede explicar por qué quedaron abajo (le pasó el
+        # nombre, el informe no puede explicar por qué quedaron abajo (pasó el
         # 2026-11-07 y tuvo que decir "no tengo ese desglose").
         alternativas = [
             {"nombre": r.get("nombre"), "costo": r.get("costo"),

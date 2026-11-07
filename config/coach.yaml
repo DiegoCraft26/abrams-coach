@@ -44,6 +44,14 @@ fuentes:
   timeout_s: 10
   reintentos: 3
   backoff_s: 2
+  # Lectura del HUD por visión. Las cajas van en coordenadas del escritorio de 4480x1440
+  # y se escalan solas a la resolución real. Si el HUD se mueve, se recalibra aquí.
+  hud:
+    cajas: {}              # vacío = las de coach/fuentes/hud_rapido.py
+    color_oro: null        # [r, g, b] del número de oro, o null para usar la caja fija
+    tolerancia_color: 40
+    max_edad_s: 2.0
+    frecuencia_hz: 2
 
 agente:
   modelo: "deepseek/deepseek-v4.1-flash"
@@ -58,7 +66,7 @@ agente:
 # la app tiene que seguir sirviendo aunque una pieza nueva falle.
 flags:
   patrones_nuevos: true     # fase económica, comeback, balance de slots y situacionales
-  copiloto: true            # drawer del copiloto y endpoint /api/copiloto
+  informe_partida: true     # resumen automático de la partida al terminar (sin chat)
   hud_ocr: true             # leer reloj y oro del HUD (si molesta, se apaga)
   archivado_auto: true      # archivar la partida en SQLite al terminar
   interfaz_responsive: true # breakpoints por ancho; si se apaga, siempre 960x1080

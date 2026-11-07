@@ -133,8 +133,8 @@ class ProveedorOpenAICompatible:
 def cadena_por_defecto() -> list[ProveedorOpenAICompatible]:
     """Command Code, Hugging Face y, de último, el Qwen local.
 
-    El tercero es el salvavidas gratis: si la cuota o la red fallan, el copiloto sigue
-    respondiendo con lo que ya viene en el resumen de estado. Está apagado cuando
+    El tercero es el salvavidas gratis: si la cuota o la red fallan, el
+    informe de partida se sigue pudiendo generar con el resumen que ya está en la base. Está apagado cuando
     llama-server no corre (el proveedor simplemente falla y se reporta el error).
 
     Ojo: ese modelo ocupa ~5.4 GB de VRAM, así que **no debe estar levantado mientras
