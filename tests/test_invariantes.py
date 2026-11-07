@@ -630,3 +630,13 @@ def escribir_informe(viol, estados, media, maxima):
 
 if __name__ == "__main__":
     sys.exit(main())
+
+
+def test_suite():
+    """Entrada para `pytest -q`.
+
+    Las suites están escritas como scripts con `main()` que devuelve el número de
+    fallos. Este envoltorio las expone a pytest sin cambiar su comportamiento
+    (siguen corriendo también con `python3 tests/<archivo>.py`).
+    """
+    assert main() == 0

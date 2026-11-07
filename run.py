@@ -3,7 +3,7 @@
     python3 run.py --fuente simulado     # demo sin juego
     python3 run.py --fuente ocr          # lectura de pantalla real
 """
-import argparse, json, os, random, subprocess, sys, time
+import argparse, json, os, random, subprocess, sys, threading, time
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from coach import servidor
@@ -73,10 +73,15 @@ def aviso_vram():
 
 
 def juego_abierto():
-    """¿Está corriendo Deadlock? Si no, no tiene sentido capturar pantalla."""
+    """¿Está corriendo Deadlock? Si no, no tiene sentido capturar pantalla.
+
+    `comm` del proceso es steam.exe/wine, no deadlock; hay que mirar los args.
+    """
     try:
-        salida = subprocess.run(["ps", "-eo", "comm"], capture_output=True, text=True, timeout=5).stdout.lower()
-        return any(n in salida for n in ("deadlock", "project8"))
+        salida = subprocess.run(["ps", "-eo", "args"], capture_output=True,
+                                text=True, timeout=5).stdout.lower()
+        return any(n in salida for n in ("deadlock.exe", "deadlock/game/bin",
+                                         "project8"))
     except Exception:
         return True
 
@@ -95,6 +100,7 @@ def estado_desde_vivo(est, cuenta=None):
     return {
         "t": est.get("t") or 0,
         "yo": {"heroe": yo.get("heroe"), "almas": yo.get("almas"),
+               "oro": yo.get("oro"), "items": yo.get("items") or [],
                "bajas": yo.get("bajas") or 0, "muertes": yo.get("muertes") or 0,
                "asistencias": yo.get("asistencias") or 0},
         "aliados": limpio(est.get("aliados") or []),
@@ -107,13 +113,89 @@ def estado_desde_vivo(est, cuenta=None):
 
 
 def bucle_vivo(a, analizar):
-    """Modo en vivo: deadlock-api. Sin OCR, sin VRAM, ~KB de RAM."""
-    from coach import en_vivo
+    """Modo en vivo: deadlock-api + HUD por OCR para reloj y oro en tiempo real."""
+    from coach import en_vivo, registro
+    estado_hud = {"t": None, "oro": None, "ts": 0.0}
+
+    if not getattr(a, "sin_hud", False):
+        def _hilo_hud():
+            from coach import hud
+            while True:
+                if not juego_abierto():
+                    time.sleep(5)
+                    continue
+                try:
+                    d = hud.leer_hud()
+                except Exception as exc:      # noqa: BLE001
+                    print(f"HUD OCR error: {exc}", flush=True)
+                    d = None
+                if d and d.get("t") is not None:
+                    estado_hud.update(d)
+                time.sleep(1.5)
+
+        threading.Thread(target=_hilo_hud, daemon=True).start()
+
+    def _publicar_hud():
+        """Desactivado: el OCR del HUD no es fiable como única fuente."""
+        return False
+        if getattr(a, "sin_hud", False):
+            return False
+        if estado_hud.get("t") is None or time.time() - estado_hud["ts"] > 8:
+            return False
+        h_t = estado_hud["t"]
+        h_oro = estado_hud.get("oro")
+        servidor.EST.publicar({
+            "t": h_t,
+            "almas": h_oro,
+            "oro": h_oro,
+            "estado": {"estado": "INICIO",
+                       "motivo": "leyendo tu HUD en tiempo real",
+                       "objetivo": "esperando enemigos del broadcast"},
+            "economia": {"mias": h_oro, "media_enemiga": None, "delta_pct": None},
+            "recomendaciones": [],
+            "fuente": "hud",
+            "notas": ["HUD OCR: reloj y oro de tu pantalla"],
+        })
+        return True
+
     escucha = None
     match_actual = None
     tick_previo = None
     tick_desde = time.time()
     avisado = False
+    conoc = {}
+    try:
+        with open(os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                               "data", "conocimiento.json"), encoding="utf-8") as f:
+            conoc = json.load(f).get("items", {})
+    except Exception:
+        pass
+    items_previos = {}
+    heroes_cta = {}
+    compras = []
+
+    def _publicar_apertura():
+        """Build de apertura mientras el broadcast todavía no existe.
+
+        No inventa almas ni enemigos: solo los tres primeros ítems del plan.
+        """
+        if not conoc:
+            return False
+        plan = []
+        for iid in ("800", "1548066885", "1437614329"):
+            d = conoc.get(iid) or {}
+            if d:
+                plan.append({"id": iid, "nombre": d.get("nombre", iid),
+                             "n": 0, "icono": f"/icono/{iid}"})
+        servidor.EST.publicar({
+            "t": 0, "almas": None, "oro": None,
+            "estado": {"estado": "INICIO", "motivo": "partida iniciando",
+                       "objetivo": "build de apertura"},
+            "economia": {"mias": None, "media_enemiga": None, "delta_pct": None},
+            "recomendaciones": [], "plan": plan, "fuente": "apertura",
+            "notas": ["Build de apertura mientras llega el broadcast"],
+        })
+        return True
     while True:
         try:
             if a.match:
@@ -121,10 +203,24 @@ def bucle_vivo(a, analizar):
             else:
                 match = en_vivo.partida_activa(a.cuenta)
             if match is None:
-                servidor.EST.publicar({"listo": False,
-                                       "mensaje": f"la cuenta {a.cuenta} no está en partida"})
-                time.sleep(10.0)
-                continue
+                # El API no siempre lista la partida. El MATCH de la esquina
+                # inferior derecha del HUD sí está cuando estás jugando.
+                from coach import hud as hud_mod
+                mid = hud_mod.leer_match_id()
+                if mid:
+                    match = mid
+                    a.match = mid
+                else:
+                    if _publicar_hud():
+                        time.sleep(2.0)
+                        continue
+                    if _publicar_apertura():
+                        time.sleep(3.0)
+                        continue
+                    servidor.EST.publicar({"listo": False,
+                                           "mensaje": f"la cuenta {a.cuenta} no está en partida"})
+                    time.sleep(10.0)
+                    continue
             if match != match_actual:
                 if escucha:
                     escucha.parar()
@@ -134,6 +230,12 @@ def bucle_vivo(a, analizar):
                 tick_previo, tick_desde, avisado = None, time.time(), False
             est = escucha.estado
             if est is None or not est.get("jugadores"):
+                if _publicar_hud():
+                    time.sleep(2.0)
+                    continue
+                if _publicar_apertura():
+                    time.sleep(3.0)
+                    continue
                 servidor.EST.publicar({"listo": False,
                                        "mensaje": f"conectando al broadcast "
                                                   f"({escucha.error or 'sin datos'})"})
@@ -145,6 +247,9 @@ def bucle_vivo(a, analizar):
             if est.get("tick") != tick_previo:
                 tick_previo, tick_desde, avisado = est.get("tick"), time.time(), False
             else:
+                if _publicar_hud():
+                    time.sleep(max(1.0, a.intervalo))
+                    continue
                 if time.time() - tick_desde > 12 and not avisado:
                     servidor.EST.publicar({
                         "listo": False,
@@ -156,6 +261,9 @@ def bucle_vivo(a, analizar):
                 time.sleep(max(1.0, a.intervalo))
                 continue
             if not est.get("yo"):
+                if _publicar_hud():
+                    time.sleep(max(1.0, a.intervalo))
+                    continue
                 # Espectando una partida donde no está tu cuenta: el reloj sirve, pero
                 # no hay "yo" ni equipos. Mejor decirlo que mostrar un panel vacío.
                 servidor.EST.publicar({
@@ -169,7 +277,71 @@ def bucle_vivo(a, analizar):
                 time.sleep(max(1.0, a.intervalo))
                 continue
             crudo = estado_desde_vivo(est, a.cuenta)
+            # El broadcast llega 20-70 s tarde (y más si hubo pausa). El HUD por
+            # OCR da el reloj y el oro reales; el patrimonio se reconstruye con
+            # el gasto que ya trae el broadcast.
+            if (not getattr(a, "sin_hud", False)
+                    and time.time() - estado_hud["ts"] < 8
+                    and estado_hud.get("t") is not None):
+                h_t = estado_hud["t"]
+                api_t = crudo.get("t") or 0
+                # El reloj del HUD se acepta solo si cuadra con el del broadcast
+                # (el broadcast incluye el tiempo previo, por eso el margen amplio).
+                if h_t is not None and abs(h_t - api_t) <= 180:
+                    crudo["t"] = h_t
+                    nota = f"HUD OCR: reloj {h_t//60}:{h_t%60:02d}"
+                else:
+                    nota = "reloj del broadcast"
+                h_oro = estado_hud.get("oro")
+                api_oro = crudo["yo"].get("oro") or 0
+                if (h_oro is not None and api_oro
+                        and abs(h_oro - api_oro) <= max(400, api_oro * 0.5)):
+                    crudo["yo"]["oro"] = h_oro
+                    crudo["yo"]["almas"] = max(
+                        0, (crudo["yo"].get("almas") or 0) - api_oro + h_oro)
+                    nota += f" · {h_oro:,} sin gastar"
+                crudo["notas"] = [nota]
+            # Compras nuevas de cualquier jugador (el broadcast manda m_vecUpgrades
+            # de los 12). Se muestran como avisos recientes en el panel.
+            for j in est.get("jugadores") or []:
+                cta = j.get("cuenta")
+                if j.get("heroe"):
+                    heroes_cta[cta] = j["heroe"]
+                act = set(j.get("items") or [])
+                ant = items_previos.get(cta)
+                if ant is not None:
+                    for iid in act - ant:
+                        nom = (conoc.get(str(iid)) or {}).get("nombre", str(iid))
+                        quien = j.get("heroe") or heroes_cta.get(cta) or "Jugador"
+                        compras.append({"texto": f"{quien}: {nom}",
+                                        "item": str(iid), "ts": time.time()})
+                items_previos[cta] = act
+            del compras[:-3]
             salida = analizar(crudo)
+            salida["compras"] = list(compras)
+            registro.anotar(salida, crudo)
+            # El motor razona con patrimonio (almas totales), pero para "compra ahora"
+            # manda el oro sin gastar. Sin este filtro recomendaba ítems de 6,400
+            # teniendo 2,355 en el bolsillo.
+            oro = (crudo.get("yo") or {}).get("oro")
+            if oro is not None:
+                recs = salida.get("recomendaciones") or []
+                pagables = [r for r in recs if (r.get("costo") or 0) <= oro]
+                if pagables:
+                    for r in pagables:
+                        r["alcanza"] = True
+                    salida["recomendaciones"] = pagables[:3]
+                elif recs:
+                    # Mantener el objetivo visible aunque no alcance: el panel muestra
+                    # el icono grande y cuánto falta, en vez de "sin compra".
+                    objetivo = recs[0]
+                    objetivo["alcanza"] = False
+                    objetivo["faltan"] = max(0, (objetivo.get("costo") or 0) - oro)
+                    salida["recomendaciones"] = [objetivo]
+                    salida["notas"] = [f"{oro:,} almas sin gastar: faltan "
+                                       f"{objetivo['faltan']:,} para "
+                                       f"{objetivo.get('nombre')}"]
+                salida["oro"] = oro
             # Las 12 almas del marcador, en el mismo campo que usa el modo OCR, para
             # que los dos paneles muestren lo mismo sin importar la fuente.
             doce = ([crudo["yo"].get("almas")]
@@ -263,6 +435,8 @@ def main():
                     help="SteamID64 de Diego, para el modo vivo")
     ap.add_argument("--match", type=int, default=None,
                     help="match_id directo (en vez de buscarlo por cuenta)")
+    ap.add_argument("--sin-hud", action="store_true",
+                    help="no leer reloj/almas del HUD por OCR (usa solo el broadcast)")
     ap.add_argument("--mi-heroe", default=None,
                     help="héroe propio para identificar tu columna en el marcador")
     ap.add_argument("--mi-columna", type=int, default=None, choices=range(6),

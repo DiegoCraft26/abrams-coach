@@ -26,3 +26,7 @@ experimentos/**/crops/
 *.log
 .DS_Store
 /tmp/
+
+# Grabaciones del juego: 5 GB, se quedan fuera del repo (solo se indexan en la BD).
+grabaciones/
+datos/coach.db

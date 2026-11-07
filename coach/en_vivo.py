@@ -46,6 +46,8 @@ COLUMNAS = {
     "bajas": "m_PlayerDataGlobal__m_iPlayerKills",
     "muertes": "m_PlayerDataGlobal__m_iDeaths",
     "asistencias": "m_PlayerDataGlobal__m_iPlayerAssists",
+    # Inventario: el broadcast manda los IDs como uint64 en hex little-endian.
+    "items": "m_PlayerDataGlobal__m_vecUpgrades",
 }
 
 SQL = ("SELECT tick," + ",".join(f'"{c}"' for c in COLUMNAS.values())
@@ -86,7 +88,7 @@ def partida_activa(cuenta, timeout=20):
     Si la cuenta no está jugando, `[]` y se devuelve None. Usa el mismo endpoint que la
     pestaña "watch" del cliente, así que también sirve para ver a cualquiera.
     """
-    url = f"{BASE}/v1/matches/active?" + urllib.parse.urlencode({"account_id": int(cuenta)})
+    url = f"{BASE}/v1/matches/active?" + urllib.parse.urlencode({"account_ids": int(cuenta)})
     try:
         datos = _get_json(url, timeout=timeout)
     except (urllib.error.URLError, OSError, ValueError):
@@ -100,6 +102,17 @@ def partida_activa(cuenta, timeout=20):
                     return primero.get("match_id")
             return primero.get("match_id")
     return None
+
+
+def _items_upgrades(valor):
+    """IDs de ítems del broadcast: hex uint64 little-endian -> str decimal."""
+    salida = []
+    for h in valor or []:
+        try:
+            salida.append(str(int.from_bytes(bytes.fromhex(h), "little")))
+        except (TypeError, ValueError):
+            continue
+    return salida
 
 
 def interpretar(filas, cuenta=None, heroes=None):
@@ -132,11 +145,17 @@ def interpretar(filas, cuenta=None, heroes=None):
     jugadores = []
     for f in filas:
         hid = f.get("m_PlayerDataGlobal__m_nHeroID")
+        oro = f.get("m_PlayerDataGlobal__m_iGold")
+        neto = f.get("m_PlayerDataGlobal__m_iGoldNetWorth")
         jugadores.append({
             "cuenta": f.get("m_unEconAccountID"),
             "equipo": f.get("m_iTeamNum"),
-            "almas": f.get("m_PlayerDataGlobal__m_iGold"),
-            "neto": f.get("m_PlayerDataGlobal__m_iGoldNetWorth"),
+            # "almas" = patrimonio (lo que muestra el HUD como SOULS). m_iGold es el
+            # oro sin gastar y compararlo entre jugadores da deltas falsos.
+            "almas": neto if neto is not None else oro,
+            "oro": oro,
+            "neto": neto,
+            "items": _items_upgrades(f.get("m_PlayerDataGlobal__m_vecUpgrades")),
             "heroe_id": hid,
             "heroe": heroes.get(int(hid)) if hid is not None else None,
             "bajas": f.get("m_PlayerDataGlobal__m_iPlayerKills"),
@@ -230,6 +249,14 @@ class Escucha:
                             grupo = [fila]
                         elif tick == tick_actual:
                             grupo.append(fila)
+                            # Si el tick no avanza (partida pausada o stream lento), el
+                            # grupo nunca se publicaba. Con 12 filas ya hay estado válido.
+                            if len(grupo) >= 12:
+                                estado = interpretar(grupo, self.cuenta, self._heroes)
+                                if estado is not None:
+                                    self.estado = estado
+                                if len(grupo) > 24:
+                                    grupo = grupo[-24:]
                         # los ticks viejos se ignoran: al conectar el stream repite
                         # historial y no debe pisar el estado actual
             except (urllib.error.URLError, OSError, ValueError) as exc:

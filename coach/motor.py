@@ -396,7 +396,9 @@ def recomendar(estado: Estado, conoc, cat, cfg=None):
     cfg = cfg or CFG_DEFECTO
     econ = economia(estado)
     tactico = estado_tactico(estado, econ, cfg)
-    top, _ = candidatos(estado, conoc, cat, cfg, limite=3)
+    # 10 candidatos: el panel filtra por oro y así puede ofrecer algo comprable
+    # en vez de enseñar siempre un tier 4 que no alcanza.
+    top, _ = candidatos(estado, conoc, cat, cfg, limite=10)
     venta = sugerir_venta(estado, conoc, cat, cfg)
     # objetivo: lo mejor que todavía no puedes pagar
     objetivo = None
@@ -428,7 +430,8 @@ def recomendar(estado: Estado, conoc, cat, cfg=None):
             continue
         clave = str(j.heroe).lower().replace(" ", "_").replace("-", "_")
         enemigos.append({"heroe": j.heroe, "icono": f"/icono-heroe/{clave}",
-                         "almas": j.almas})
+                         "almas": j.almas, "bajas": j.bajas,
+                         "muertes": j.muertes, "asistencias": j.asistencias})
     inventario = []
     for iid in estado.yo.items:
         info = conoc["items"].get(str(iid))

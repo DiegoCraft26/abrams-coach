@@ -26,9 +26,9 @@ window { background-color: #080a0e; }
 .chip-farm { color: #ffb544; background: rgba(255,181,68,.14); }
 .chip-pelear { color: #3ddc84; background: rgba(61,220,132,.14); }
 .chip-equilibrio, .chip-inicio { color: #5aa9f0; background: rgba(90,169,240,.14); }
-.tarjeta { background: linear-gradient(160deg, #171e28, #0d1117); border-radius: 22px; padding: 26px; }
+.tarjeta { background: linear-gradient(160deg, #171e28, #0d1117); border-radius: 18px; padding: 18px; }
 .et { color: #7b8a9e; font-size: 11px; font-weight: 800; }
-.titulo { color: #f2f6fc; font-size: 40px; font-weight: 800; }
+.titulo { color: #f2f6fc; font-size: 32px; font-weight: 800; }
 .precio { color: #a8b6c8; font-size: 17px; }
 .razon { color: #a8b6c8; font-size: 15px; }
 .contexto { color: #7b8a9e; font-size: 13px; }
@@ -62,6 +62,7 @@ class Panel(Gtk.ApplicationWindow):
         super().__init__(application=app, title="Abrams Coach")
         self.url = url
         self.set_default_size(960, 1080)
+        self.set_size_request(640, 480)
         self.add_css_class("fondo")
         self._construir()
         self._ultimo = 0.0
@@ -99,7 +100,7 @@ class Panel(Gtk.ApplicationWindow):
         tarjeta.add_css_class("tarjeta")
         tarjeta.set_vexpand(False)
         self.img_item = Gtk.Picture()
-        self.img_item.set_size_request(260, 260)
+        self.img_item.set_size_request(210, 210)
         tarjeta.append(self.img_item)
         detalle = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
         detalle.set_valign(Gtk.Align.CENTER)
@@ -123,7 +124,18 @@ class Panel(Gtk.ApplicationWindow):
 
         # tiras
         self.fila_vs = self._tira("VS")
+        self.fila_vs["caja"].remove(self.fila_vs["contenido"])
+        flujo = Gtk.FlowBox()
+        flujo.set_selection_mode(Gtk.SelectionMode.NONE)
+        flujo.set_max_children_per_line(2)
+        flujo.set_min_children_per_line(1)
+        flujo.set_column_spacing(8)
+        flujo.set_row_spacing(6)
+        self.fila_vs["caja"].append(flujo)
+        self.fila_vs["contenido"] = flujo
         raiz.append(self.fila_vs["caja"])
+        self.fila_compras = self._tira("COMPRAS")
+        raiz.append(self.fila_compras["caja"])
         self.fila_sigue = self._tira("SIGUE")
         raiz.append(self.fila_sigue["caja"])
         self.fila_ahorro = self._tira("AHORRANDO")
@@ -245,7 +257,13 @@ class Panel(Gtk.ApplicationWindow):
         almas = d.get("almas")
         econ = d.get("economia") or {}
         dp = econ.get("delta_pct")
-        meta = f"{almas:,} almas" if almas is not None else "— almas"
+        oro = d.get("oro")
+        if oro is not None:
+            meta = f"{oro:,} sin gastar"
+            if almas is not None:
+                meta += f"   ·   {almas:,} patrimonio"
+        else:
+            meta = f"{almas:,} almas" if almas is not None else "— almas"
         if dp is not None:
             meta += f"   ·   {dp*100:+.0f}% vs enemigos"
         self.lbl_meta.set_label(meta)
@@ -264,7 +282,11 @@ class Panel(Gtk.ApplicationWindow):
                 self.img_item.set_pixbuf(pb)
             self.lbl_et.set_label("COMPRA CON CAMBIO" if r.get("requiere_venta") else "COMPRA AHORA")
             self.lbl_titulo.set_label(r["nombre"])
-            self.lbl_precio.set_label(f"{r['costo']:,} almas")
+            if r.get("alcanza") is False:
+                self.lbl_et.set_label("AHORRA PARA")
+                self.lbl_precio.set_label(f"{r['costo']:,} almas · faltan {r.get('faltan', 0):,}")
+            else:
+                self.lbl_precio.set_label(f"{r['costo']:,} almas")
             self.lbl_razon.set_label(" · ".join((r.get("razones") or [])[:2]) or "sin datos")
         else:
             self.img_item.set_pixbuf(None)
@@ -278,7 +300,8 @@ class Panel(Gtk.ApplicationWindow):
         st = d.get("estado") or {}
         self.lbl_contexto.set_label(" · ".join(x for x in (st.get("motivo"), st.get("objetivo")) if x))
 
-        for clave, campo in (("fila_vs", "enemigos"), ("fila_sigue", "plan"), ("fila_ahorro", None)):
+        for clave, campo in (("fila_vs", "enemigos"), ("fila_compras", None),
+                             ("fila_sigue", "plan"), ("fila_ahorro", None)):
             tira = getattr(self, clave)
             hijo = tira["contenido"].get_first_child()
             while hijo:
@@ -288,9 +311,18 @@ class Panel(Gtk.ApplicationWindow):
         for e in (d.get("enemigos") or []):
             nombre = str(e.get("heroe", "?"))
             almas = e.get("almas")
-            texto = nombre.capitalize() if almas is None else f"{nombre.capitalize()} · {almas:,}"
+            if almas is None:
+                texto = nombre.capitalize()
+            else:
+                kda = e.get("bajas")
+                extra = (f" · {kda}/{e.get('muertes', 0)}/{e.get('asistencias', 0)}"
+                         if kda is not None else "")
+                texto = f"{nombre.capitalize()} · {almas:,}{extra}"
             self.fila_vs["contenido"].append(
                 self._pill(texto, nombre.replace(" ", "_"), "heroes"))
+        for c in (d.get("compras") or []):
+            self.fila_compras["contenido"].append(
+                self._pill(c.get("texto", ""), c.get("item"), "items"))
         for p in (d.get("plan") or []):
             self.fila_sigue["contenido"].append(self._pill(p["nombre"], p["id"], "items"))
         obj = d.get("objetivo")
