@@ -40,7 +40,8 @@ def razones(residual=0.0, counter=0.0, pareja=0.0, cadena=0.0, info_fase=None,
         hito = patrones.hito_siguiente(almas)
         desvio = patrones.desvio(t_s, almas)
         if faltan_fase is not None and faltan_fase > 0 and hito:
-            salida.append(f"fase {fase}: al build le faltan {int(faltan_fase):,} almas")
+            salida.append(f"fase de build {fase}: faltan {int(faltan_fase):,} almas "
+                          f"para el siguiente hito")
         elif desvio is not None and desvio > 0:
             salida.append(f"vas {int(desvio):,} almas por delante del build de Abrams")
 
@@ -55,7 +56,7 @@ def explicar_estado(econ, tactico, t_s, almas):
     partes = []
     fase = patrones.fase_economica(almas)
     if fase != "DESCONOCIDA":
-        partes.append(f"fase {fase}")
+        partes.append(f"fase de build {fase} (por almas, no por minuto)")
     desvio = patrones.desvio(t_s, almas)
     if desvio is not None:
         if desvio >= 0:

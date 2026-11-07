@@ -354,9 +354,12 @@ def candidatos(estado: Estado, conoc, cat, cfg=CFG_DEFECTO, limite=3):
                  + premio_balance
                  - (cfg["w_venta"] if requiere_venta else 0.0))
 
+        # `min_compra` viene en porcentaje de la partida típica (0-100), no en minutos:
+        # el panel llegó a decir "minuto 61 de partida" a los 25 minutos reales.
+        mc_min = (mc or 0) * cfg["duracion_tipica_s"] / 6000.0
         razones = explicador.razones(
             residual=residual, counter=counter, pareja=pareja, cadena=cadena,
-            info_fase=info_fase, min_compra=mc, distancia_t=distancia_t,
+            info_fase=info_fase, min_compra=mc_min, distancia_t=distancia_t,
             requiere_venta=requiere_venta, slot=slot,
             contexto=ctx_razones.get(iid), presupuesto=(
                 f"cabe en lo que falta para el hito de {hito:,} almas" if (
@@ -492,10 +495,15 @@ def recomendar(estado: Estado, conoc, cat, cfg=None):
                            "valor": round(info["lift_residual"]*100, 2),
                            "slot": info["slot"], "icono": f"/icono/{iid}"})
     contexto_fase = explicador.explicar_estado(econ, tactico, estado.t, estado.yo.almas)
+    # Consejo de composición: va aparte del ranking porque los datos de residual de estos
+    # ítems son negativos (los compra quien va perdiendo). Se muestran con su fuente.
+    contra = situacionales.sugerencias_composicion(
+        [j.heroe for j in estado.enemigos if j.heroe], estado.yo.items)
     return {
         "t": estado.t,
         "estado": tactico,
         "contexto_fase": contexto_fase,
+        "contra_composicion": contra,
         "fase_economica": patrones.fase_economica(estado.yo.almas),
         "economia": econ,
         "recomendaciones": top,

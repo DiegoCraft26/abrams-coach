@@ -191,7 +191,10 @@ def probar_herramientas():
     fallos += _fallos_prueba(
         "explica la primera con alternativas",
         r.get("nombre") == "A" and r.get("costo") == 1500
-        and r.get("razones") == ["r1"] and r.get("alternativas") == ["B", "C"]
+        and r.get("razones") == ["r1"]
+        # las alternativas llevan nombre, coste y sus propias razones (2026-11-07)
+        and [x.get("nombre") for x in r.get("alternativas") or []] == ["B", "C", "D"]
+        and all("razones" in x for x in r.get("alternativas") or [])
         and r.get("alcanza") is True,
     )
     rec["almas"] = 1000

@@ -25,6 +25,7 @@ from gi.repository import Gdk, GLib, Gtk  # noqa: E402
 from . import preferencias
 from .componentes.cabecera import Header
 from .componentes.compras import PurchaseFeed
+from .componentes.contra import ContraComposicion
 from .componentes.copiloto import CopilotoDrawer
 from .componentes.enemigos import EnemyGrid
 from .componentes.equipo import Equipo
@@ -131,6 +132,7 @@ class Panel(Gtk.ApplicationWindow):
         self.tendencia = TrendChart()
         self.ventas = Ventas()
         self.equipo = Equipo()
+        self.contra = ContraComposicion()
         self.pie = StatusBar()
 
         # el cuerpo va en un scrolled: si el monitor es 800×600 no se pierde nada
@@ -143,7 +145,7 @@ class Panel(Gtk.ApplicationWindow):
         self.desplazable.set_child(self.cuerpo)
         self.raiz.append(self.desplazable)
 
-        self.copiloto = CopilotoDrawer(url)
+        self.copiloto = CopilotoDrawer(self.url)
         self.raiz.append(self.copiloto)
         self.raiz.append(self.pie)
 
@@ -185,7 +187,7 @@ class Panel(Gtk.ApplicationWindow):
         vaciar(self.cuerpo)
         for comp in (self.recomendacion, self.inventario, self.enemigos,
                      self.compras, self.plan, self.tendencia, self.ventas,
-                     self.equipo):
+                     self.equipo, self.contra):
             desacoplar(comp)
 
         principal = self._columna()
@@ -210,6 +212,7 @@ class Panel(Gtk.ApplicationWindow):
         seccion_comp = self._seccion("COMPRAS", self.compras)
         seccion_venta = self._seccion("VENTAS", self.ventas)
         seccion_equipo = self._seccion("EQUIPO", self.equipo)
+        seccion_contra = self._seccion("CONTRA SU COMPOSICIÓN", self.contra)
 
         if modo == "angosto":
             principal.append(self.recomendacion)
@@ -230,6 +233,7 @@ class Panel(Gtk.ApplicationWindow):
             contexto.append(seccion_comp)
             contexto.append(self._relleno())
             contexto.append(seccion_venta)
+            contexto.append(seccion_contra)
             contexto.append(seccion_equipo)
             self.tendencia.set_visible(True)
             self.plan.set_visible(True)
@@ -243,6 +247,7 @@ class Panel(Gtk.ApplicationWindow):
             principal.append(self._seccion("TENDENCIA DE ALMAS", self.tendencia))
             contexto.append(seccion_enem)
             contexto.append(seccion_plan)
+            contexto.append(seccion_contra)
             contexto.append(seccion_equipo)
             lateral.append(seccion_comp)
             lateral.append(seccion_venta)
@@ -356,6 +361,7 @@ class Panel(Gtk.ApplicationWindow):
             self.tendencia.actualizar(datos)
             self.ventas.actualizar(datos)
             self.equipo.actualizar(datos)
+            self.contra.actualizar(datos)
             self.pie.actualizar(datos)
         except Exception as exc:                           # noqa: BLE001
             self.pie.lbl_aviso.set_label(f"error de pintado: {exc}"[:90])

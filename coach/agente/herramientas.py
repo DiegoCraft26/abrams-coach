@@ -105,12 +105,18 @@ def explicar_recomendacion(estado: dict) -> dict:
         alcanza = None
         if costo is not None and almas is not None:
             alcanza = costo <= almas
-        alternativas = [r.get("nombre") for r in recs[1:3]
-                        if isinstance(r, dict) and r.get("nombre")]
+        # Las alternativas van con sus propias razones y su score: si solo se manda el
+        # nombre, el copiloto no puede explicar por qué quedaron abajo (le pasó el
+        # 2026-11-07 y tuvo que decir "no tengo ese desglose").
+        alternativas = [
+            {"nombre": r.get("nombre"), "costo": r.get("costo"),
+             "score": r.get("score"), "razones": r.get("razones") or []}
+            for r in recs[1:4] if isinstance(r, dict) and r.get("nombre")]
         return {
             "nombre": primera.get("nombre"),
             "costo": costo,
             "razones": primera.get("razones"),
+            "score": primera.get("score"),
             "alternativas": alternativas,
             "alcanza": alcanza,
         }

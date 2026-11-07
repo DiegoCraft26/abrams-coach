@@ -130,3 +130,34 @@ def bonus_contexto(heroes_enemigos, factor=1.0, senal_datos=None):
             puntos[iid] = round(0.5 * factor, 3)
             razones[iid] = f"{datos['para']} cuando vas atrás"
     return puntos, razones
+
+
+def sugerencias_composicion(heroes_enemigos, poseidos=(), maximo=2):
+    """Ítems que la composición enemiga justifica, **fuera del ranking**.
+
+    No entran en la recomendación porque sus datos de residual son negativos (los compra
+    quien ya va perdiendo: el sesgo que este proyecto mide y evita). Se muestran aparte,
+    con su fuente y con el dato en contra, para que el jugador decida con todo a la vista.
+    """
+    señales = señales_composicion(heroes_enemigos)
+    poseidos = {str(x) for x in (poseidos or ())}
+    candidatos = []
+    for iid, datos in SITUACIONALES.items():
+        señal = {"antiheal": "heal", "antispirit": "spirit", "anticc": "cc",
+                 "antimovilidad": "movilidad"}.get(datos["tag"])
+        if not señal or not señales.get(señal):
+            continue
+        if iid in poseidos or señales[señal] < 2:
+            continue
+        candidatos.append({
+            "id": iid,
+            "nombre": datos["nombre"],
+            "costo": datos["costo"],
+            "para": datos["para"],
+            "cuando": datos["cuando"],
+            "enemigos_que_lo_justifican": señales[señal],
+            "fuente": datos["fuente"],
+            "fecha_fuente": FECHA,
+        })
+    candidatos.sort(key=lambda x: (x["costo"], -x["enemigos_que_lo_justifican"]))
+    return candidatos[:maximo]

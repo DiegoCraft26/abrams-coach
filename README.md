@@ -1,88 +1,108 @@
 # Abrams Coach
 
-Panel de decisiones para Deadlock, solo héroe **Abrams**, en el monitor secundario.
-Lee la partida por pantalla, cruza con 1.9 millones de partidas reales y dice qué comprar,
-qué vender y si toca farmear o pelear.
+Panel de decisiones para Deadlock, solo héroe **Abrams**, pensado para el monitor
+secundario. Lee la partida por pantalla y por el broadcast de Valve, cruza con 1.9 millones
+de partidas reales y dice qué comprar, qué vender y si toca farmear o pelear. Incluye un
+**copiloto** que explica lo que el panel muestra y busca fuera de la base cuando hace falta.
 
-## Estado
+No toca el juego: solo captura de pantalla del escritorio y APIs públicas. Cero lectura de
+memoria, cero inyección, cero hooks. El anti-cheat está activo y la cuenta es de Diego.
 
-| Pieza | Estado |
-|---|---|
-| Minería de datos (deadlock-api) | funcionando, datos descargados |
-| Base de conocimiento (120 ítems, 400 pares, 43 matchups) | funcionando |
-| Motor de decisión | funcionando, **1–3 ms** por consulta |
-| Panel web (SSE) | rediseñado: sistema de diseño, inventario abajo, tendencia de almas, estados claros |
-| Puerta de calidad automatizada | `verificar_ui.py` + 3 suites de pruebas |
-| Grafo de compras (fases + aristas) | funcionando: 558 nodos, 29,239 transiciones |
-| Ítems de apertura | funcionando: solo abre con ítems de apertura reales |
-| Filtro de estabilidad | funcionando: detecta reloj que retrocede, saltos imposibles, se congela |
-| Detección de iconos | 100% en pruebas sintéticas con recorte exacto, 85% con icono al 70% |
-| Lectura del marcador (12 almas + reloj) | **funcionando sobre captura real: 12/12 almas, reloj exacto** (2026-11-07) |
-| Estado en vivo sin OCR (almas por jugador) | **funcionando y verificado** contra partidas reales (2026-11-07) |
-| Registro de decisiones | funcionando |
+## Estado (2026-11-07, sesión de 9 h)
 
-## Estado en vivo (2026-11-07)
-
-Hay tres fuentes de partida, y cada una está medida:
-
-| Modo | Qué da | Coste |
+| Pieza | Estado | Número que lo respalda |
 |---|---|---|
-| `--fuente vivo` | tiempo, almas por jugador, héroe, equipo y KDA **sin OCR** | 0 VRAM, ~KB de RAM, latencia ~20-25 s |
-| `--fuente ocr` | tiempo y las 12 almas leídas de la pantalla | ~650 ms por lectura, 0 VRAM |
-| `--fuente simulado` | demo sin juego, para ver el panel | despreciable |
-
-```bash
-python3 run.py --fuente vivo                 # busca tu partida por cuenta Steam
-python3 run.py --fuente vivo --match 123456  # partida concreta (ver a cualquiera)
-python3 run.py --fuente ocr --mi-columna 5   # columna aliada que eres tú
-python3 run.py --fuente ocr --imagen salida/calibracion/marcador_real_juego.png  # probar sin juego
-```
-
-El modo `vivo` saca el estado del broadcast de espectador de Valve vía `deadlock-api`:
-no lee memoria del juego, no inyecta y no hookea. Ver `coach/en_vivo.py`.
-
-**Verificado el 2026-11-07 contra una partida real en curso**: `t = 29:33`, `5.911` almas
-propias, las 12 almas (`[5911, 2711, 1051, 1880, 2118, 5362, 1987, 3265, 3339, 1551,
-2696, 4388]`), enemigos con héroe y almas (`Mina 1987, Billy 3265, Yamato 3339`), estado
-`PELEAR` y recomendaciones con coste. Latencia ~20–25 s respecto del juego.
-
-Si el stream deja de mandar ticks o la partida termina, el panel lo dice: `/api/estado`
-publica `edad_s` y `rancio`, y a los 8 s la insignia pasa a **datos congelados** en vez
-de seguir diciendo "en vivo".
-
-**Qué necesita Diego para cerrar lo que falta:**
-
-1. Una captura del marcador de **otra partida** (para cumplir "≥2 capturas reales").
-2. Una captura de **partida normal** sin Testing Tools (para ubicar el contador de almas
-   propias del HUD; hoy se resuelve por la API en vivo o con `--mi-columna`).
-
+| UI nativa GTK4 responsive | **funcionando** | 4 tamaños sin recortes (960×1080, 1280×720, 1920×1080, 800×600), 127.5 MB, 0.2 % CPU |
+| Motor de decisión | funcionando | 4.5 ms medio, 8.6 ms máx (200 partidas, 2,156 estados) |
+| Modo en vivo (broadcast) | funcionando | latencia 20–25 s, se muestra como *datos de hace N s* |
+| Persistencia SQLite | **funcionando** | 1,936 muestras, 5,289 recomendaciones, 5 videos archivados |
+| Copiloto DS 4.1 Flash | **funcionando** | 5 preguntas de muestra respondidas con estado real; 6 llamadas/min |
+| Patrones de motor nuevos | **medidos** | diversidad 15 → 19 ítems distintos, residual +0.0552 pp |
+| Tests | **en verde** | `pytest -q` → 25 tests, 0 fallos |
+| Invariantes del motor | **en verde** | 6/6, 0 violaciones |
 
 ## Arranque
 
 ```bash
 cd .
-./arrancar.sh simulado      # demo sin juego, para ver el panel
-./arrancar.sh ocr           # lectura real de pantalla
-./parar.sh
+
+# panel con datos de demostración (sin juego)
+./arrancar.sh simulado          # o: python3 run.py --fuente simulado
+python3 panel_nativo.py         # ventana GTK4 contra http://127.0.0.1:8090
+
+# partida real
+./herramientas/partida.sh prep  # apaga lo que roba VRAM, abre coach y panel
+./herramientas/partida.sh grabar
+./herramientas/partida.sh cortar
+./herramientas/partida.sh fin   # cierra y archiva en datos/coach.db
 ```
 
-Panel: **http://127.0.0.1:8090**
+Atajos del panel: `1` recomendación · `2` enemigos · `3` compras · `c` copiloto · `?` ayuda
+· `Esc` cerrar. La ventana recuerda tamaño y posición en `~/.config/abrams-coach/ui.json`.
 
-Para el segundo monitor: abre esa URL en Brave y pon la ventana en la mitad derecha del
-monitor secundario. El panel está pensado para ~960 px de ancho.
+## Arquitectura
 
-## Cómo se construyeron los datos
-
-```bash
-python3 mineria.py                 # descarga base: partidas, ítems, pares, builds
-python3 -m coach.catalogo          # catálogo normalizado de 250 ítems
-python3 -m coach.conocimiento      # base de conocimiento (usa caché)
-python3 -m coach.iconos            # 245 iconos de ítems + 62 retratos
+```
+abrams-coach/
+  run.py                  CLI y cableado: arma el motor, el servidor y el copiloto
+  panel_nativo.py         punto de entrada del panel (delega todo en coach/ui/)
+  coach/
+    dominio.py            dataclasses tipadas: Jugador, Item, Recomendacion, Partida…
+    bus.py                bus de estado con suscriptores (la UI no conoce las fuentes)
+    config.py             carga y valida config/coach.yaml; valores por defecto seguros
+    estado.py             estado de partida (compatibilidad con el motor histórico)
+    motor.py              decisión: compra, venta, farm/pelear + scoring
+    motor_api.py          puente: dict -> Estado -> recomendación
+    decision/
+      patrones.py         hitos de almas del build, economía por evento, objetivos
+      situacionales.py    ítems situacionales con fuente y fecha
+      explicador.py       las razones que ve el jugador (nunca vacías)
+    fuentes/
+      base.py             interfaz FuenteDatos
+      api_vivo.py         broadcast de Valve vía deadlock-api (SSE)
+      hud_ocr.py          reloj y oro del HUD por captura + OCR, con validación
+      simulador.py        demo sin juego
+      compuesto.py        regla de precedencia y estado honesto
+    agente/
+      proveedor.py        OpenAI-compatible (Command Code → Hugging Face)
+      presupuesto.py      límites por minuto/sesión + caché
+      herramientas.py     estado_actual, explicar, historial, api_query, buscar_web
+      copiloto.py         bucle de herramientas, log en SQLite
+    persistencia/
+      db.py               SQLite con WAL y migraciones idempotentes
+      repos.py            guardar/consultar partidas, muestras, compras, videos, agente
+    ui/
+      app.py              ventana, breakpoints, sondeo a /api/estado, atajos
+      tema.css            sistema de diseño (colores, tipografía, tarjetas)
+      preferencias.py     memoria de tamaño y posición
+      iconos.py           caché de iconos (antes se releían del disco cada segundo)
+      componentes/        cabecera, recomendación, enemigos, compras, plan, inventario,
+                          tendencia, ventas, equipo, contra-composición, copiloto, pie
+    servidor.py           HTTP + SSE en 127.0.0.1:8090, /api/copiloto
+  herramientas/
+    partida.sh            prep/grabar/cortar/estado/resumen/archivar/seguir/fin
+    archivar.py           importa salida/*.jsonl y videos a SQLite (idempotente)
+    capturar_ui.py        capturas a tamaños exactos, sin depender del compositor
+    evaluar_motor.py      A/B del motor sobre 626 partidas reales
+    escenarios_motor.py   escenarios que el replay no puede medir (comeback)
+    monitor.py            muestreo periódico a salida/monitor-<match>.jsonl
+  config/coach.yaml       pesos del motor, UI, fuentes, agente y banderas
+  datos/coach.db          base de datos local (no se versiona)
+  capturas/               capturas de la UI (4 tamaños + antes/después)
+  informes/               investigación, evaluaciones y este informe de sesión
 ```
 
-Fuente única: `api.deadlock-api.com`, sin clave. Datos del ciclo actual:
-**1,945,004 partidas de Abrams**, winrate base 49.19%, 44 héroes enemigos con estadística
-por ítem.
+### Reglas de diseño que se respetan
+
+- **Interfaces explícitas**: `FuenteDatos`, repositorios y `ProveedorLLM`. Los dicts crudos
+  no cruzan capas nuevas (`coach/dominio.py` para lo tipado).
+- **Un bus de estado**: `coach/bus.py`; el servidor publica y la UI solo consume HTTP, así
+  que no sabe si detrás hay broadcast, OCR o demo.
+- **Configuración con defaults y validación**: `config/coach.yaml`. Un YAML roto no impide
+  arrancar: se usan los valores por defecto y se anota el aviso.
+- **Banderas para lo nuevo** (`flags` en `config/coach.yaml`): `patrones_nuevos`,
+  `copiloto`, `hud_ocr`, `archivado_auto`, `interfaz_responsive`. Todo se puede apagar sin
+  tocar código.
 
 ## El motor, en una frase
 
@@ -96,133 +116,81 @@ score = 1.00 · lift residual (pp)
       + 0.40 · encaje con el minuto actual
       + 0.20 · premio por no gastarte todas las almas
       + 0.50 · combo con un ítem que ya llevas
+      + 1.20 · probabilidad de ser la compra siguiente
+      + 0.45 · balance de slots (rellenar el más flojo)
+      + contexto de composición (0–4 puntos, con fuente)
+      − 0.30 · gastarte lo que te faltaba para el hito de build
+      − 0.90 · ítem caro cuando vas atrás
 ```
 
-Filtros duros antes de puntuar: te alcanza, hay slot libre, no lo tienes, no es trampa
-(lift residual por debajo de −1 pp), y tiene muestra suficiente.
+### Fase económica y power spikes (nuevo, 2026-11-07)
 
-### Apertura (primeros 10 minutos)
+El motor compara tus almas con el build de referencia de Abrams (7.6k a los 10 min y 25.5k
+a los 25, Blitz.gg 2026-10-31) y con los hitos por coste total (Early 8,000 · Mid 13,600 ·
+Late 22,400, deadlocked.gg 2026-10-30). Eso alimenta tres cosas: la etiqueta de fase, el
+castigo por gastar de más justo antes de un hito y el texto que dice cuántas almas faltan.
 
-No recomienda cualquier ítem barato: solo los que en datos reales son apertura de Abrams
-(Restorative Shot, Melee Lifesteal, Close Quarters, Extra Stamina, Rebuttal), con su
-winrate ajustado y su muestra.
+### Situacionales y contra-composición (nuevo)
 
-### Pathing
-
-`item-flow-stats` da el grafo real de compras: **558 nodos y 29,239 transiciones** entre
-ítems, con winrate ajustado por fase y almas medias al comprar. El motor lo usa de dos
-formas: premia ítems que se compran en la fase actual, y muestra los 2 ítems que suelen
-venir después del recomendado.
-
-### Estabilidad y errores de lectura
-
-`coach/estabilizador.py` detecta y frena:
-
-- reloj que retrocede o que no avanza en 4 lecturas seguidas
-- saltos de almas mayores a 12,000 entre lecturas
-- almas negativas o tiempo fuera de rango
-
-Cuando pasa, la lectura se marca como dudosa, la confianza baja a 35% y **se mantiene la
-última recomendación buena** en vez de saltar a una decisión con datos rotos. Además hay
-histéresis: la recomendación no cambia hasta repetirse 2 lecturas o superar a la anterior
-por 0.8 puntos.
-
-### Estados
-
-Solo tres, y solo a partir del minuto 10:
-
-- **FARM** — vas ≥10% atrás en almas: farmea hasta un objetivo que el panel calcula.
-- **PELEAR** — vas ≥10% arriba: busca pelea y objetivos.
-- **EQUILIBRIO** — diferencia menor al 10%: sigue el ritmo, no fuerces.
-
-No compara líneas ni rivales concretos: usa la media de almas enemiga. Así no falla cuando
-el equipo enemigo rota y el marcador ya no coincide con la línea.
+Los ítems situacionales (anti-curación, anti-spirit, anti-control, anti-movilidad) se
+listan en **CONTRA SU COMPOSICIÓN**, fuera del ranking, con su fuente y con el aviso de que
+sus datos de residual son negativos (los compra quien va perdiendo). No se cuelan en la
+recomendación principal salvo que los datos de matchup del proyecto también los apoyen.
 
 ### Venta
 
 En Deadlock todo ítem se vende por su valor completo, así que la regla no es "¿puedo?"
-sino "¿mejoro?". Solo propone vender si:
+sino "¿mejoro?". Solo propone vender si el ítem que entra supera al que sale por ≥2 pp, el
+que sale se vende de verdad (≥40 % de las partidas) y ya pasó su minuto típico de venta.
 
-1. el ítem que entra supera al que sale por **≥2 pp**,
-2. el que sale se vende de verdad en partidas reales (≥40% de las veces),
-3. ya pasó su minuto típico de venta (dato real de `avg_sell_time_relative`).
+## Copiloto
 
-Ejemplo real del motor:
-`Slowing Bullets supera a Rapid Rounds por +13.0pp y Rapid Rounds se vende en 75% de las partidas`
+`POST /api/copiloto {"pregunta": "..."}` con el estado vivo. Usa `deepseek/deepseek-v4.1-flash`
+por el proveedor `commandcode` y cae a `huggingface` si falla. Las claves se leen de
+`~/.dsh/.credentials.yaml` y **nunca** se imprimen ni se escriben en el repo.
 
-## Calibrar con el juego abierto
+- Herramientas: `estado_actual`, `explicar_recomendacion`, `historial`, `api_query` (lista
+  blanca de endpoints), `buscar_web` (Tavily, devuelve URL y extracto).
+- Guardrails: 6 llamadas/minuto, 120 por sesión, caché de 300 s, timeout de 45 s por
+  llamada y 75 s por pregunta, log en `agente_log`. En partida es **solo lectura**.
+- Verificado con 5 preguntas reales; ver `informes/copiloto-muestras.md`.
 
-```bash
-python3 calibrar.py
-```
+## Datos
 
-Regiones en `config/regiones.json` (fracciones de pantalla, 0–1): `tiempo`, `almas`,
-`retrato`, `mis_items` (barra del HUD con tus 12 slots), `scoreboard`.
+**1,945,004 partidas de Abrams**, winrate base 49.19 %, 153 ítems con datos, 400 pares,
+43 matchups, 558 nodos y 29,239 transiciones en el grafo de compras.
 
-Guarda `salida/captura.png`, intenta leer tiempo y almas, y genera
-`salida/rejilla-scoreboard.png` con la rejilla encima del marcador. Si la rejilla no cae
-donde debe, ajusta `config/regiones.json` (fracciones 0–1 de la pantalla, no píxeles).
-Después vuelve a correr `calibrar.py` hasta que las celdas coincidan con los iconos.
-
-## Pruebas
+Base local (`datos/coach.db`, SQLite con WAL):
 
 ```bash
-python3 tests/test_motor.py        # decisiones, filtros, estado táctico, latencia
-python3 tests/test_robustez.py     # basura de entrada: nunca se cae
-python3 tests/test_deteccion.py    # precisión de reconocimiento de iconos
+sqlite3 datos/coach.db ".tables"
+sqlite3 datos/coach.db "select match_id, duracion_s, resultado from partidas order by inicio desc limit 5;"
+sqlite3 datos/coach.db "select item, count(*) n from recomendaciones group by item order by n desc limit 10;"
+sqlite3 datos/coach.db "select * from videos;"
+./herramientas/partida.sh archivar        # reimporta salida/*.jsonl (idempotente)
 ```
 
-## Registro
+## Pruebas y puertas de calidad
 
-Cada recomendación se anota en `salida/decisiones.jsonl` con tiempo, almas, estado y
-los ítems sugeridos. Es la base para comparar después qué recomendó la app contra lo que
-compraste y contra el resultado.
+```bash
+python3 -m py_compile run.py panel_nativo.py coach/*.py coach/*/*.py
+PYTHONPATH=$HOME/.dsh/bin/pylib python3 -m pytest -q       # 25 tests
+python3 tests/test_invariantes.py                          # 6/6 invariantes
+python3 herramientas/evaluar_motor.py --partidas 200        # A/B del motor
+python3 herramientas/escenarios_motor.py                   # escenarios sintéticos
+python3 herramientas/capturar_ui.py                        # 4 capturas + gate de pintado
+```
 
-## Fuente de imagen
+## Limitaciones conocidas (sin adornos)
 
-`--captura auto|bufer|spectacle`:
-
-- `bufer`: reutiliza `~/.dsh/state/ultima.png` (servicio `dsh-buffer-pantalla`) si está
-  fresco. **Su intervalo es de 12 s**, así que sirve como respaldo barato, no como fuente
-  principal para un coach en vivo.
-- `spectacle`: captura propia, la fuente real del coach.
-- `auto`: usa lo más fresco de los dos.
-
-## Composición enemiga
-
-Se lee la columna de retratos del marcador (10 filas), las 5 primeras son enemigos y las
-5 siguientes aliados. Los nombres entran al scoring por matchup: el motor cambia la
-recomendación según contra quién juegas.
-
-## Competencia (revisado 2026-11-06)
-
-Hay al menos tres apps que hacen algo parecido, así que no es tierra virgen:
-
-| App | Qué hace | En qué nos diferenciamos |
-|---|---|---|
-| [Deadlock Signal](https://overwolf.com/app/deadlock_signal-deadlock_signal) | builds en orden de compra y skill order, overlay Overwolf | ellos son overlay dentro del juego; nosotros monitor 2, sin inyección |
-| [Soulbound](https://www.overwolf.com/app/jackalope_digital-soulbound) | overlay discreto, scout de lobby, counter pick, top ítems por winrate | su ranking es winrate crudo, que demostramos sesgado por el minuto de compra |
-| [Item Assistant](https://deadlocktrade.gg/mods/item-assistant) | overlay en la tienda: qué comprar, cuándo y contra el equipo enemigo | no pudimos abrir su página para verificar su lógica; no afirmamos ventaja aquí |
-
-Nuestra ventaja verificable: lift residual, grafo de compras por fase, plan de 2 compras
-siguientes, filtro de estabilidad con detección de lecturas rotas, y registro de decisiones
-para medir después.
-
-## Validación
-
-Ver [VALIDACION.md](VALIDACION.md). Resumen: el lift residual predice ganar
-(+0.48 pp de diferencia entre ganadores y perdedores, p = 0.0015, n = 113 partidas) y la
-app elige un ítem de mayor residual que el jugador en 88% de las compras (+2.29 pp).
-Imitar la compra exacta del jugador da 0%: esa métrica mide popularidad, no calidad.
-
-## Limitaciones conocidas
-
-- La lectura de ítems del marcador necesita calibración: depende del HUD y la resolución.
-- El scoreboard solo se ve con Tab abierto; si está cerrado el panel lo dice y sigue
-  recomendando con el resto de la información.
-- Los ítems de aliados todavía no entran en el cálculo (solo enemigos).
-- El tiempo de partida se lee del reloj del HUD; si el HUD lo oculta, la app avisa.
-- Los combos de 3 ítems no se pudieron bajar (el endpoint devolvía 504).
+- La latencia del broadcast (20–25 s, más con pausas) **se muestra**, no se disimula.
+- El OCR del HUD sigue siendo frágil: el reloj funciona, el oro se valida contra el
+  broadcast y se descarta si difiere >30 %. El fallback de solo-HUD sigue apagado.
+- Los ítems del enemigo solo se ven cuando el broadcast los manda; no hay build completo.
+- El copiloto no lee el build rival: lo dice cuando se lo preguntan.
+- La prueba de escalado 125 %/150 % no se pudo hacer con capturas offscreen (GDK_SCALE no
+  aplica al render); queda pendiente probarla con el escalado del monitor.
+- Los FPS del juego no se midieron en esta sesión: no había partida abierta.
 
 ## Riesgos que se respetan por diseño
 

@@ -142,6 +142,12 @@ seguir() {
 
 fin() {
   cortar
+  # Al terminar la partida se archiva sola (bandera `archivado_auto` en
+  # config/coach.yaml). Si falla, se avisa y no se pierde la grabación.
+  if python3 -c "import sys; sys.path.insert(0,'$BASE'); from coach.config import cargar; sys.exit(0 if cargar().flags.get('archivado_auto', True) else 1)" 2>/dev/null; then
+    echo "Archivando partida en datos/coach.db…"
+    archivar || echo "AVISO: el archivado falló; los .jsonl siguen en salida/"
+  fi
   for f in "$PID_PANEL" "$PID_COACH"; do
     if vivo "$f"; then kill "$(cat "$f")" 2>/dev/null || true; rm -f "$f"; fi
   done
@@ -158,6 +164,12 @@ analizar() {
   ffmpeg -hide_banner -loglevel error -i "$src" \
     -vf "fps=1/5,scale=1280:-1" -q:v 3 "$dir/f_%04d.jpg"
   echo "Fotogramas en $dir ($(find "$dir" -name 'f_*.jpg' | wc -l) imágenes, 1 cada 5 s)."
+}
+
+archivar() {
+  # Importa lo ya grabado (decisiones, monitores, compras y videos) a SQLite.
+  # Es idempotente: correrlo dos veces no duplica filas.
+  python3 "$BASE/herramientas/archivar.py" "$@"
 }
 
 resumen() {
@@ -182,8 +194,9 @@ case "${1:-estado}" in
   cortar)   cortar ;;
   estado)   estado ;;
   resumen)  resumen ;;
+  archivar) shift; archivar "$@" ;;
   seguir)   shift; seguir "${1:-}" "${2:-}" ;;
   fin)      fin ;;
   analizar) shift; analizar "${1:-}" ;;
-  *) echo "Uso: $0 {prep|grabar|cortar|estado|fin|analizar <mp4>}"; exit 1 ;;
+  *) echo "Uso: $0 {prep|grabar|cortar|estado|resumen|archivar|seguir <match> [cuenta]|fin|analizar <mp4>}"; exit 1 ;;
 esac
