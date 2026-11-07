@@ -57,6 +57,15 @@ recomendación pasó de un ítem de 6,400 a uno de 1,600.
 | Iconos al 70 % de la celda | 85 % | el mismo |
 | Reloj y oro del HUD sintético | correctos en 4 casos | `tests/test_latencia.py` |
 
+## Estabilidad (15 minutos corriendo)
+
+| Proceso | Al arrancar | A los 15 min | Conclusión |
+|---|---|---|---|
+| coach (`run.py --fuente simulado`) | 34.1 MB | 33.8 MB | sin crecimiento |
+| panel nativo | 126.9 MB | 128.5 MB | +1.6 MB por la caché de iconos, se estabiliza |
+
+Cero excepciones en el log durante la prueba.
+
 ## Base de datos
 
 `datos/coach.db` al cierre: 2 partidas, 1,936 muestras, 5,289 recomendaciones, 5 videos.
