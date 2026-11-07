@@ -43,12 +43,21 @@ def _ocr(imagen, caja, escala=6, whitelist="0123456789:", psm="7"):
                              Image.LANCZOS)
     recorte = ImageOps.autocontrast(recorte)
     recorte = ImageOps.invert(recorte)
-    ruta = os.path.join(tempfile.gettempdir(), "abrams-hud-ocr.png")
-    recorte.save(ruta)
-    salida = subprocess.run(
-        ["tesseract", ruta, "stdout", "--psm", psm,
-         "-c", f"tessedit_char_whitelist={whitelist}"],
-        capture_output=True, text=True, timeout=10).stdout
+    # Archivo ÚNICO por llamada: el reloj y el oro se leen en paralelo y, compartiendo
+    # nombre, una hebra pisaba la imagen de la otra (leía 3,807 donde decía 9,801).
+    fd, ruta = tempfile.mkstemp(prefix="abrams-hud-", suffix=".png")
+    os.close(fd)
+    try:
+        recorte.save(ruta)
+        salida = subprocess.run(
+            ["tesseract", ruta, "stdout", "--psm", psm,
+             "-c", f"tessedit_char_whitelist={whitelist}"],
+            capture_output=True, text=True, timeout=10).stdout
+    finally:
+        try:
+            os.unlink(ruta)
+        except OSError:
+            pass
     return salida.strip()
 
 
