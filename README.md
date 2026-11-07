@@ -41,6 +41,15 @@ python3 run.py --fuente ocr --imagen salida/calibracion/marcador_real_juego.png 
 El modo `vivo` saca el estado del broadcast de espectador de Valve vía `deadlock-api`:
 no lee memoria del juego, no inyecta y no hookea. Ver `coach/en_vivo.py`.
 
+**Verificado el 2026-11-07 contra una partida real en curso**: `t = 29:33`, `5.911` almas
+propias, las 12 almas (`[5911, 2711, 1051, 1880, 2118, 5362, 1987, 3265, 3339, 1551,
+2696, 4388]`), enemigos con héroe y almas (`Mina 1987, Billy 3265, Yamato 3339`), estado
+`PELEAR` y recomendaciones con coste. Latencia ~20–25 s respecto del juego.
+
+Si el stream deja de mandar ticks o la partida termina, el panel lo dice: `/api/estado`
+publica `edad_s` y `rancio`, y a los 8 s la insignia pasa a **datos congelados** en vez
+de seguir diciendo "en vivo".
+
 **Qué necesita Diego para cerrar lo que falta:**
 
 1. Una captura del marcador de **otra partida** (para cumplir "≥2 capturas reales").
