@@ -185,7 +185,9 @@ button:focus-visible, .pill:focus-visible, .tarjeta:focus-visible {
 }
 
 .pie {
-  color: #6E7A8C;
+  /* #6E7A8C daba 4.4:1 sobre el fondo: por debajo de AA. Lo cazó
+     tests/test_accesibilidad.py; este tono da 4.8:1 sobre fondo y 4.5:1 sobre tarjeta. */
+  color: #74808F;
   font-size: 11px;
   font-feature-settings: "tnum";
 }
