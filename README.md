@@ -145,8 +145,10 @@ que sale se vende de verdad (≥40 % de las partidas) y ya pasó su minuto típi
 
 ## Copiloto
 
-`POST /api/copiloto {"pregunta": "..."}` con el estado vivo. Usa `deepseek/deepseek-v4.1-flash`
-por el proveedor `commandcode` y cae a `huggingface` si falla. Las claves se leen de
+`POST /api/copiloto {"pregunta": "..."}` con el estado vivo. Cadena de proveedores:
+`commandcode` (DeepSeek V4.1 Flash) → `huggingface` → **Qwen 3.5-9B local** (gratis, solo
+si `llama-server` está arriba; responde sin herramientas y con el razonamiento apagado,
+medido en 1.5 s). Las claves se leen de
 `~/.dsh/.credentials.yaml` y **nunca** se imprimen ni se escriben en el repo.
 
 - Herramientas: `estado_actual`, `explicar_recomendacion`, `historial`, `api_query` (lista
@@ -169,6 +171,16 @@ sqlite3 datos/coach.db "select item, count(*) n from recomendaciones group by it
 sqlite3 datos/coach.db "select * from videos;"
 ./herramientas/partida.sh archivar        # reimporta salida/*.jsonl (idempotente)
 ```
+
+## Rutas de modelo verificadas (2026-11-07)
+
+| Ruta | Estado | Nota |
+|---|---|---|
+| `commandcode` (DS 4.1 Flash) | **funciona** | exige cabecera `User-Agent` o devuelve 403 |
+| `huggingface` | funciona | respaldo de texto |
+| `opencode-go` (beam/iceman/crouton free) | **funciona** | se usó para subagentes gratis |
+| `local-llama` (Qwen 3.5-9B) | funciona por HTTP | **no** admite `tools` ni dos mensajes de sistema; hay que apagarle el razonamiento |
+| `groq`, `gemini`, `openrouter` | fallaron como subagente | reintentar antes de confiar en ellos |
 
 ## Pruebas y puertas de calidad
 

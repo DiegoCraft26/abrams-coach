@@ -1,0 +1,57 @@
+# Integración continua del Abrams Coach.
+# OJO: este flujo NO se ha ejecutado todavía (la sesión del 2026-11-07 no tenía runner
+# de GitHub). Se deja listo para que el primer push lo valide.
+name: ci
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+
+jobs:
+  pruebas:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.12", "3.13"]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Dependencias del sistema (GTK4 para la UI y tesseract para el OCR)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libgtk-4-1 libgirepository1.0-dev python3-gi \
+            gir1.2-gtk-4.0 xvfb tesseract-ocr sqlite3
+          sudo apt-get install -y xvfb || true
+
+      - name: Dependencias de Python
+        run: |
+          python -m pip install --upgrade pip
+          pip install pytest pillow numpy pyyaml
+
+      - name: Compilación
+        run: python -m py_compile run.py panel_nativo.py coach/*.py coach/*/*.py
+
+      - name: Pruebas
+        run: python -m pytest -q
+
+      - name: Invariantes del motor
+        run: python tests/test_invariantes.py
+
+      - name: A/B del motor (sin red, usa data/replay_cache.json)
+        run: |
+          if [ -f data/replay_cache.json ]; then
+            python herramientas/evaluar_motor.py --partidas 40
+          else
+            echo "sin replay_cache.json (está en .gitignore): se omite"
+          fi
+
+      - name: Archivado idempotente
+        run: |
+          python herramientas/archivar.py --db /tmp/ci.db || true
+          python herramientas/archivar.py --db /tmp/ci.db
+          sqlite3 /tmp/ci.db ".tables"

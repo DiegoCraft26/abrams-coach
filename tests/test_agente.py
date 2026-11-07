@@ -341,7 +341,7 @@ def probar_respaldo():
     cadena = proveedor.cadena_por_defecto()
     fallos += _fallos_prueba(
         "cadena por defecto en orden",
-        [x.nombre for x in cadena] == ["commandcode", "huggingface"]
+        [x.nombre for x in cadena] == ["commandcode", "huggingface", "local-llama"]
         and cadena[0].base_url == "https://api.commandcode.ai/provider/v1"
         and cadena[1].modelo == "deepseek-ai/DeepSeek-V4.1-Flash",
     )

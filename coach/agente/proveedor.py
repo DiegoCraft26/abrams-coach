@@ -65,11 +65,19 @@ class ProveedorOpenAICompatible:
     `leer_credencial`); el valor nunca aparece en mensajes de error.
     """
 
-    def __init__(self, base_url: str, modelo: str, clave_env: str, nombre: str):
+    def __init__(self, base_url: str, modelo: str, clave_env: str, nombre: str,
+                 soporta_herramientas: bool = True, parametros_extra: dict | None = None):
         self.base_url = base_url.rstrip("/")
         self.modelo = modelo
         self.clave_env = clave_env
         self.nombre = nombre
+        # El Qwen local (llama-server) devuelve HTTP 500 si se le manda el bloque
+        # `tools`: verificado el 2026-11-07. Como último recurso responde sin
+        # herramientas, con el resumen de estado que ya va en el prompt.
+        self.soporta_herramientas = soporta_herramientas
+        # El Qwen local razona antes de contestar si no se le apaga: con "thinking"
+        # tarda más de 45 s y el respaldo no sirve de nada.
+        self.parametros_extra = dict(parametros_extra or {})
 
     def _clave(self) -> str | None:
         clave = os.environ.get(self.clave_env)
@@ -82,7 +90,8 @@ class ProveedorOpenAICompatible:
         if not clave:
             raise ErrorProveedor(f"{self.nombre}: falta credencial {self.clave_env}")
         cuerpo = {"model": self.modelo, "messages": mensajes}
-        if herramientas:
+        cuerpo.update(self.parametros_extra)
+        if herramientas and self.soporta_herramientas:
             cuerpo["tools"] = herramientas
         peticion = urllib.request.Request(
             self.base_url + "/chat/completions",
@@ -122,7 +131,15 @@ class ProveedorOpenAICompatible:
 
 
 def cadena_por_defecto() -> list[ProveedorOpenAICompatible]:
-    """Command Code primero, Hugging Face de respaldo (en ese orden)."""
+    """Command Code, Hugging Face y, de último, el Qwen local.
+
+    El tercero es el salvavidas gratis: si la cuota o la red fallan, el copiloto sigue
+    respondiendo con lo que ya viene en el resumen de estado. Está apagado cuando
+    llama-server no corre (el proveedor simplemente falla y se reporta el error).
+
+    Ojo: ese modelo ocupa ~5.4 GB de VRAM, así que **no debe estar levantado mientras
+    se juega** (`systemctl --user stop llama-server`).
+    """
     return [
         ProveedorOpenAICompatible(
             "https://api.commandcode.ai/provider/v1",
@@ -135,6 +152,15 @@ def cadena_por_defecto() -> list[ProveedorOpenAICompatible]:
             "deepseek-ai/DeepSeek-V4.1-Flash",
             "HUGGINGFACE_API_KEY",
             "huggingface",
+        ),
+        ProveedorOpenAICompatible(
+            "http://127.0.0.1:8080/v1",
+            "Qwen3.5-9B local",
+            "LOCAL_LLAMA_KEY",
+            "local-llama",
+            soporta_herramientas=False,
+            parametros_extra={"chat_template_kwargs": {"enable_thinking": False},
+                              "max_tokens": 600},
         ),
     ]
 
