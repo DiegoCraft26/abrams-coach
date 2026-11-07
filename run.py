@@ -111,6 +111,9 @@ def bucle_vivo(a, analizar):
     from coach import en_vivo
     escucha = None
     match_actual = None
+    tick_previo = None
+    tick_desde = time.time()
+    avisado = False
     while True:
         try:
             if a.match:
@@ -128,12 +131,27 @@ def bucle_vivo(a, analizar):
                 print(f"partida en vivo: {match}")
                 escucha = en_vivo.Escucha(match, cuenta=a.cuenta).arrancar()
                 match_actual = match
+                tick_previo, tick_desde, avisado = None, time.time(), False
             est = escucha.estado
             if est is None or not est.get("jugadores"):
                 servidor.EST.publicar({"listo": False,
                                        "mensaje": f"conectando al broadcast "
                                                   f"({escucha.error or 'sin datos'})"})
                 time.sleep(3.0)
+                continue
+            # Si el tick no cambia, el stream dejó de mandar datos. Republicar el estado
+            # viejo lo haría parecer fresco y anularía el aviso de "datos congelados".
+            if est.get("tick") != tick_previo:
+                tick_previo, tick_desde, avisado = est.get("tick"), time.time(), False
+            elif time.time() - tick_desde > 12 and not avisado:
+                servidor.EST.publicar({
+                    "listo": False,
+                    "fuente": "en_vivo",
+                    "mensaje": ("el broadcast dejó de mandar datos (último tick "
+                                f"{tick_previo}); reintentando"),
+                })
+                avisado = True
+                time.sleep(max(1.0, a.intervalo))
                 continue
             if not est.get("yo"):
                 # Espectando una partida donde no está tu cuenta: el reloj sirve, pero
