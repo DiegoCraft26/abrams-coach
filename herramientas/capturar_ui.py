@@ -45,6 +45,8 @@ def main():
     ap.add_argument("--salida", default=os.path.join(RAIZ, "capturas"))
     ap.add_argument("--tamanos", default="960x1080,1280x720,1920x1080,800x600")
     ap.add_argument("--breakpoint", default="auto")
+    ap.add_argument("--preguntar", default=None,
+                    help="abre el copiloto y le hace esta pregunta antes de capturar")
     a = ap.parse_args()
 
     os.makedirs(a.salida, exist_ok=True)
@@ -63,6 +65,9 @@ def main():
         ancho, alto = tamanos[i]
         win = ui_app.Panel(app, a.url, a.breakpoint, 0.4, (ancho, alto))
         win.present()
+        if a.preguntar:
+            win.copiloto.set_reveal_child(True)
+            win.copiloto.preguntar(a.preguntar)
 
         def capturar():
             # dos vueltas al bucle: la primera asigna tamaño, la segunda pinta datos
@@ -78,7 +83,7 @@ def main():
                 win.destroy()
                 GLib.idle_add(siguiente, app, i + 1)
                 return False
-            GLib.timeout_add(900, hacer)
+            GLib.timeout_add(9000 if a.preguntar else 900, hacer)
             return False
 
         GLib.timeout_add(400, capturar)

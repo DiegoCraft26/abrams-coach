@@ -112,12 +112,15 @@ def estado_desde_vivo(est, cuenta=None):
     }
 
 
+_FLAGS = {}
+
+
 def bucle_vivo(a, analizar):
     """Modo en vivo: deadlock-api + HUD por OCR para reloj y oro en tiempo real."""
     from coach import en_vivo, registro
     estado_hud = {"t": None, "oro": None, "ts": 0.0}
 
-    if not getattr(a, "sin_hud", False):
+    if not getattr(a, "sin_hud", False) and _FLAGS.get("hud_ocr", True):
         def _hilo_hud():
             from coach import hud
             while True:
@@ -453,8 +456,22 @@ def main():
     # publicación, o con --intervalo alto el panel parpadearía sin nada roto.
     servidor.UMBRAL_RANCIO_S = max(8.0, 3.0 * max(0.2, a.intervalo))
 
+    # Configuración con defaults y validación (config/coach.yaml). Si el archivo falta o
+    # está roto, `cargar()` devuelve los valores por defecto y anota el aviso: el coach
+    # nunca deja de arrancar por un YAML.
+    from coach.config import cargar as cargar_config
+    cfg = cargar_config()
+    _FLAGS.update(cfg.flags)
+    cfg_motor = dict(cfg.motor)
+    if not cfg.flags.get("patrones_nuevos", True):
+        # Rollback de los patrones nuevos sin tocar código.
+        cfg_motor.update({"w_presupuesto": 0.0, "w_recuperacion": 0.0,
+                          "w_balance": 0.0, "contexto_activo": False})
+    if cfg.avisos:
+        print("  avisos de config: " + "; ".join(cfg.avisos[:3]))
+
     print("cargando conocimiento…")
-    m = Motor()
+    m = Motor(cfg=cfg_motor)
     print(f"  {len(m.conoc['items'])} ítems · {len(m.conoc['pares'])} pares · "
           f"{len(m.conoc['counters'])} matchups")
 
@@ -473,6 +490,21 @@ def main():
         return con_historial(est.procesar(e, m.analizar_dict(d)))
 
     servidor.arrancar(a.puerto, analizador=analizar)
+
+    # Copiloto (solo lectura). Si falta el paquete o la credencial, el panel sigue
+    # funcionando y el drawer dice "no configurado": nada de esto puede tumbar el vivo.
+    try:
+        if not cfg.flags.get("copiloto", True):
+            raise RuntimeError("copiloto apagado en config/coach.yaml")
+        from coach.agente.copiloto import Copiloto
+        ruta_db = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                               "datos", "coach.db")
+        copiloto = Copiloto(estado_fn=lambda: servidor.EST.leer()[0], db_ruta=ruta_db)
+        servidor.configurar_copiloto(copiloto)
+        print("copiloto: listo (DS 4.1 Flash con respaldo a Hugging Face)")
+    except Exception as exc:                                   # noqa: BLE001
+        print(f"copiloto no disponible: {type(exc).__name__}: {exc}")
+
     print(f"panel: http://127.0.0.1:{a.puerto}")
 
     if a.fuente == "simulado":

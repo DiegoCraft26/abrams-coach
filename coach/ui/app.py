@@ -25,6 +25,7 @@ from gi.repository import Gdk, GLib, Gtk  # noqa: E402
 from . import preferencias
 from .componentes.cabecera import Header
 from .componentes.compras import PurchaseFeed
+from .componentes.copiloto import CopilotoDrawer
 from .componentes.enemigos import EnemyGrid
 from .componentes.equipo import Equipo
 from .componentes.inventario import Inventory
@@ -142,6 +143,8 @@ class Panel(Gtk.ApplicationWindow):
         self.desplazable.set_child(self.cuerpo)
         self.raiz.append(self.desplazable)
 
+        self.copiloto = CopilotoDrawer(url)
+        self.raiz.append(self.copiloto)
         self.raiz.append(self.pie)
 
         self._atajos()
@@ -301,6 +304,9 @@ class Panel(Gtk.ApplicationWindow):
         if nombre in ("3", "KP_3"):
             self.compras.grab_focus()
             return True
+        if nombre in ("c", "C"):
+            self.copiloto.alternar()
+            return True
         if nombre in ("question", "questiondown"):
             self._ayuda()
             return True
@@ -319,7 +325,8 @@ class Panel(Gtk.ApplicationWindow):
         from .componentes.base import etiqueta
         caja.append(etiqueta("Atajos", "t18"))
         for linea in ("1 · ir a la recomendación", "2 · ir a los enemigos",
-                      "3 · ir a las compras", "? · esta ayuda", "Esc · cerrar"):
+                      "3 · ir a las compras", "c · abrir el copiloto",
+                      "? · esta ayuda", "Esc · cerrar"):
             caja.append(etiqueta(linea, "t13 tenue"))
         dlg.present()
 

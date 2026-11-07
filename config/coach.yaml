@@ -1,0 +1,64 @@
+# Configuración del coach de Deadlock (héroe Abrams).
+# Los valores fuera de rango se corrigen al default al cargar.
+
+motor:
+  # Pesos del scoring (lift residual + matchup + fase + precio + flujo + cadena + tiempo + venta).
+  w_lift: 1.0
+  w_counter: 0.75
+  w_fase: 0.40
+  w_precio: 0.20
+  w_flujo: 0.50
+  w_cadena: 1.20
+  w_tiempo: 0.18
+  w_venta: 1.20
+  w_presupuesto: 0.30
+  w_recuperacion: 0.90
+  w_balance: 0.45
+  contexto_activo: true
+  lift_minimo: -0.010
+  umbral_ventaja: 0.10
+  fase_minima_s: 600
+  duracion_tipica_s: 2400
+  venta_minima_tasa: 0.40
+  venta_margen_pp: 2.0
+  venta_margen_s: 60
+  # extras usados por el motor
+  slots:
+    weapon: 4
+    vitality: 4
+    spirit: 4
+  flex: 0
+  ventana_fase: 22.0
+
+ui:
+  ancho: 960
+  alto: 1080
+  breakpoints:
+    angosto_max: 760
+    amplio_min: 1100
+  angosto_max: 760
+  amplio_min: 1100
+  actualizacion_hz: 1
+
+fuentes:
+  timeout_s: 10
+  reintentos: 3
+  backoff_s: 2
+
+agente:
+  modelo: "deepseek/deepseek-v4.1-flash"
+  proveedor: "commandcode"
+  fallback: "huggingface"
+  presupuesto_llamadas_min: 6
+  presupuesto_llamadas_sesion: 120
+  cache_s: 300
+  timeout_s: 45
+
+# Interruptores de lo nuevo. Todo lo que se pueda apagar sin tocar código vive aquí:
+# la app tiene que seguir sirviendo aunque una pieza nueva falle.
+flags:
+  patrones_nuevos: true     # fase económica, comeback, balance de slots y situacionales
+  copiloto: true            # drawer del copiloto y endpoint /api/copiloto
+  hud_ocr: true             # leer reloj y oro del HUD (si molesta, se apaga)
+  archivado_auto: true      # archivar la partida en SQLite al terminar
+  interfaz_responsive: true # breakpoints por ancho; si se apaga, siempre 960x1080

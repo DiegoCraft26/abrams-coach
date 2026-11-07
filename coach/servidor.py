@@ -11,6 +11,17 @@ UI = os.path.join(AQUI, "ui", "index.html")
 # "congelado" en cada ciclo aunque todo funcionara.
 UMBRAL_RANCIO_S = 8.0
 
+# Copiloto: se configura desde run.py (`servidor.configurar_copiloto`). Si no hay
+# copiloto, el endpoint responde 503 y el panel esconde el drawer.
+COPILOTO = None
+TIMEOUT_COPILOTO_S = 75.0
+
+
+def configurar_copiloto(copiloto):
+    global COPILOTO
+    COPILOTO = copiloto
+    return COPILOTO
+
 class Estado:
     def __init__(self):
         self.lock = threading.Lock()
@@ -109,6 +120,11 @@ class Manejador(BaseHTTPRequestHandler):
                         self._enviar(200, f.read(), tipo)
                     return
             self._enviar(404, {"error": "sin icono"})
+        elif ruta == "/api/copiloto":
+            self._enviar(200, {
+                "disponible": COPILOTO is not None,
+                "presupuesto": (COPILOTO.presupuesto.estado() if COPILOTO else None),
+            })
         elif ruta == "/api/salud":
             self._enviar(200, {"ok": True, "ts": time.time()})
         elif ruta == "/eventos":
@@ -151,6 +167,35 @@ class Manejador(BaseHTTPRequestHandler):
                 self._enviar(200, {"ok": True})
             except Exception as e:
                 self._enviar(400, {"error": str(e)})
+        elif ruta == "/api/copiloto":
+            if COPILOTO is None:
+                self._enviar(503, {"error": "copiloto no configurado"})
+                return
+            try:
+                cuerpo = json.loads(cuerpo or b"{}")
+            except ValueError:
+                cuerpo = {}
+            pregunta = str((cuerpo or {}).get("pregunta") or "")[:600]
+            if not pregunta.strip():
+                self._enviar(400, {"error": "pregunta vacía"})
+                return
+            # El copiloto puede tardar (varias llamadas al modelo): se ejecuta aparte y
+            # se corta con timeout para no colgar el servidor del panel.
+            caja = {}
+
+            def _correr():
+                try:
+                    caja["r"] = COPILOTO.preguntar(pregunta)
+                except Exception as exc:                       # noqa: BLE001
+                    caja["r"] = {"error": f"{type(exc).__name__}: {exc}"}
+
+            hilo = threading.Thread(target=_correr, daemon=True)
+            hilo.start()
+            hilo.join(TIMEOUT_COPILOTO_S)
+            if hilo.is_alive():
+                self._enviar(504, {"error": "el copiloto no respondió a tiempo"})
+                return
+            self._enviar(200, caja.get("r") or {"error": "sin respuesta"})
         else:
             self._enviar(404, {"error": "no existe"})
 

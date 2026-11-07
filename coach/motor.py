@@ -2,6 +2,7 @@
 import json
 import os
 
+from .decision import explicador, patrones, situacionales
 from .estado import Estado
 
 _RAIZ = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -58,8 +59,14 @@ CFG_DEFECTO = {
     "duracion_tipica_s": 2400,
     "venta_minima_tasa": 0.40,
     "venta_margen_pp": 2.0,
-    "ventana_fase": 22.0,        # % de partida alrededor del minuto típico de compra   # % de veces que se vende el ítem
+    "ventana_fase": 22.0,        # % de partida alrededor del minuto típico de compra
     "venta_margen_s": 60,
+    # --- fase económica y power spikes (2026-11-07) ---
+    "w_presupuesto": 0.30,       # castigo por gastar más de lo que falta para el hito
+    "w_recuperacion": 0.90,      # castigo a ítems caros cuando vas atrás
+    "recuperacion_desde": 3200,   # coste a partir del cual cuenta como "caro" yendo atrás
+    "contexto_activo": True,     # señales de composición (heurística, con datos de matchup)
+    "w_balance": 0.45,           # premia rellenar el slot más flojo del build
 }
 
 
@@ -239,9 +246,29 @@ def candidatos(estado: Estado, conoc, cat, cfg=CFG_DEFECTO, limite=3):
     heroes_enemigos = [j.heroe for j in estado.enemigos if j.heroe]
 
     indice = conoc.get("heroes_index", {})
-    col, en_fase = fase_flujo(estado.t, conoc)
+    # Todas las señales que dependen del reloj se calculan en bloques de 10 s. Sin esto,
+    # dos consultas separadas por 4 s caían a lados distintos de la rampa de apertura y
+    # el ítem recomendado cambiaba (invariante 3 del QA, 2026-11-07). Con el bloque de
+    # 10 s, "casi el mismo momento" da exactamente la misma recomendación.
+    t_efectivo = (int(max(0.0, float(estado.t))) // 10) * 10.0
+    col, en_fase = fase_flujo(t_efectivo, conoc)
     apertura = apertura_ids(conoc)
-    peso_ap = peso_apertura(estado.t, cfg) if apertura else 0.0
+    peso_ap = peso_apertura(t_efectivo, cfg) if apertura else 0.0
+
+    # --- contexto de fase económica (power spikes del build de Abrams) ---
+    hito = patrones.hito_siguiente(almas)
+    faltan_fase = (hito - almas) if hito else 0
+    pct_vs_enemigos = econ.get("delta_pct")
+    atras = (pct_vs_enemigos is not None and pct_vs_enemigos <= -cfg["umbral_ventaja"])
+    # Señal de composición: la heurística solo puntúa si los datos de matchup del
+    # proyecto también dan señal para ese ítem contra esos enemigos.
+    senal_datos = {iid: _bonus_counter(iid, heroes_enemigos, conoc, cfg, indice)
+                   for iid in situacionales.SITUACIONALES}
+    if cfg.get("contexto_activo", True):
+        ctx_puntos, ctx_razones = situacionales.bonus_contexto(
+            heroes_enemigos, senal_datos=senal_datos)
+    else:
+        ctx_puntos, ctx_razones = {}, {}
     filas = []
     for iid, d in conoc["items"].items():
         if iid in poseidos:
@@ -256,20 +283,21 @@ def candidatos(estado: Estado, conoc, cat, cfg=CFG_DEFECTO, limite=3):
         if not slot:
             continue
         residual = d["lift_residual"]
-        if residual < cfg["lift_minimo"]:
+        contexto_pts = ctx_puntos.get(iid, 0.0)
+        if residual < cfg["lift_minimo"] and contexto_pts <= 0:
             continue
         # En la apertura sólo se abre con ítems de apertura reales, pero la restricción
         # se apaga en rampa en vez de cortarse en el minuto 10 de golpe.
         castigo_apertura = 0.0
         if peso_ap > 0 and iid not in apertura:
-            if estado.t < cfg.get("apertura_desde_s", 480.0):
+            if t_efectivo < cfg.get("apertura_desde_s", 480.0):
                 continue
             castigo_apertura = cfg.get("w_apertura", 6.0) * peso_ap
         # los ítems que aparecen en la fase actual del grafo reciben su ventaja real
         info_fase = en_fase.get(iid)
         bonus_flujo = (info_fase["wr_ajustado"] - 0.5) if info_fase else -0.02
         # penalización por tiempo, suave pero fuerte: un ítem de minuto 80 a los 10 se cae solo
-        t_rel = (estado.t / cfg["duracion_tipica_s"]) * 100.0
+        t_rel = (t_efectivo / cfg["duracion_tipica_s"]) * 100.0
         mc = d.get("min_compra") if d.get("min_compra") is not None else t_rel
         distancia_t = abs(t_rel - mc)
 
@@ -286,11 +314,29 @@ def candidatos(estado: Estado, conoc, cat, cfg=CFG_DEFECTO, limite=3):
         if costo > almas:
             continue
 
-        fase = _fase_fit(estado.t, d.get("min_compra"), cfg)
+        fase = _fase_fit(t_efectivo, d.get("min_compra"), cfg)
         counter = _bonus_counter(iid, heroes_enemigos, conoc, cfg, indice)
         pareja = _bonus_pareja(iid, poseidos, conoc)
         cadena = _bonus_cadena(iid, poseidos, conoc)
         precio = 1.0 - min(1.0, costo / max(1, almas))   # premia no gastarte todo
+
+        # Gasto por encima de lo que falta para el hito de build: si estás a 400 almas
+        # del Early (8,000), comprar un ítem de 6,400 te saca del spike.
+        castigo_presupuesto = 0.0
+        if faltan_fase and faltan_fase > 0 and costo > faltan_fase:
+            castigo_presupuesto = cfg["w_presupuesto"] * (costo - faltan_fase) / 1000.0
+        # Yendo atrás, los ítems caros rinden menos que dos de 1,600 (hallazgo 8 de la
+        # investigación del 2026-11-07, con fuente en informes/).
+        castigo_recuperacion = 0.0
+        if atras and costo > cfg["recuperacion_desde"]:
+            castigo_recuperacion = cfg["w_recuperacion"]
+
+        # Balance de slots: Deadlock pide las tres categorías al día. Un build con 4 de
+        # arma y 0 de vitalidad pierde igual que uno sin ítems, así que se premia
+        # rellenar el slot más vacío frente al que ya está lleno.
+        hueco = max(0, cap.get(slot, 4) - usados.get(slot, 0))
+        hueco_max = max(1, max((cap.get(s, 4) - usados.get(s, 0)) for s in cap))
+        premio_balance = cfg.get("w_balance", 0.0) * (hueco / hueco_max) * 2.0
 
         # todo en puntos porcentuales para que los pesos sean legibles
         score = (cfg["w_lift"]*residual*100
@@ -302,30 +348,20 @@ def candidatos(estado: Estado, conoc, cat, cfg=CFG_DEFECTO, limite=3):
                  + cfg["w_cadena"]*cadena*10
                  - cfg["w_tiempo"]*distancia_t
                  - castigo_apertura
+                 - castigo_presupuesto
+                 - castigo_recuperacion
+                 + contexto_pts
+                 + premio_balance
                  - (cfg["w_venta"] if requiere_venta else 0.0))
 
-        razones = []
-        if residual > 0:
-            razones.append(f"{residual*100:+.1f}pp mejor de lo esperado para su minuto de compra")
-        if counter > 0.01:
-            razones.append(f"{counter*100:+.1f}pp en este matchup")
-        if pareja > 0.005:
-            razones.append(f"combo con lo que ya tienes (+{pareja*100:.1f}pp)")
-        if cadena > 0.15:
-            razones.append(f"suele ser la compra siguiente ({cadena*100:.0f}% de las veces)")
-        if info_fase:
-            razones.append(f"se compra en esta fase y gana {info_fase['wr_ajustado']*100:.1f}% "
-                           f"(n={info_fase['n']:,})")
-        if mc is not None and distancia_t <= 6:
-            razones.append(f"estás en su ventana de compra (minuto {mc:.0f} de partida)")
-        if requiere_venta:
-            razones.append(f"necesita vender algo del slot {slot}")
-        # Invariante 5 del QA: una recomendación nunca sale sin explicación. Si no hay
-        # ninguna señal buena, se dice tal cual en vez de dejar el hueco vacío: el panel
-        # muestra razones vacías como "sin datos", que parece un fallo de lectura.
-        if not razones:
-            razones.append(f"lo mejor disponible ahora en {slot}: "
-                           f"residual {residual*100:+.1f}pp, sin señal fuerte todavía")
+        razones = explicador.razones(
+            residual=residual, counter=counter, pareja=pareja, cadena=cadena,
+            info_fase=info_fase, min_compra=mc, distancia_t=distancia_t,
+            requiere_venta=requiere_venta, slot=slot,
+            contexto=ctx_razones.get(iid), presupuesto=(
+                f"cabe en lo que falta para el hito de {hito:,} almas" if (
+                    hito and costo <= faltan_fase) else None),
+            t_s=t_efectivo, almas=almas, faltan_fase=faltan_fase)
 
         filas.append({"id": iid, "nombre": d["nombre"], "costo": costo, "slot": slot,
                       "score": round(score, 4), "residual": residual, "n": d["n"],
@@ -455,9 +491,12 @@ def recomendar(estado: Estado, conoc, cat, cfg=None):
         inventario.append({"id": str(iid), "nombre": info["nombre"],
                            "valor": round(info["lift_residual"]*100, 2),
                            "slot": info["slot"], "icono": f"/icono/{iid}"})
+    contexto_fase = explicador.explicar_estado(econ, tactico, estado.t, estado.yo.almas)
     return {
         "t": estado.t,
         "estado": tactico,
+        "contexto_fase": contexto_fase,
+        "fase_economica": patrones.fase_economica(estado.yo.almas),
         "economia": econ,
         "recomendaciones": top,
         "venta": venta,
