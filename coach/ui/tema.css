@@ -191,3 +191,14 @@ button:focus-visible, .pill:focus-visible, .tarjeta:focus-visible {
 }
 
 .apagado { opacity: 0.45; }
+
+/* barras de comparación (enemigos) */
+.barra-fondo {
+  background-color: #0B0E14;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.04);
+}
+.barra-valor {
+  background-color: rgba(90, 169, 240, 0.75);
+  border-radius: 999px;
+}

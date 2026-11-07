@@ -59,13 +59,20 @@ class EnemyGrid(Gtk.Box):
                if kda is not None else "")
         caja.append(etiqueta(txt, "kda"))
 
-        # barra relativa al que más almas tiene: mide la amenaza, no el valor absoluto
-        barra = Gtk.LevelBar()
-        barra.set_min_value(0)
-        barra.set_max_value(maximo)
-        barra.set_value(min(maximo, e.get("almas") or 0))
-        barra.set_size_request(48, 6)
-        barra.set_valign(Gtk.Align.CENTER)
-        barra.set_hexpand(True)
-        caja.append(barra)
+        # Barra relativa al que más almas tiene: mide la amenaza, no el valor absoluto.
+        # Se dibuja con cajas y no con Gtk.LevelBar porque su "slider" interno reporta
+        # tamaños mínimos negativos y GTK llena el log de avisos en cada repintado.
+        caja.append(self._barra(e.get("almas") or 0, maximo))
         return caja
+
+    def _barra(self, valor, maximo, ancho=64, alto=6):
+        fondo = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL)
+        fondo.set_size_request(ancho, alto)
+        fondo.set_valign(Gtk.Align.CENTER)
+        fondo.add_css_class("barra-fondo")
+        relleno = Gtk.Box()
+        fraccion = 0.0 if not maximo else max(0.0, min(1.0, valor / maximo))
+        relleno.set_size_request(max(1, int(ancho * fraccion)), alto)
+        relleno.add_css_class("barra-valor")
+        fondo.append(relleno)
+        return fondo
