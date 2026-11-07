@@ -34,3 +34,13 @@ for relleno, ruido, et in [(1.0,0,"icono llena la celda, sin ruido"),
                            (0.85,10,"85% de la celda, ruido leve"),
                            (0.70,15,"70% de la celda, ruido fuerte")]:
     print(f"  {et:36} {prueba(relleno, ruido)*100:5.1f}%")
+
+
+def test_suite():
+    """Entrada para `pytest -q`: con el icono limpio el reconocimiento es casi exacto.
+
+    La semilla se fija aquí (no en el import): con pytest los módulos se importan antes
+    de ejecutarse y la semilla del import se la comían otras suites. Medido: 90%.
+    """
+    random.seed(7)
+    assert prueba(1.0, 0) >= 0.90

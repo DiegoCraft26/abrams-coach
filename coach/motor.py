@@ -316,6 +316,16 @@ def candidatos(estado: Estado, conoc, cat, cfg=CFG_DEFECTO, limite=3):
         if info_fase:
             razones.append(f"se compra en esta fase y gana {info_fase['wr_ajustado']*100:.1f}% "
                            f"(n={info_fase['n']:,})")
+        if mc is not None and distancia_t <= 6:
+            razones.append(f"estás en su ventana de compra (minuto {mc:.0f} de partida)")
+        if requiere_venta:
+            razones.append(f"necesita vender algo del slot {slot}")
+        # Invariante 5 del QA: una recomendación nunca sale sin explicación. Si no hay
+        # ninguna señal buena, se dice tal cual en vez de dejar el hueco vacío: el panel
+        # muestra razones vacías como "sin datos", que parece un fallo de lectura.
+        if not razones:
+            razones.append(f"lo mejor disponible ahora en {slot}: "
+                           f"residual {residual*100:+.1f}pp, sin señal fuerte todavía")
 
         filas.append({"id": iid, "nombre": d["nombre"], "costo": costo, "slot": slot,
                       "score": round(score, 4), "residual": residual, "n": d["n"],
@@ -432,6 +442,9 @@ def recomendar(estado: Estado, conoc, cat, cfg=None):
         enemigos.append({"heroe": j.heroe, "icono": f"/icono-heroe/{clave}",
                          "almas": j.almas, "bajas": j.bajas,
                          "muertes": j.muertes, "asistencias": j.asistencias})
+    aliados = [{"heroe": j.heroe, "almas": j.almas, "bajas": j.bajas,
+                "muertes": j.muertes, "asistencias": j.asistencias}
+               for j in estado.aliados if (j.heroe or j.almas is not None)]
     inventario = []
     for iid in estado.yo.items:
         info = conoc["items"].get(str(iid))
@@ -451,6 +464,7 @@ def recomendar(estado: Estado, conoc, cat, cfg=None):
         "plan": plan,
         "objetivo": objetivo,
         "enemigos": enemigos,
+        "aliados": aliados,
         "inventario": inventario,
         "almas": estado.yo.almas,
         "confianza": estado.confianza,

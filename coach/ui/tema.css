@@ -1,0 +1,193 @@
+/* Abrams Coach · tema oscuro neutro, escala 11/12/13/15/18/24/32, grid de 8 px.
+   Paleta:
+     fondo        #0B0E14   tarjeta      #12161F   borde  rgba(255,255,255,.06)
+     acento       #3DDC84   acento suave #6EE7B7   texto  #F2F6FC   secundario #8A94A6
+     aviso        #FFB544   error        #FF5C5C   info   #5AA9F0
+*/
+
+window.coach {
+  background-color: #0B0E14;
+  color: #F2F6FC;
+  font-size: 13px;
+}
+
+/* ---------- tipografía ---------- */
+.t11 { font-size: 11px; }
+.t12 { font-size: 12px; }
+.t13 { font-size: 13px; }
+.t15 { font-size: 15px; }
+.t18 { font-size: 18px; font-weight: 700; }
+.t24 { font-size: 24px; font-weight: 800; }
+.t32 { font-size: 32px; font-weight: 800; }
+
+.tenue   { color: #8A94A6; }
+.fuerte  { color: #F2F6FC; }
+.acento  { color: #3DDC84; }
+.aviso   { color: #FFB544; }
+.error   { color: #FF5C5C; }
+.info    { color: #5AA9F0; }
+.num     { font-feature-settings: "tnum"; }
+
+.rotulo {
+  color: #8A94A6;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+}
+
+/* ---------- superficies ---------- */
+.tarjeta {
+  background-color: #12161F;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 16px;
+  padding: 16px;
+}
+.tarjeta-alta {
+  background-image: linear-gradient(150deg, #161C27, #10141C);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 18px;
+  padding: 20px;
+}
+.superficie {
+  background-color: #0E121A;
+  border-radius: 12px;
+  padding: 8px 12px;
+}
+
+/* ---------- insignias y pills ---------- */
+.insignia {
+  font-size: 12px;
+  font-weight: 800;
+  padding: 5px 12px;
+  border-radius: 999px;
+  border: 1px solid transparent;
+}
+.insignia-vivo    { color: #3DDC84; background-color: rgba(61, 220, 132, 0.12);
+                    border-color: rgba(61, 220, 132, 0.35); }
+.insignia-rancio  { color: #FFB544; background-color: rgba(255, 181, 68, 0.12);
+                    border-color: rgba(255, 181, 68, 0.35); }
+.insignia-offline { color: #FF5C5C; background-color: rgba(255, 92, 92, 0.12);
+                    border-color: rgba(255, 92, 92, 0.35); }
+
+.pill {
+  background-color: #0E121A;
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  border-radius: 999px;
+  padding: 4px 10px;
+  color: #C9D3E1;
+  font-size: 12px;
+}
+.pill:hover { background-color: #141A25; border-color: rgba(255, 255, 255, 0.12); }
+
+.chip {
+  font-size: 12px;
+  font-weight: 800;
+  padding: 5px 12px;
+  border-radius: 999px;
+}
+.chip-farm       { color: #FFB544; background-color: rgba(255, 181, 68, 0.14); }
+.chip-pelear     { color: #3DDC84; background-color: rgba(61, 220, 132, 0.14); }
+.chip-equilibrio { color: #5AA9F0; background-color: rgba(90, 169, 240, 0.14); }
+.chip-inicio     { color: #8A94A6; background-color: rgba(138, 148, 166, 0.14); }
+
+/* ---------- tarjeta de recomendación ---------- */
+.accion {
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: 0.10em;
+  color: #3DDC84;
+}
+.accion-espera { color: #FFB544; }
+.accion-nada   { color: #8A94A6; }
+.nombre-item {
+  font-size: 32px;
+  font-weight: 800;
+  color: #F2F6FC;
+}
+.precio-item {
+  font-size: 15px;
+  color: #C9D3E1;
+  font-feature-settings: "tnum";
+}
+.razon {
+  font-size: 13px;
+  color: #A9B4C6;
+}
+.contexto {
+  font-size: 12px;
+  color: #8A94A6;
+}
+
+/* ---------- barra de progreso del ahorro ---------- */
+.ahorro trough {
+  background-color: #0B0E14;
+  border-radius: 999px;
+  min-height: 6px;
+  border: none;
+}
+.ahorro progress {
+  background-color: #3DDC84;
+  border-radius: 999px;
+  min-height: 6px;
+}
+
+/* ---------- slots de inventario ---------- */
+.slot {
+  background-color: #0E121A;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  min-width: 44px;
+  min-height: 44px;
+}
+.slot-bien { border-color: rgba(61, 220, 132, 0.45); }
+.slot-mal  { border-color: rgba(255, 92, 92, 0.45); }
+.slot-vacio { border-style: dashed; border-color: rgba(255, 255, 255, 0.10); }
+.slot-valor { font-size: 10px; font-weight: 700; }
+
+/* ---------- enemigos ---------- */
+.fila-enemigo { padding: 3px 0; }
+.almas { font-feature-settings: "tnum"; color: #C9D3E1; font-size: 12px; }
+.kda { font-feature-settings: "tnum"; color: #8A94A6; font-size: 11px; }
+
+/* ---------- estados vacíos y foco ---------- */
+.vacio {
+  color: #8A94A6;
+  font-size: 12px;
+  padding: 10px 2px;
+}
+button:focus-visible, .pill:focus-visible, .tarjeta:focus-visible {
+  outline: 2px solid #6EE7B7;
+  outline-offset: 2px;
+}
+
+.boton {
+  background-color: #12161F;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 10px;
+  padding: 6px 14px;
+  color: #F2F6FC;
+  font-size: 12px;
+  font-weight: 700;
+}
+.boton:hover { background-color: #182030; }
+.boton:active { background-color: #0E121A; }
+.boton-principal {
+  background-color: rgba(61, 220, 132, 0.16);
+  border-color: rgba(61, 220, 132, 0.45);
+  color: #6EE7B7;
+}
+
+/* skeleton de carga: un bloque que respira mientras no hay datos */
+.skeleton {
+  background-image: linear-gradient(90deg, #10141C 0%, #171E2A 50%, #10141C 100%);
+  border-radius: 8px;
+  min-height: 12px;
+}
+
+.pie {
+  color: #6E7A8C;
+  font-size: 11px;
+  font-feature-settings: "tnum";
+}
+
+.apagado { opacity: 0.45; }

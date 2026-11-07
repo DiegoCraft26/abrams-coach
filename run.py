@@ -480,7 +480,15 @@ def main():
         while True:
             # si alguien inyecta un estado a mano, el demo se calla un rato
             if time.time() - servidor.EST.manual_ts > 120:
-                servidor.EST.publicar(analizar(estado_simulado(min(t, 2399))))
+                crudo = estado_simulado(min(t, 2399))
+                salida = analizar(crudo)
+                # El demo rellena el mismo campo de 12 almas que llenan el modo vivo y el
+                # OCR: así la sección EQUIPO del panel se puede probar sin partida.
+                doce = ([crudo["yo"].get("almas")]
+                        + [j.get("almas") for j in crudo["aliados"]]
+                        + [j.get("almas") for j in crudo["enemigos"]])
+                salida["almas_12"] = (doce + [None] * 12)[:12]
+                servidor.EST.publicar(salida)
             if a.acelerar > 0:
                 t += 20 * a.acelerar
                 if t > 2400:
