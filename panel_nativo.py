@@ -232,8 +232,14 @@ class Panel(Gtk.ApplicationWindow):
             self._limpiar((d or {}).get("mensaje", ""))
             return
         fuente = str(d.get("fuente") or "")
-        self.lbl_vivo.set_label("● demo" if fuente == "simulado" else "● en vivo")
-        self.lbl_vivo.remove_css_class("muerto"); self.lbl_vivo.add_css_class("vivo")
+        if d.get("rancio"):
+            edad = d.get("edad_s")
+            self.lbl_vivo.set_label("● datos congelados"
+                                    + (f" · hace {round(edad)} s" if edad is not None else ""))
+            self.lbl_vivo.remove_css_class("vivo"); self.lbl_vivo.add_css_class("muerto")
+        else:
+            self.lbl_vivo.set_label("● demo" if fuente == "simulado" else "● en vivo")
+            self.lbl_vivo.remove_css_class("muerto"); self.lbl_vivo.add_css_class("vivo")
         t = int(d.get("t") or 0)
         self.lbl_hora.set_label(f"{t//60}:{t%60:02d}")
         almas = d.get("almas")

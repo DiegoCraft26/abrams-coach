@@ -456,6 +456,7 @@ def recomendar(estado: Estado, conoc, cat, cfg=None):
         "plan": plan,
         "objetivo": objetivo,
         "enemigos": enemigos,
+        "aliados": aliados,
         "inventario": inventario,
         "almas": estado.yo.almas,
         "confianza": estado.confianza,

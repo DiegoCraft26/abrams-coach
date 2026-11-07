@@ -135,7 +135,26 @@ def bucle_vivo(a, analizar):
                                                   f"({escucha.error or 'sin datos'})"})
                 time.sleep(3.0)
                 continue
-            salida = analizar(estado_desde_vivo(est, a.cuenta))
+            if not est.get("yo"):
+                # Espectando una partida donde no está tu cuenta: el reloj sirve, pero
+                # no hay "yo" ni equipos. Mejor decirlo que mostrar un panel vacío.
+                servidor.EST.publicar({
+                    "listo": False,
+                    "mensaje": (f"la partida va {int(est.get('t', 0))//60}:"
+                                f"{int(est.get('t', 0)) % 60:02d}, pero tu cuenta "
+                                f"{a.cuenta} no está en ella"),
+                    "t": est.get("t"),
+                    "fuente": "en_vivo",
+                })
+                time.sleep(max(1.0, a.intervalo))
+                continue
+            crudo = estado_desde_vivo(est, a.cuenta)
+            salida = analizar(crudo)
+            # Las 12 almas del marcador, en el mismo campo que usa el modo OCR, para
+            # que los dos paneles muestren lo mismo sin importar la fuente.
+            salida["almas_12"] = ([crudo["yo"].get("almas")]
+                                  + [j.get("almas") for j in crudo["aliados"]]
+                                  + [j.get("almas") for j in crudo["enemigos"]])
             servidor.EST.publicar(salida)
         except Exception as exc:                                    # noqa: BLE001
             servidor.EST.publicar({"listo": False, "mensaje": f"error en vivo: {exc}"})

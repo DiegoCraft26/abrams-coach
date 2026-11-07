@@ -13,15 +13,27 @@ class Estado:
         self.version = 0
         self.oyentes = []
         self.manual_ts = 0.0   # última inyección manual: pausa el modo demo
+        self.ts = 0.0          # cuándo se publicó lo último
 
     def publicar(self, datos):
         with self.lock:
             self.ultimo = datos
             self.version += 1
+            self.ts = time.time()
 
     def leer(self):
         with self.lock:
             return self.ultimo, self.version
+
+    def edad_s(self):
+        """Segundos desde la última publicación.
+
+        Sin esto el panel seguía diciendo "en vivo" con datos de hace minutos: si el
+        stream se cortaba o la partida terminaba, se mostraba una compra vieja como si
+        fuera actual (detectado por QA de UI, 2026-11-07).
+        """
+        with self.lock:
+            return (time.time() - self.ts) if self.ts else None
 
 EST = Estado()
 
@@ -51,6 +63,11 @@ class Manejador(BaseHTTPRequestHandler):
                 self._enviar(200, f.read(), "text/html; charset=utf-8")
         elif ruta == "/api/estado":
             datos, _ = EST.leer()
+            edad = EST.edad_s()
+            if isinstance(datos, dict):
+                datos = dict(datos)
+                datos["edad_s"] = round(edad, 1) if edad is not None else None
+                datos["rancio"] = bool(edad is not None and edad > 8)
             self._enviar(200, datos)
         elif ruta.startswith("/icono/"):
             iid = ruta.split("/")[-1].replace(".webp", "").replace(".png", "")
@@ -126,6 +143,9 @@ class Manejador(BaseHTTPRequestHandler):
 
 def arrancar(puerto=8090, analizador=None):
     srv = ThreadingHTTPServer(("127.0.0.1", puerto), Manejador)
+    # Sin esto, cada conexión keep-alive deja un hilo esperando y el proceso no termina
+    # nunca: el test del servidor se quedaba colgado al salir.
+    srv.daemon_threads = True
     srv.analizador = analizador
     hilo = threading.Thread(target=srv.serve_forever, daemon=True)
     hilo.start()
