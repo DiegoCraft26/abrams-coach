@@ -1,0 +1,28 @@
+# Datos generados o descargables: se regeneran con las herramientas del repo.
+__pycache__/
+*.pyc
+*.pyo
+
+# Capturas del escritorio: pesan y son de la máquina de desarrollo.
+# Se conserva UNA captura real, la que es verdad terreno del test de lectura.
+salida/*.png
+salida/calibracion/*
+salida/diagnostico/
+!salida/calibracion/marcador_real_juego.png
+
+# Datos crudos grandes (se bajan con mineria.py / descargar_mis_partidas.py).
+data/ability-order.json
+data/flujo.json
+data/items.json
+data/replay_cache.json
+data/perm-2.json
+data/perm-3.json
+
+# Experimentos: scripts y resultados sí, imágenes pesadas no.
+experimentos/**/*.png
+experimentos/**/crops/
+
+# Basura de editores / temporales.
+*.log
+.DS_Store
+/tmp/

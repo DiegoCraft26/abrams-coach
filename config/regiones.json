@@ -1,0 +1,50 @@
+{
+ "pantalla": {
+  "ancho": null,
+  "alto": null
+ },
+ "tiempo": [
+  0.4688,
+  0.0028,
+  0.0859,
+  0.0292
+ ],
+ "almas": [
+  0.36,
+  0.93,
+  0.12,
+  0.045
+ ],
+ "retrato": [
+  0.02,
+  0.905,
+  0.055,
+  0.085
+ ],
+ "scoreboard": [
+  0.14,
+  0.18,
+  0.72,
+  0.56
+ ],
+ "heroes_col": [
+  0.14,
+  0.18,
+  0.052,
+  0.56
+ ],
+ "filas_total": 10,
+ "mis_items": [
+  0.355,
+  0.905,
+  0.29,
+  0.045
+ ],
+ "mis_items_nx": 12,
+ "mis_items_ny": 1,
+ "slots_por_categoria": 4,
+ "filas_enemigas": 4,
+ "filas_aliadas": 5,
+ "iconos_por_fila": 8,
+ "_nota": "regiones en fracciones del area de JUEGO, no del escritorio completo"
+}
