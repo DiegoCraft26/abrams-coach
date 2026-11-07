@@ -22,11 +22,11 @@ Lo que sí se puede es dejar de depender de él para lo que cambia cada segundo.
 
 | Paso | Qué | Salida medible |
 |---|---|---|
-| F1.1 | Medir la cadena completa y mostrar cada latencia por separado | panel con "captura X ms · lectura Y ms · broadcast Z s" |
-| F1.2 | Reloj y oro del HUD por visión a 2–5 Hz | reloj exacto en < 500 ms desde que cambia en pantalla |
+| F1.1 | ~~Medir la cadena completa y mostrar cada latencia por separado~~ | **hecho**: el pie muestra captura, lectura y cuánto va el TV por detrás |
+| F1.2 | ~~Reloj y oro del HUD por visión a 2–5 Hz~~ | **hecho**: lectura en 127 ms, 7.9 lecturas/s; falta validar con captura real |
 | F1.3 | Inventario propio por plantillas (fila inferior del HUD) | 12 slots reconocidos con ≥ 95 % en capturas reales |
 | F1.4 | Proyección entre actualizaciones (almas extrapoladas por ritmo) | el panel marca "proyectado" y corrige al llegar el dato |
-| F1.5 | Captura compartida a un solo proceso | una captura por ciclo, no una por lector |
+| F1.5 | ~~Captura compartida a un solo proceso~~ | **hecho**: `coach/fuentes/captura.py`, una captura por ciclo |
 
 Meta: **tiempo y oro a menos de 1 s** de lo que ve el jugador; el resto (enemigos, KDA) sigue
 en los 20–25 s del broadcast, pero etiquetado con su edad real.
