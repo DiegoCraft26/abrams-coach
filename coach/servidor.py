@@ -4,7 +4,12 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urlparse, parse_qs
 
 AQUI = os.path.dirname(os.path.abspath(__file__))
-UI = os.path.join(AQUI, "ui", "index.html")
+
+# El panel web se retiró el 2026-11-07: hay una sola interfaz, la nativa (GTK4). El
+# servidor queda como API local para el panel y para scripts.
+AVISO_RAIZ = ("Abrams Coach: la interfaz es la app nativa.\n"
+              "Abre el panel con: abrams-coach demo   (o  abrams-coach jugar)\n"
+              "Estado en JSON: /api/estado\n")
 
 # Cuántos segundos sin publicar antes de avisar que los datos están viejos.
 # run.py lo sube según --intervalo: con intervalo 10 s, 8 s fijos marcaban
@@ -74,8 +79,7 @@ class Manejador(BaseHTTPRequestHandler):
     def do_GET(self):
         ruta = urlparse(self.path).path
         if ruta in ("/", "/index.html"):
-            with open(UI, "rb") as f:
-                self._enviar(200, f.read(), "text/html; charset=utf-8")
+            self._enviar(200, AVISO_RAIZ, "text/plain; charset=utf-8")
         elif ruta == "/api/estado":
             datos, _, edad = EST.encuesta()
             if isinstance(datos, dict):
