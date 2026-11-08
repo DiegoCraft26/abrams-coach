@@ -29,6 +29,8 @@ class FuenteApiVivo:
         self._escucha = None
         self._match_actual: int | None = None
         self._callbacks: list[Callable[[dict[str, Any]], None]] = []
+        self._ultimo_ok = 0.0
+        self._arranque_escucha = 0.0
 
     def _backoffs(self) -> list[float]:
         base = [0.5, 1.0, 2.0]
@@ -100,6 +102,7 @@ class FuenteApiVivo:
         )
         self._escucha.arrancar()
         self._match_actual = match
+        self._arranque_escucha = time.time()
         return self._escucha
 
     def _traducir(self, est: dict[str, Any], escucha=None) -> dict[str, Any]:
@@ -168,7 +171,24 @@ class FuenteApiVivo:
                     break
             if est is None:
                 self.ultimo_error = getattr(escucha, "error", None) or "sin datos del broadcast"
+                # Si la partida terminó (o el demo dejó de existir), el id queda
+                # clavado y el coach nunca vuelve a buscar la siguiente. Se suelta
+                # el id para reintentar por cuenta; con --match fijo no se toca.
+                vivo = True
+                try:
+                    vivo = bool(escucha.vivo())
+                except Exception:                              # noqa: BLE001
+                    vivo = False
+                ultima_senal = max(self._ultimo_ok, self._arranque_escucha)
+                if self.match is None and (not vivo or time.time() - ultima_senal > 90.0):
+                    try:
+                        escucha.parar(espera=0.5)
+                    except Exception:                          # noqa: BLE001
+                        pass
+                    self._escucha = None
+                    self._match_actual = None
                 return None
+            self._ultimo_ok = time.time()
             traducido = self._traducir(est, escucha=escucha)
             self.ultimo_error = None
             for fn in list(self._callbacks):

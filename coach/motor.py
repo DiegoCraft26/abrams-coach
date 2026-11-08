@@ -272,6 +272,28 @@ def candidatos(estado: Estado, conoc, cat, cfg=CFG_DEFECTO, limite=3, heroe=None
             heroes_enemigos, senal_datos=senal_datos)
     else:
         ctx_puntos, ctx_razones = {}, {}
+
+    # Lo que ya lleva puesto puede ser componente de lo que se recomienda: Deadlock
+    # consume los componentes y solo cobra la diferencia, liberando sus slots. Antes el
+    # motor cobraba el precio de lista y pedía slot libre, así que con Extra Health en la
+    # mochila Colossus parecía imposible sin vender (reportado jugando el 2026-11-08).
+    _absorbe_cache: dict[str, set] = {}
+
+    def _absorbe(iid):
+        if iid not in _absorbe_cache:
+            _absorbe_cache[iid] = {c for c in componentes_de([iid]) if c in poseidos}
+        return _absorbe_cache[iid]
+
+    def _costo_de(xid):
+        return (conoc["items"].get(xid) or {}).get("costo") or 0
+
+    def _slot_de(xid):
+        return (conoc["items"].get(xid) or {}).get("slot") or (cat.get(xid) or {}).get("slot")
+
+    def _nombre_de(xid):
+        return ((conoc["items"].get(xid) or {}).get("nombre")
+                or (cat.get(xid) or {}).get("nombre") or str(xid))
+
     filas = []
     for iid, d in conoc["items"].items():
         if iid in poseidos:
@@ -281,7 +303,10 @@ def candidatos(estado: Estado, conoc, cat, cfg=CFG_DEFECTO, limite=3, heroe=None
         c = cat.get(iid, {})
         if not c.get("comprable", True):
             continue
-        costo = d["costo"] or c.get("costo") or 0
+        costo_lista = d["costo"] or c.get("costo") or 0
+        absorbe = _absorbe(iid)
+        ahorro = sum(_costo_de(x) for x in absorbe)
+        costo = max(0, costo_lista - ahorro)     # solo se paga la diferencia
         slot = d["slot"] or c.get("slot")
         if not slot:
             continue
@@ -305,7 +330,10 @@ def candidatos(estado: Estado, conoc, cat, cfg=CFG_DEFECTO, limite=3, heroe=None
         distancia_t = abs(t_rel - mc)
 
         mejora = _es_mejora_de(iid, poseidos, cat)
-        libre = cap.get(slot, 4) - usados.get(slot, 0)
+        # Los componentes absorbidos que ocupan el mismo slot devuelven su hueco:
+        # upgrade sobre lo que ya llevas no necesita vender nada.
+        libera = sum(1 for x in absorbe if _slot_de(x) == slot)
+        libre = cap.get(slot, 4) - usados.get(slot, 0) + libera
         requiere_venta = False
         if not mejora and libre <= 0:
             # slot lleno: se permite si hay algo vendible en ese slot (swap)
@@ -368,10 +396,16 @@ def candidatos(estado: Estado, conoc, cat, cfg=CFG_DEFECTO, limite=3, heroe=None
                 f"cabe en lo que falta para el hito de {hito:,} almas" if (
                     hito and costo <= faltan_fase) else None),
             t_s=t_efectivo, almas=almas, faltan_fase=faltan_fase, heroe=heroe)
+        if ahorro:
+            nombres = ", ".join(sorted(_nombre_de(x) for x in absorbe))
+            razones.append(f"aprovecha lo que ya llevas ({nombres}): "
+                           f"pagas {costo:,} en vez de {costo_lista:,}")
 
         filas.append({"id": iid, "nombre": d["nombre"], "costo": costo, "slot": slot,
                       "score": round(score, 4), "residual": residual, "n": d["n"],
                       "razones": razones, "mejora": mejora,
+                      "costo_lista": costo_lista, "ahorro": ahorro,
+                      "absorbe": sorted(_nombre_de(x) for x in absorbe),
                       "min_compra": d.get("min_compra"),
                       "fase": info_fase["wr_ajustado"] if info_fase else None,
                       "requiere_venta": requiere_venta,
@@ -502,9 +536,12 @@ def recomendar(estado: Estado, conoc, cat, cfg=None):
                            "slot": info["slot"], "icono": f"/icono/{iid}"})
     contexto_fase = explicador.explicar_estado(econ, tactico, estado.t, estado.yo.almas, h)
     # Consejo de composición: va aparte del ranking porque los datos de residual de estos
-    # ítems son negativos (los compra quien va perdiendo). Se muestran con su fuente.
+    # ítems son negativos (los compra quien va perdiendo). Se muestran con su fuente y con
+    # el coeficiente a la vista: sin el número, el panel parecía respaldarlos.
+    residuales = {iid: d.get("lift_residual") for iid, d in conoc["items"].items()}
     contra = situacionales.sugerencias_composicion(
-        [j.heroe for j in estado.enemigos if j.heroe], estado.yo.items)
+        [j.heroe for j in estado.enemigos if j.heroe], estado.yo.items,
+        residuales=residuales)
     return {
         "t": estado.t,
         "estado": tactico,

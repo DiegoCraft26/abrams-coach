@@ -132,13 +132,17 @@ def bonus_contexto(heroes_enemigos, factor=1.0, senal_datos=None):
     return puntos, razones
 
 
-def sugerencias_composicion(heroes_enemigos, poseidos=(), maximo=2):
+def sugerencias_composicion(heroes_enemigos, poseidos=(), maximo=2, residuales=None):
     """Ítems que la composición enemiga justifica, **fuera del ranking**.
 
     No entran en la recomendación porque sus datos de residual son negativos (los compra
     quien ya va perdiendo: el sesgo que este proyecto mide y evita). Se muestran aparte,
     con su fuente y con el dato en contra, para que el jugador decida con todo a la vista.
+
+    `residuales` es {item_id: lift_residual} y viaja hasta la interfaz: sin el número al
+    lado, el panel parecía respaldar el ítem y se compraba a ciegas (reportado el 2026-11-08).
     """
+    residuales = residuales or {}
     señales = señales_composicion(heroes_enemigos)
     poseidos = {str(x) for x in (poseidos or ())}
     candidatos = []
@@ -149,6 +153,7 @@ def sugerencias_composicion(heroes_enemigos, poseidos=(), maximo=2):
             continue
         if iid in poseidos or señales[señal] < 2:
             continue
+        coef = residuales.get(iid)
         candidatos.append({
             "id": iid,
             "nombre": datos["nombre"],
@@ -158,6 +163,9 @@ def sugerencias_composicion(heroes_enemigos, poseidos=(), maximo=2):
             "enemigos_que_lo_justifican": señales[señal],
             "fuente": datos["fuente"],
             "fecha_fuente": FECHA,
+            # Copia del lift residual de 1.9 M de partidas, en puntos porcentuales.
+            # Negativo = el ítem lo compra quien ya va perdiendo; se muestra tal cual.
+            "coef": None if coef is None else round(coef * 100, 2),
         })
     candidatos.sort(key=lambda x: (x["costo"], -x["enemigos_que_lo_justifican"]))
     return candidatos[:maximo]

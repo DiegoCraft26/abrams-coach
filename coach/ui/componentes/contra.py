@@ -40,6 +40,14 @@ class ContraComposicion(Gtk.Box):
             titulo = etiqueta(f"{x.get('nombre')} · {x.get('costo', 0):,}", "t12 fuerte")
             titulo.set_ellipsize(3)
             col.append(titulo)
+            # El coeficiente va SIEMPRE visible: si es negativo, el ítem lo compra quien
+            # ya va perdiendo y el panel no debe parecer que lo recomienda.
+            coef = x.get("coef")
+            if coef is not None:
+                signo = "+" if coef >= 0 else ""
+                clase = "t11 tenue" if coef >= 0 else "t11 aviso"
+                col.append(etiqueta(f"coef {signo}{coef:.2f} pp · "
+                                    f"{'a favor' if coef >= 0 else 'en contra'}", clase))
             detalle = etiqueta(f"{x.get('para')} · {x.get('enemigos_que_lo_justifican')} "
                                f"enemigo(s)", "t11 tenue")
             envolver(detalle, 30)

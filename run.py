@@ -177,6 +177,7 @@ def bucle_vivo(a, analizar):
 
     escucha = None
     match_actual = None
+    ultimo_hud = 0.0
     tick_previo = None
     tick_desde = time.time()
     avisado = False
@@ -222,8 +223,18 @@ def bucle_vivo(a, analizar):
             if match is None:
                 # El API no siempre lista la partida. El MATCH de la esquina
                 # inferior derecha del HUD sí está cuando estás jugando.
-                from coach import hud as hud_mod
-                mid = hud_mod.leer_match_id()
+                # OJO: esto cuesta una captura completa (`spectacle -f`) más
+                # tesseract; sin límite hundía los FPS, así que va espaciado.
+                ahora = time.time()
+                cada = 30.0 if getattr(a, "sin_hud", False) else 10.0
+                mid = None
+                if ahora - ultimo_hud >= cada:
+                    ultimo_hud = ahora
+                    try:
+                        from coach import hud as hud_mod
+                        mid = hud_mod.leer_match_id()
+                    except Exception:                          # noqa: BLE001
+                        mid = None
                 if mid:
                     match = mid
                     a.match = mid
@@ -298,7 +309,11 @@ def bucle_vivo(a, analizar):
             # sesión sin pantalla) esto queda en None y no rompe nada.
             try:
                 from coach.fuentes import captura as _cap
-                metricas_captura = _cap.global_().metricas()
+                # No arrancar la captura solo para leer métricas: con --sin-hud
+                # esto encendía `spectacle` a pantalla completa cada ciclo y
+                # hundía los FPS del juego.
+                metricas_captura = ({} if getattr(a, "sin_hud", False)
+                                    else _cap.global_().metricas())
             except Exception:                                  # noqa: BLE001
                 metricas_captura = {}
             latencias = {

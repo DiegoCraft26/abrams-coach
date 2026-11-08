@@ -24,12 +24,22 @@ class Estado:
         self.oyentes = []
         self.manual_ts = 0.0   # última inyección manual: pausa el modo demo
         self.ts = 0.0          # cuándo se publicó lo último
+        self._firma = None     # contenido del último estado (para detectar congelado)
 
     def publicar(self, datos):
         with self.lock:
             self.ultimo = datos
             self.version += 1
-            self.ts = time.time()
+            # `ts` solo avanza si el contenido cambia. El bucle republica el mismo
+            # estado cada pocos segundos; sin esto, una partida terminada seguía
+            # pareciendo fresca (edad 1 s) con el reloj congelado en 34:32.
+            firma = None
+            if isinstance(datos, dict):
+                firma = (datos.get("t"), datos.get("oro"), datos.get("almas"),
+                         (datos.get("estado") or {}).get("estado"))
+            if firma is None or firma != self._firma or not datos.get("t"):
+                self._firma = firma
+                self.ts = time.time()
 
     def leer(self):
         with self.lock:
