@@ -1,216 +1,164 @@
-"""Fuente en vivo desde deadlock-api (broadcast de espectador de Valve).
+"""Descubrimiento de la partida en 3 capas, con presupuesto de golpes a la API.
 
-Envuelve coach.en_vivo: detecta la partida activa y traduce el estado del
-stream SSE al formato que consume el motor. Nunca lanza desde estado().
+Medido el 2026-11-08 (docs/experto/api.md):
+
+- La caché del CDN de `matches/active` es de 120 s (stale hasta ~240 s), así que una
+  partida recién empezada puede tardar minutos en aparecer y un `[]` también puede ser
+  rancio. Por eso esta capa busca como máximo una vez cada 30 s y, cuando lleva tres
+  respuestas vacías seguidas (90 s), repite la consulta con un parámetro de cache-bust.
+- El listado global son 150 partidas y trae `account_id` por jugador: filtrar en local
+  por cuenta no necesita nada más.
+- `matches/live/urls` (~5.8 KB) dice qué partidas tienen broadcast de verdad y no gasta
+  cuota de espectador.
+- La cuota de espectador es 6/h y el 429 trae `retry-after`: `coach.en_vivo` ya la
+  respeta en una sola puerta para todas las llamadas.
+
+Las tres capas, en orden:
+  1. HUD: "MATCH: …" de la esquina inferior derecha. Cuesta una captura (`spectacle -f`,
+     0.41 s y 449 KB medidos), así que se lee como mucho cada 10 s. No depende de la
+     nube ni de la cuota.
+  2. API por cuenta: `matches/active?account_ids=<cuenta>`, 1.4 KB.
+  3. Listado global: `matches/active` completo, filtrado en local por la cuenta.
 """
 from __future__ import annotations
 
 import time
-from typing import Any, Callable
+
+from coach import en_vivo
+
+TTL_S = 30.0             # una búsqueda cada 30 s: la caché de la API es de 120 s
+CADA_HUD_S = 10.0        # cadencia máxima de la capa 1
+SONDEOS_PARA_UNICO = 3   # tres vacíos seguidos (90 s) -> una consulta sin caché
+# Un match_id al que se le abrió el stream y no dio un solo estado en este tiempo se
+# da por muerto: se suelta en vez de devolverlo una y otra vez desde la caché.
+SIN_SENAL_S = 90.0
+
+_cache = {"match": None, "via": None, "detalle": "sin buscar", "ts": 0.0}
+_hud_ts = 0.0
+_vacios = 0
 
 
-class FuenteApiVivo:
-    """Lee una partida real por la API pública, sin OCR y sin tocar el juego."""
+def _por_silencio():
+    """¿El match cacheado lleva demasiado tiempo sin dar un solo estado del stream?
 
-    nombre = "en_vivo"
+    Solo aplica si de verdad se le abrió el stream (si no, no hay silencio que juzgar).
+    """
+    match = _cache["match"]
+    if not match:
+        return False
+    red = en_vivo.DIARIO.resumen()
+    if red.get("match") != match:
+        return False
+    edad = red.get("edad_senal_s")
+    return edad is None or edad > SIN_SENAL_S
 
-    def __init__(
-        self,
-        match: int | None = None,
-        cuenta: int | None = None,
-        timeout_s: float = 20.0,
-        reintentos: int = 3,
-    ):
-        self.match = int(match) if match is not None else None
-        self.cuenta = int(cuenta) if cuenta is not None else None
-        self.timeout_s = float(timeout_s)
-        self.reintentos = max(0, int(reintentos))
-        self.ultimo_error: str | None = None
-        self._escucha = None
-        self._match_actual: int | None = None
-        self._callbacks: list[Callable[[dict[str, Any]], None]] = []
-        self._ultimo_ok = 0.0
-        self._arranque_escucha = 0.0
 
-    def _backoffs(self) -> list[float]:
-        base = [0.5, 1.0, 2.0]
-        if self.reintentos <= 0:
-            return []
-        return (base + [base[-1]] * max(0, self.reintentos - len(base)))[: self.reintentos]
+def _guardar(match, via, detalle):
+    _cache.update({"match": int(match) if match is not None else None,
+                   "via": via, "detalle": detalle, "ts": time.time()})
+    return dict(_cache, de_cache=False)
 
-    def _resolver_match(self) -> int | None:
-        if self.match is not None:
-            return self.match
-        if self.cuenta is None:
-            return None
-        from coach import en_vivo
 
-        ultimo: Exception | None = None
-        intentos = [0.0] + self._backoffs()
-        for i, espera in enumerate(intentos):
-            if espera:
-                time.sleep(espera)
-            try:
-                encontrado = en_vivo.partida_activa(self.cuenta, timeout=self.timeout_s)
-                if encontrado is not None:
-                    self.ultimo_error = None
-                    return int(encontrado)
-                ultimo = None
-            except Exception as exc:  # noqa: BLE001
-                ultimo = exc
-                self.ultimo_error = f"{type(exc).__name__}: {exc}"
-        if ultimo is None and self.ultimo_error is None:
-            self.ultimo_error = "no hay partida activa"
+def _leer_hud():
+    """Capa 1: 'MATCH: …' del HUD. Devuelve None si no toca leer, o si no hay HUD."""
+    global _hud_ts
+    ahora = time.time()
+    if ahora - _hud_ts < CADA_HUD_S:
+        return None
+    _hud_ts = ahora
+    try:
+        from coach import hud
+        return hud.leer_match_id()
+    except Exception as exc:                                   # noqa: BLE001
+        en_vivo.DIARIO.error(f"HUD: {type(exc).__name__}: {exc}")
         return None
 
-    def disponible(self) -> bool:
-        if self.match is not None:
-            return True
-        if self.cuenta is None:
-            return False
-        try:
-            from coach import en_vivo
 
-            return en_vivo.partida_activa(self.cuenta, timeout=self.timeout_s) is not None
-        except Exception:
-            return False
+def descubrir(cuenta=None, forzar=False, timeout=20.0, con_hud=True):
+    """Busca la partida en las 3 capas y devuelve qué encontró y por dónde.
 
-    def _asegurar_escucha(self, match: int):
-        from coach import en_vivo
+    Devuelve un dict:
+        {"match": 133754270 o None, "via": "hud"|"cuenta"|"global"|None,
+         "de_cache": bool, "detalle": "texto para el panel", "ts": epoch}
 
-        if self._escucha is not None and self._match_actual == match:
-            if not self._escucha.vivo() and self._escucha.error:
-                # El stream murió; se reemplaza para permitir un reintento limpio.
-                try:
-                    self._escucha.parar(espera=0.5)
-                except Exception:
-                    pass
-                self._escucha = None
-            else:
-                return self._escucha
-        if self._escucha is not None:
-            try:
-                self._escucha.parar(espera=0.5)
-            except Exception:
-                pass
-        self._escucha = en_vivo.Escucha(
-            match,
-            cuenta=self.cuenta,
-            reintento=1.0,
-            tope_reintentos=max(1, self.reintentos),
-            max_segundos=None,
-        )
-        self._escucha.arrancar()
-        self._match_actual = match
-        self._arranque_escucha = time.time()
-        return self._escucha
+    Nunca lanza: si algo falla lo anota en `en_vivo.DIARIO` y sigue con la capa
+    siguiente. Con `con_hud=False` se saltan la captura de pantalla. Un match cacheado
+    que lleva más de 90 s sin dar un estado del stream se descarta: es la regla que
+    evita quedarse clavado en la partida muerta.
 
-    def _traducir(self, est: dict[str, Any], escucha=None) -> dict[str, Any]:
-        cuenta_txt = str(int(self.cuenta)) if self.cuenta is not None else None
-        yo = est.get("yo") or {}
+        from coach.fuentes import api_vivo
+        hallado = api_vivo.descubrir(cuenta=TU_STEAMID64)
+        match = hallado["match"]      # None si no hay partida
+    """
+    ahora = time.time()
+    if (not forzar and _cache["ts"] and (ahora - _cache["ts"]) < TTL_S
+            and not _por_silencio()):
+        return dict(_cache, de_cache=True)
 
-        def limpio(lista: Any) -> list[dict[str, Any]]:
-            salida = []
-            for j in lista or []:
-                if not isinstance(j, dict):
-                    continue
-                if cuenta_txt is not None and str(j.get("cuenta")) == cuenta_txt:
-                    continue
-                salida.append(
-                    {
-                        "heroe": j.get("heroe"),
-                        "almas": j.get("almas"),
-                        "bajas": j.get("bajas") or 0,
-                        "muertes": j.get("muertes") or 0,
-                        "asistencias": j.get("asistencias") or 0,
-                    }
-                )
-            return salida
+    if con_hud:
+        mid = _leer_hud()
+        if mid:
+            return _guardar(mid, "hud", f"match id leído del HUD ({int(mid)})")
 
-        notas = [
-            "almas, héroes y KDA desde el broadcast de espectador "
-            "(latencia ~20-25 s del TV de Valve)"
-        ]
-        if escucha is not None and getattr(escucha, "conectado", False):
-            notas.append("stream conectado")
-        elif escucha is not None and getattr(escucha, "error", None):
-            notas.append(f"error de stream: {escucha.error}")
+    if cuenta is None:
+        return _guardar(None, None, "sin cuenta: solo queda la capa del HUD")
 
-        return {
-            "t": est.get("t") or 0,
-            "yo": {
-                "heroe": yo.get("heroe"),
-                "almas": yo.get("almas"),
-                "oro": yo.get("oro"),
-                "items": list(yo.get("items") or []),
-                "bajas": yo.get("bajas") or 0,
-                "muertes": yo.get("muertes") or 0,
-                "asistencias": yo.get("asistencias") or 0,
-            },
-            "aliados": limpio(est.get("aliados") or []),
-            "enemigos": limpio(est.get("enemigos") or []),
-            "confianza": 0.95,
-            "fuente": "en_vivo",
-            "notas": notas,
-        }
+    global _vacios
+    unico = _vacios >= SONDEOS_PARA_UNICO
+    try:
+        match = en_vivo.partida_activa(cuenta, timeout=timeout, unico=unico)
+    except Exception as exc:                                   # noqa: BLE001
+        match = None
+        en_vivo.DIARIO.error(f"descubrir/cuenta: {type(exc).__name__}: {exc}")
+    if match:
+        _vacios = 0
+        return _guardar(match, "cuenta", f"la API lista la cuenta {cuenta} en {int(match)}")
 
-    def estado(self) -> dict[str, Any] | None:
-        try:
-            match = self._resolver_match()
-            if match is None:
-                return None
-            escucha = self._asegurar_escucha(match)
-            # Espera breve con backoff para que llegue el primer estado útil.
-            esperas = [0.0] + self._backoffs()
-            est = None
-            for espera in esperas:
-                if espera:
-                    time.sleep(espera)
-                est = getattr(escucha, "estado", None)
-                if est is not None:
-                    break
-            if est is None:
-                self.ultimo_error = getattr(escucha, "error", None) or "sin datos del broadcast"
-                # Si la partida terminó (o el demo dejó de existir), el id queda
-                # clavado y el coach nunca vuelve a buscar la siguiente. Se suelta
-                # el id para reintentar por cuenta; con --match fijo no se toca.
-                vivo = True
-                try:
-                    vivo = bool(escucha.vivo())
-                except Exception:                              # noqa: BLE001
-                    vivo = False
-                ultima_senal = max(self._ultimo_ok, self._arranque_escucha)
-                if self.match is None and (not vivo or time.time() - ultima_senal > 90.0):
-                    try:
-                        escucha.parar(espera=0.5)
-                    except Exception:                          # noqa: BLE001
-                        pass
-                    self._escucha = None
-                    self._match_actual = None
-                return None
-            self._ultimo_ok = time.time()
-            traducido = self._traducir(est, escucha=escucha)
-            self.ultimo_error = None
-            for fn in list(self._callbacks):
-                try:
-                    fn(traducido)
-                except Exception:
-                    pass
-            return traducido
-        except Exception as exc:  # noqa: BLE001
-            self.ultimo_error = f"{type(exc).__name__}: {exc}"
-            return None
+    _vacios = 0 if unico else _vacios + 1
+    cuco = " (consulta sin caché)" if unico else ""
+    try:
+        match, activas = en_vivo.buscar_en_listado(cuenta, timeout=timeout, unico=True)
+    except Exception as exc:                                   # noqa: BLE001
+        match, activas = None, 0
+        en_vivo.DIARIO.error(f"descubrir/global: {type(exc).__name__}: {exc}")
+    if match:
+        return _guardar(match, "global",
+                        f"la cuenta {cuenta} aparece en el listado global ({activas} partidas)")
+    return _guardar(None, None,
+                    f"la cuenta {cuenta} no está en ningún listado{cuco} "
+                    f"({activas} partidas activas)")
 
-    def suscribir(self, fn: Callable[[dict[str, Any]], None]) -> None:
-        if callable(fn):
-            self._callbacks.append(fn)
 
-    def cerrar(self) -> None:
-        if self._escucha is not None:
-            try:
-                self._escucha.parar(espera=1.0)
-            except Exception:
-                pass
-        self._escucha = None
-        self._match_actual = None
-        self._callbacks.clear()
+def existe_match(match, timeout=20.0):
+    """¿Ese match_id sigue activo y tiene broadcast? Para el diagnóstico del panel.
+
+    Dos golpes a la API, sin gastar cuota de espectador. Lo que no se pudo medir
+    queda en None, no se adivina.
+    """
+    resultado = {"match": int(match), "en_listado": None, "con_broadcast": None,
+                 "activas": None}
+    try:
+        urls = en_vivo.partidas_con_broadcast(timeout=timeout)
+        if urls:
+            resultado["con_broadcast"] = int(match) in urls
+    except Exception as exc:                                   # noqa: BLE001
+        en_vivo.DIARIO.error(f"existe_match/urls: {type(exc).__name__}: {exc}")
+    try:
+        partidas = en_vivo.listado_activo(timeout=timeout, unico=True)
+        if partidas:
+            resultado["activas"] = len(partidas)
+            resultado["en_listado"] = any(
+                p.get("match_id") == int(match) for p in partidas)
+    except Exception as exc:                                   # noqa: BLE001
+        en_vivo.DIARIO.error(f"existe_match/listado: {type(exc).__name__}: {exc}")
+    return resultado
+
+
+def olvidar():
+    """Suelta el match cacheado para forzar un descubrimiento nuevo en la próxima."""
+    _cache.update({"match": None, "via": None, "detalle": "olvidado", "ts": 0.0})
+
+
+def estado():
+    """Lo último que se descubrió, sin tocar la red (para logs y diagnóstico)."""
+    return dict(_cache, de_cache=bool(_cache["ts"]))

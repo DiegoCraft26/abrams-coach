@@ -71,10 +71,13 @@ SITUACIONALES = {
 # el kit de cada héroe, no un dato de la API (heroes.json solo trae id y nombre). Por eso
 # solo se usa como desempate y **solo si los datos de matchup del propio proyecto también
 # dan señal positiva** para ese ítem contra ese enemigo. Sin las dos cosas, no suma.
+# Las claves tienen que ser las de data/heroes_index.json: cuatro estaban mal escritas
+# (`mcginness`, `talon`, `geist`, `arcanist`) y una composición de 5 curanderos contaba 4
+# (medido en docs/experto/mecanicas.md §4). Corregidas el 2026-11-08.
 HEROES_CON = {
-    "heal": ("dynamo", "kelvin", "wraith", "paige", "ivy", "mcginness"),
-    "spirit": ("haze", "seven", "lash", "pocket", "talon", "geist", "infernus"),
-    "cc": ("mirage", "mcginnis", "bebop", "vindicta", "abrams", "warden", "arcanist"),
+    "heal": ("dynamo", "kelvin", "wraith", "paige", "ivy", "mcginnis"),
+    "spirit": ("haze", "seven", "lash", "pocket", "grey_talon", "lady_geist", "infernus"),
+    "cc": ("mirage", "mcginnis", "bebop", "vindicta", "abrams", "warden"),
     "movilidad": ("haze", "pocket", "wraith", "vindicta", "lash", "infernus"),
 }
 
@@ -132,7 +135,8 @@ def bonus_contexto(heroes_enemigos, factor=1.0, senal_datos=None):
     return puntos, razones
 
 
-def sugerencias_composicion(heroes_enemigos, poseidos=(), maximo=2, residuales=None):
+def sugerencias_composicion(heroes_enemigos, poseidos=(), maximo=2, residuales=None,
+                            ganancia=1.0, motivo_ajuste=None):
     """Ítems que la composición enemiga justifica, **fuera del ranking**.
 
     No entran en la recomendación porque sus datos de residual son negativos (los compra
@@ -141,6 +145,12 @@ def sugerencias_composicion(heroes_enemigos, poseidos=(), maximo=2, residuales=N
 
     `residuales` es {item_id: lift_residual} y viaja hasta la interfaz: sin el número al
     lado, el panel parecía respaldar el ítem y se compraba a ciegas (reportado el 2026-11-08).
+
+    `ganancia` es la ganancia de contexto del motor (`motor.ganancias_contexto`). El
+    coeficiente que se muestra es residual × ganancia: el mismo número con el que el
+    ranking puntúa el ítem. Así "contra su composición" deja de ser una constante por
+    ítem y responde a la fase y a las almas; `coef_global` queda al lado para poder
+    comparar con la tabla de 1.9 M de partidas.
     """
     residuales = residuales or {}
     señales = señales_composicion(heroes_enemigos)
@@ -154,6 +164,7 @@ def sugerencias_composicion(heroes_enemigos, poseidos=(), maximo=2, residuales=N
         if iid in poseidos or señales[señal] < 2:
             continue
         coef = residuales.get(iid)
+        ajustado = None if coef is None else coef * 100 * ganancia
         candidatos.append({
             "id": iid,
             "nombre": datos["nombre"],
@@ -163,9 +174,15 @@ def sugerencias_composicion(heroes_enemigos, poseidos=(), maximo=2, residuales=N
             "enemigos_que_lo_justifican": señales[señal],
             "fuente": datos["fuente"],
             "fecha_fuente": FECHA,
-            # Copia del lift residual de 1.9 M de partidas, en puntos porcentuales.
-            # Negativo = el ítem lo compra quien ya va perdiendo; se muestra tal cual.
-            "coef": None if coef is None else round(coef * 100, 2),
+            # Coeficiente CONTEXTUAL en puntos porcentuales: el lift residual de 1.9 M de
+            # partidas × la ganancia del estado. Negativo = el ítem lo compra quien ya va
+            # perdiendo; se muestra tal cual.
+            "coef": None if ajustado is None else round(ajustado, 2),
+            "coef_global": None if coef is None else round(coef * 100, 2),
+            "peso_contexto": round(ganancia, 2),
+            "motivo_ajuste": motivo_ajuste if abs(ganancia - 1.0) >= 0.02 else None,
         })
-    candidatos.sort(key=lambda x: (x["costo"], -x["enemigos_que_lo_justifican"]))
+    # Orden por coeficiente contextual: el consejo se reordena al cambiar el estado, no
+    # por precio, que era lo que dejaba siempre los mismos dos arriba (y en ese orden).
+    candidatos.sort(key=lambda x: (x["coef"] is None, -(x["coef"] or 0.0), x["costo"]))
     return candidatos[:maximo]

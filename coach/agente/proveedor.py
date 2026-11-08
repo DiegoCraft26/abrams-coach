@@ -85,6 +85,10 @@ class ProveedorOpenAICompatible:
             return clave
         return leer_credencial(self.clave_env)
 
+    def hay_clave(self) -> bool:
+        """¿Hay credencial? Solo dice si existe: nunca la devuelve ni la imprime."""
+        return bool(self._clave())
+
     def _intentar(self, mensajes, herramientas, timeout_s):
         clave = self._clave()
         if not clave:
@@ -163,6 +167,18 @@ def cadena_por_defecto() -> list[ProveedorOpenAICompatible]:
                               "max_tokens": 600},
         ),
     ]
+
+
+def proveedor_flash() -> ProveedorOpenAICompatible | None:
+    """El proveedor de DS 4.1 Flash de la cadena por defecto (Command Code).
+
+    Se usa cuando hace falta una respuesta suelta y no toda la cadena: si no hay
+    clave, quien llama lo dice claro en vez de inventar un veredicto.
+    """
+    for proveedor in cadena_por_defecto():
+        if proveedor.nombre == "commandcode":
+            return proveedor
+    return None
 
 
 class ProveedorConRespaldo:

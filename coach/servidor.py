@@ -1,5 +1,6 @@
 """Servidor local: panel para el monitor secundario + API de estado."""
 import json, os, threading, time
+from collections import deque
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urlparse, parse_qs
 
@@ -9,7 +10,7 @@ AQUI = os.path.dirname(os.path.abspath(__file__))
 # servidor queda como API local para el panel y para scripts.
 AVISO_RAIZ = ("Abrams Coach: la interfaz es la app nativa.\n"
               "Abre el panel con: abrams-coach demo   (o  abrams-coach jugar)\n"
-              "Estado en JSON: /api/estado\n")
+              "Estado en JSON: /api/estado   ·   Diagnóstico: /api/revisar\n")
 
 # Cuántos segundos sin publicar antes de avisar que los datos están viejos.
 # run.py lo sube según --intervalo: con intervalo 10 s, 8 s fijos marcaban
@@ -25,11 +26,17 @@ class Estado:
         self.manual_ts = 0.0   # última inyección manual: pausa el modo demo
         self.ts = 0.0          # cuándo se publicó lo último
         self._firma = None     # contenido del último estado (para detectar congelado)
+        # Para el diagnóstico de /api/revisar: cuántas publicaciones hubo y los
+        # últimos avisos de fallo, tal como los publicó el bucle.
+        self.desde = time.time()
+        self.publicaciones = 0
+        self.avisos = deque(maxlen=20)
 
     def publicar(self, datos):
         with self.lock:
             self.ultimo = datos
             self.version += 1
+            self.publicaciones += 1
             # `ts` solo avanza si el contenido cambia. El bucle republica el mismo
             # estado cada pocos segundos; sin esto, una partida terminada seguía
             # pareciendo fresca (edad 1 s) con el reloj congelado en 34:32.
@@ -40,6 +47,9 @@ class Estado:
             if firma is None or firma != self._firma or not datos.get("t"):
                 self._firma = firma
                 self.ts = time.time()
+            if isinstance(datos, dict) and datos.get("listo") is False:
+                self.avisos.append({"ts": round(time.time(), 1),
+                                    "mensaje": str(datos.get("mensaje") or "")[:200]})
 
     def leer(self):
         with self.lock:
@@ -66,6 +76,110 @@ class Estado:
             return (time.time() - self.ts) if self.ts else None
 
 EST = Estado()
+
+
+# --- diagnóstico del botón "Revisar" -------------------------------------------
+# Solo un diagnóstico a la vez: cada uno hace dos golpes a la API (con la puerta de
+# 3 s de coach.en_vivo) y puede pedir una respuesta al modelo.
+_LOCK_REVISION = threading.Lock()
+
+SISTEMA_REVISION = (
+    "Diagnosticas la conexión del coach de Deadlock. Recibes un JSON con el estado "
+    "real: fuente de datos, edad de lo último publicado, último tick, avisos y errores "
+    "acumulados, cuota de la API y si el match sigue activo.\n"
+    "Responde en español, en 3 a 5 líneas, sin adornos: qué está roto, qué NO está "
+    "roto y qué hacer ahora. No inventes números que no estén en el JSON; si falta un "
+    "dato, escribe \"sin medir\". No propongas tocar el juego ni reiniciar procesos.")
+
+
+def diagnostico():
+    """Lo que se sabe del coach ahora mismo, sin adornos y sin inventar.
+
+    Lo que no se pudo medir queda en None (el que llama lo muestra como "sin medir").
+    """
+    datos, _, edad = EST.encuesta()
+    datos = datos if isinstance(datos, dict) else {}
+    from coach import en_vivo
+
+    red = en_vivo.DIARIO.resumen()
+    try:
+        from coach.fuentes import api_vivo
+        buscado = api_vivo.estado()
+    except Exception as exc:                                   # noqa: BLE001
+        api_vivo, buscado = None, {}
+        en_vivo.DIARIO.error(f"revisar: {type(exc).__name__}: {exc}")
+    match = red.get("match") or buscado.get("match")
+    diag = {
+        "ts": round(time.time(), 1),
+        "fuente": datos.get("fuente"),
+        "listo": datos.get("listo"),
+        "mensaje": datos.get("mensaje"),
+        "edad_datos_s": round(edad, 1) if edad is not None else None,
+        "rancio": bool(edad is not None and edad > UMBRAL_RANCIO_S),
+        "ultimo_t": datos.get("t"),
+        "publicaciones": EST.publicaciones,
+        "segundos_arriba": round(time.time() - EST.desde),
+        "avisos": list(EST.avisos)[-5:],
+        "red": red,
+        "cuota_pausa_s": round(en_vivo.pausa_restante_s()),
+        "descubrimiento": {
+            "via": buscado.get("via"),
+            "detalle": buscado.get("detalle"),
+            "edad_s": (round(time.time() - buscado["ts"], 1)
+                       if buscado.get("ts") else None),
+        },
+        "match": None,
+    }
+    if match and api_vivo is not None:
+        diag["match"] = api_vivo.existe_match(match)
+    return diag
+
+
+def _contenido(respuesta):
+    """Texto de la primera opción de un `chat/completions`, o None."""
+    try:
+        mensaje = respuesta["choices"][0]["message"]
+        return (mensaje.get("content") or "").strip() or None
+    except (KeyError, IndexError, TypeError, AttributeError):
+        return None
+
+
+def veredicto(diag, timeout_s=20.0):
+    """Pide un veredicto en texto a DS 4.1 Flash sobre el diagnóstico.
+
+    Si no hay clave o el modelo falla, devuelve el motivo y ningún texto: nada de
+    inventar un veredicto.
+    """
+    try:
+        from coach.agente.proveedor import ErrorProveedor, proveedor_flash
+    except Exception as exc:                                   # noqa: BLE001
+        return {"texto": None, "modelo": None, "proveedor": None,
+                "motivo": f"no se pudo cargar el proveedor: {type(exc).__name__}: {exc}"}
+    prov = proveedor_flash()
+    if prov is None:
+        return {"texto": None, "modelo": None, "proveedor": None,
+                "motivo": "no hay proveedor de DS 4.1 Flash configurado"}
+    if not prov.hay_clave():
+        return {"texto": None, "modelo": prov.modelo, "proveedor": prov.nombre,
+                "motivo": (f"falta la clave {prov.clave_env}: no está en el entorno "
+                           "ni en ~/.dsh/.credentials.yaml")}
+    mensajes = [{"role": "system", "content": SISTEMA_REVISION},
+                {"role": "user", "content": json.dumps(diag, ensure_ascii=False)}]
+    try:
+        respuesta = prov.chat(mensajes, timeout_s=timeout_s)
+    except ErrorProveedor as exc:
+        return {"texto": None, "modelo": prov.modelo, "proveedor": prov.nombre,
+                "motivo": str(exc)}
+    except Exception as exc:                                   # noqa: BLE001
+        return {"texto": None, "modelo": prov.modelo, "proveedor": prov.nombre,
+                "motivo": f"{type(exc).__name__}: {exc}"}
+    texto = _contenido(respuesta)
+    if not texto:
+        return {"texto": None, "modelo": prov.modelo, "proveedor": prov.nombre,
+                "motivo": "el modelo no devolvió texto"}
+    return {"texto": texto, "modelo": prov.modelo, "proveedor": prov.nombre,
+            "motivo": None}
+
 
 
 class Manejador(BaseHTTPRequestHandler):
@@ -125,6 +239,20 @@ class Manejador(BaseHTTPRequestHandler):
             self._enviar(404, {"error": "sin icono"})
         elif ruta == "/api/salud":
             self._enviar(200, {"ok": True, "ts": time.time()})
+        elif ruta == "/api/revisar":
+            # `?modelo=0` devuelve solo el diagnóstico crudo, sin gastar una llamada
+            # al modelo (para scripts y para cuando la clave no está).
+            sin_modelo = parse_qs(urlparse(self.path).query).get("modelo", ["1"])[0] in (
+                "0", "no", "false", "off")
+            with _LOCK_REVISION:
+                diag = diagnostico()
+                salida = {"ok": True, "diagnostico": diag}
+                if sin_modelo:
+                    salida.update({"texto": None, "modelo": None, "proveedor": None,
+                                   "motivo": "pedido sin modelo (?modelo=0)"})
+                else:
+                    salida.update(veredicto(diag))
+            self._enviar(200, salida)
         elif ruta == "/eventos":
             self.send_response(200)
             self.send_header("Content-Type", "text/event-stream; charset=utf-8")

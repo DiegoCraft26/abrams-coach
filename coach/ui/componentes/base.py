@@ -63,6 +63,11 @@ def clase_unica(widget, clases, nueva):
         widget.add_css_class(nueva)
 
 
+def nombre_heroe(heroe):
+    """Id de héroe ('mo_&_krill') al nombre que se lee ('Mo & Krill')."""
+    return str(heroe or "?").replace("_", " ").title()
+
+
 def fmt_num(valor):
     """Número con separador de miles; None -> raya."""
     if valor is None:

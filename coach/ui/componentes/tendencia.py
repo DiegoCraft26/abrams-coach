@@ -7,7 +7,7 @@ import math
 
 from gi.repository import Gtk
 
-from .base import etiqueta
+from .base import etiqueta, fmt_num
 
 
 class TrendChart(Gtk.Box):
@@ -44,8 +44,12 @@ class TrendChart(Gtk.Box):
         if firma == self._firma:
             return
         self._firma = firma
-        self._puntos = [(h.get("t") or 0, h.get("a"), h.get("e"))
-                        for h in hist if h.get("a") is not None]
+        # Ordenado por tiempo: el historial llega como deque y, cuando el reloj de la
+        # partida vuelve a empezar, los puntos viejos quedan detrás de los nuevos. Sin
+        # ordenar, la polilínea retrocede y el rango se leía al revés (30:00 → 20:00).
+        self._puntos = sorted(((h.get("t") or 0, h.get("a"), h.get("e"))
+                               for h in hist if h.get("a") is not None),
+                              key=lambda p: p[0])
         hay = len(self._puntos) >= 2
         self.area.set_visible(hay)
         self.lbl_vacio.set_visible(not hay)
@@ -55,8 +59,9 @@ class TrendChart(Gtk.Box):
             return
         ult = self._puntos[-1]
         prim = self._puntos[0]
-        self.lbl_mio.set_label(f"tú {ult[1]:,}" if ult[1] is not None else "tú —")
-        self.lbl_suyo.set_label(f"media enemiga {ult[2]:,}" if ult[2] is not None else "")
+        self.lbl_mio.set_label(f"tú {fmt_num(ult[1])}")
+        self.lbl_suyo.set_label(f"media enemiga {fmt_num(ult[2])}" if ult[2] is not None
+                                else "")
         self.lbl_rango.set_label(f"{int(prim[0])//60}:{int(prim[0])%60:02d} → "
                                  f"{int(ult[0])//60}:{int(ult[0])%60:02d} "
                                  f"· {len(self._puntos)} muestras")

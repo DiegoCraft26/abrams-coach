@@ -2,7 +2,7 @@
 from gi.repository import Gtk
 
 from ..iconos import pixbuf
-from .base import etiqueta, fila, fmt_num, vaciar
+from .base import elipse, etiqueta, fila, fmt_num, nombre_heroe, vaciar
 
 
 def _clave(heroe):
@@ -33,7 +33,7 @@ class EnemyGrid(Gtk.Box):
             self.append(self._fila_enemigo(e, maximo))
 
     def _fila_enemigo(self, e, maximo):
-        nombre = str(e.get("heroe") or "?").capitalize()
+        nombre = nombre_heroe(e.get("heroe"))
         caja = fila(8)
         caja.add_css_class("fila-enemigo")
 
@@ -46,7 +46,9 @@ class EnemyGrid(Gtk.Box):
 
         nom = etiqueta(nombre, "t13 fuerte")
         nom.set_size_request(74, -1)
-        nom.set_ellipsize(3)          # Pango.EllipsizeMode.END
+        # Con solo elipsis el nombre largo crecía y desalineaba la columna de almas:
+        # max_width_chars fija el techo y el tooltip deja leer el nombre entero.
+        elipse(nom, 10)
         caja.append(nom)
 
         almas = etiqueta(fmt_num(e.get("almas")), "almas num")

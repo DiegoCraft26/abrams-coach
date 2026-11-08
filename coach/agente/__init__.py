@@ -6,6 +6,7 @@ from .proveedor import (
     ProveedorOpenAICompatible,
     cadena_por_defecto,
     leer_credencial,
+    proveedor_flash,
 )
 from .presupuesto import Presupuesto
 
@@ -17,4 +18,5 @@ __all__ = [
     "ProveedorOpenAICompatible",
     "cadena_por_defecto",
     "leer_credencial",
+    "proveedor_flash",
 ]

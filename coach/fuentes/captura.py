@@ -1,15 +1,21 @@
 """Captura compartida del escritorio, de alta frecuencia.
 
-Por qué existe: en Wayland/KDE la única vía sancionada para capturar es `spectacle`, y cada
-invocación cuesta ~415 ms en 4480×1440 (medido). Si cada lector captura por su cuenta, el
+Por qué existe: capturar la pantalla cuesta, y si cada lector captura por su cuenta el
 ciclo se multiplica. Aquí hay **un** hilo capturando y todos los lectores miran el último
 cuadro.
 
-Medido el 2026-11-07 en la máquina de desarrollo:
-    spectacle 4480x1440 .... 415 ms (mediana de 5)
-    abrir el PNG ........... 71 ms
-    tesseract (recorte) .... 94 ms
-    ciclo completo ......... ~580 ms  -> 1.7 Hz
+Medido en la máquina de desarrollo, escritorio 4480×1440:
+    `spectacle -f` (método viejo) .... 415 ms + 71 ms de abrir el PNG
+    KWin CaptureWorkspace ............ 34 ms en frío, 38 ms de mediana ya en el ciclo
+    tesseract (recorte) .............. 94 ms
+
+Con KWin el ciclo baja de ~490 ms a ~40 ms, así que el intervalo por defecto es 0.15 s
+(5.5 Hz, 10.4 % de un núcleo medido el 2026-11-08) en vez de 0.05 s, que con la captura
+barata sería demasiado rato componiendo cuadros. Si KWin no contesta en 300 ms, se cae a
+`spectacle` como antes.
+
+El hilo no se enciende solo: lo enciende `coach.nucleo_vivo.hilo_hud` cuando hay juego
+abierto y lo para cuando no, que es cuando no hay nada que leer.
 """
 import os
 import statistics
@@ -20,16 +26,19 @@ import time
 
 from PIL import Image
 
+from . import captura_kwin
+
 RUTA_CUADRO = os.path.join(tempfile.gettempdir(), "abrams-cuadro.png")
+ESPECTACLE = ["spectacle", "-b", "-n", "-f", "-o"]
 
 
 class CapturaCompartida:
     """Un hilo que captura sin parar y publica el último cuadro con su hora."""
 
-    def __init__(self, ruta=RUTA_CUADRO, intervalo=0.05, comando=None):
+    def __init__(self, ruta=RUTA_CUADRO, intervalo=0.15, comando=None):
         self.ruta = ruta
         self.intervalo = intervalo
-        self.comando = comando or ["spectacle", "-b", "-n", "-f", "-o"]
+        self.comando = comando      # None = KWin; una lista = ese comando y su archivo
         self.lock = threading.Lock()
         self.cuadro = None          # PIL.Image del último cuadro válido
         self.ts = 0.0               # cuándo se terminó de capturar
@@ -51,14 +60,23 @@ class CapturaCompartida:
     def parar(self):
         self._parar.set()
 
+    def _cuadro(self):
+        """Un cuadro del escritorio: por KWin (~35 ms) o con el comando de siempre."""
+        if self.comando is None:
+            im = captura_kwin.capturar_escritorio()
+            if im is not None:
+                return im.convert("RGB")
+        subprocess.run((self.comando or ESPECTACLE) + [self.ruta], check=True, timeout=10,
+                       stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        cuadro = Image.open(self.ruta)
+        cuadro.load()
+        return cuadro
+
     def _bucle(self):
         while not self._parar.is_set():
             t0 = time.perf_counter()
             try:
-                subprocess.run(self.comando + [self.ruta], check=True, timeout=10,
-                               stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-                cuadro = Image.open(self.ruta)
-                cuadro.load()
+                cuadro = self._cuadro()
                 dur = (time.perf_counter() - t0) * 1000
                 with self.lock:
                     self.cuadro = cuadro
@@ -116,3 +134,13 @@ def parar_global():
         if _INSTANCIA is not None:
             _INSTANCIA.parar()
             _INSTANCIA = None
+
+
+def metricas_si_arriba():
+    """Métricas de la captura si ya está arriba; {} si no. No la arranca.
+
+    Pedir métricas para el panel no puede encender un hilo que captura el escritorio
+    entero: eso costaba ~10 % de un núcleo solo por rellenar un número.
+    """
+    inst = _INSTANCIA
+    return inst.metricas() if inst is not None else {}

@@ -33,12 +33,16 @@ class Header(Gtk.Box):
 
         self.lbl_chiip = etiqueta("—", "chip chip-inicio")
         self.lbl_chiip.set_xalign(1)
+        # Nace oculto: sin partida no hay fase, y "INICIO" al lado de "sin partida"
+        # se leía como un estado contradictorio.
+        self.lbl_chiip.set_visible(False)
         self.append(self.lbl_chiip)
 
     def actualizar(self, d):
         if not d:
             self.lbl_conexion.set_label("● sin conexión")
             clase_unica(self.lbl_conexion, INSIGNIAS, "insignia-offline")
+            self.lbl_chiip.set_visible(False)
             return
         fuente = str(d.get("fuente") or "")
         if d.get("listo") is False:
@@ -69,6 +73,8 @@ class Header(Gtk.Box):
         dp = (d.get("economia") or {}).get("delta_pct")
         self.lbl_delta.set_label(f"· {dp*100:+.0f}% vs enemigos" if dp is not None else "")
 
-        est = (d.get("estado") or {}).get("estado") or "INICIO"
-        self.lbl_chiip.set_label(est)
-        clase_unica(self.lbl_chiip, CHIPS, "chip-" + est.lower())
+        est = (d.get("estado") or {}).get("estado")
+        self.lbl_chiip.set_visible(bool(est) and d.get("listo") is not False)
+        if est:
+            self.lbl_chiip.set_label(est)
+            clase_unica(self.lbl_chiip, CHIPS, "chip-" + est.lower())

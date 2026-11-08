@@ -15,6 +15,7 @@ import json
 import threading
 import time
 import urllib.request
+from urllib.parse import urlparse
 
 import gi
 
@@ -32,6 +33,7 @@ from .componentes.inventario import Inventory
 from .componentes.pie import StatusBar
 from .componentes.plan import BuildPlan
 from .componentes.recomendacion import RecommendationCard
+from .componentes.revisar import Revisar
 from .componentes.tendencia import TrendChart
 from .componentes.ventas import Ventas
 
@@ -133,6 +135,13 @@ class Panel(Gtk.ApplicationWindow):
         self.ventas = Ventas()
         self.equipo = Equipo()
         self.contra = ContraComposicion()
+        # Botón de diagnóstico: pregunta a /api/revisar y pinta lo que devuelva el
+        # servidor, sin inventar nada. El puerto sale de la URL del panel.
+        try:
+            puerto = int(urlparse(self.url).port or 8090)
+        except Exception:                                  # noqa: BLE001
+            puerto = 8090
+        self.revisar = Revisar(puerto=puerto)
         self.pie = StatusBar()
 
         # el cuerpo va en un scrolled: si el monitor es 800×600 no se pierde nada
@@ -190,23 +199,25 @@ class Panel(Gtk.ApplicationWindow):
         vaciar(self.cuerpo)
         for comp in (self.recomendacion, self.inventario, self.enemigos,
                      self.compras, self.plan, self.tendencia, self.ventas,
-                     self.equipo, self.contra):
+                     self.equipo, self.contra, self.revisar):
             desacoplar(comp)
 
         principal = self._columna()
         contexto = self._columna()
         lateral = self._columna()
 
-        # Barra de 12 slots en una fila cuando hay ancho; 6×2 cuando no hay.
+        # Barra de slots: 12 en fila solo cuando hay ancho de verdad (>1100); a
+        # 1280x720 la columna mide ~640 px y 12 celdas partían el inventario en filas
+        # irregulares de 10+2. QA de UI, 2026-11-08.
+        ancho = modo == "ancho"
         self.inventario.set_lado(36 if modo == "angosto" else 44,
-                                 columnas=6 if modo == "angosto" else 12)
+                                 columnas=12 if ancho else 6)
 
-        # La tarjeta manda pero no se estira: el alto que sobra va a la tendencia, que
-        # aporta información. Una tarjeta vacía de 700 px no se lee.
+        # La tarjeta manda pero no se estira.
         self.recomendacion.set_vexpand(False)
-        # La tendencia no se estira: un gráfico de 700 px de alto no se lee. El espacio
-        # que sobra se lo queda un relleno, y así el inventario no se va al fondo.
-        self.tendencia.set_vexpand(True)
+        # La tendencia NO se estira: con vexpand se comía ~630 px de alto a 1920x1080
+        # para dos polilíneas (medido en QA). Alto fijo y el sobrante va a un relleno.
+        self.tendencia.set_vexpand(False)
         self.tendencia.set_size_request(-1, 170)
 
         seccion_inv = self._seccion("INVENTARIO", self.inventario)
@@ -216,6 +227,7 @@ class Panel(Gtk.ApplicationWindow):
         seccion_venta = self._seccion("VENTAS", self.ventas)
         seccion_equipo = self._seccion("TU EQUIPO", self.equipo)
         seccion_contra = self._seccion("CONTRA SU COMPOSICIÓN", self.contra)
+        seccion_revisar = self._seccion("¿ALGO VA MAL?", self.revisar)
 
         # Con la ventana baja, las secciones secundarias se ocultan en vez de quedar
         # cortadas a media frase (pasaba a 800x600).
@@ -230,6 +242,7 @@ class Panel(Gtk.ApplicationWindow):
             principal.append(seccion_comp)
             principal.append(seccion_venta)
             principal.append(seccion_equipo)
+            principal.append(seccion_revisar)
             self.tendencia.set_visible(False)
             self.plan.set_visible(False)
             self.cuerpo.append(principal)
@@ -244,6 +257,7 @@ class Panel(Gtk.ApplicationWindow):
             contexto.append(seccion_venta)
             contexto.append(seccion_contra)
             contexto.append(seccion_equipo)
+            contexto.append(seccion_revisar)
             self.tendencia.set_visible(True)
             self.plan.set_visible(True)
             contexto.set_size_request(300, -1)
@@ -260,6 +274,7 @@ class Panel(Gtk.ApplicationWindow):
             contexto.append(seccion_equipo)
             lateral.append(seccion_comp)
             lateral.append(seccion_venta)
+            lateral.append(seccion_revisar)
             lateral.append(self._relleno())
             self.tendencia.set_visible(True)
             self.plan.set_visible(True)

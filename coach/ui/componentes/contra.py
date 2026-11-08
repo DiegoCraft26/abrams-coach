@@ -3,6 +3,11 @@
 Van **fuera del ranking** a propósito: sus datos de residual son negativos (los compra
 quien ya va perdiendo), y este proyecto no recomienda por corazonada. El jugador ve el
 consejo, el motivo y la fuente, y decide.
+
+El coeficiente que se muestra es el CONTEXTUAL (residual × ganancia del estado), el mismo
+con el que el motor puntúa el ítem; antes era siempre el número global y no se movía en
+toda la partida. Por eso la firma de repintado incluye el coeficiente: si cambia el
+contexto cambia el número aunque los ítems sean los mismos.
 """
 from gi.repository import Gtk
 
@@ -19,7 +24,7 @@ class ContraComposicion(Gtk.Box):
 
     def actualizar(self, d):
         items = (d or {}).get("contra_composicion") or []
-        firma = tuple(x.get("id") for x in items)
+        firma = tuple((x.get("id"), x.get("coef"), x.get("motivo_ajuste")) for x in items)
         if firma == self._firma:
             return
         self._firma = firma
@@ -46,10 +51,20 @@ class ContraComposicion(Gtk.Box):
             if coef is not None:
                 signo = "+" if coef >= 0 else ""
                 clase = "t11 tenue" if coef >= 0 else "t11 aviso"
-                col.append(etiqueta(f"coef {signo}{coef:.2f} pp · "
+                global_ = x.get("coef_global")
+                compara = ""
+                if global_ is not None and abs(global_ - coef) >= 0.05:
+                    compara = f" (global {global_:+.2f})"
+                col.append(etiqueta(f"coef {signo}{coef:.2f} pp{compara} · "
                                     f"{'a favor' if coef >= 0 else 'en contra'}", clase))
-            detalle = etiqueta(f"{x.get('para')} · {x.get('enemigos_que_lo_justifican')} "
-                               f"enemigo(s)", "t11 tenue")
+            # Por qué el coeficiente no es el global: fase y almas, en una línea.
+            if x.get("motivo_ajuste"):
+                ajuste = etiqueta(x.get("motivo_ajuste"), "t11 tenue")
+                envolver(ajuste, 34)
+                col.append(ajuste)
+            cuantos = x.get("enemigos_que_lo_justifican")
+            detalle = etiqueta(f"{x.get('para')} · {cuantos} "
+                               f"{'enemigo' if cuantos == 1 else 'enemigos'}", "t11 tenue")
             envolver(detalle, 30)
             col.append(detalle)
             fuente = etiqueta(f"fuente: {x.get('fuente')}", "t11 tenue")

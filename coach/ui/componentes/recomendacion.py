@@ -69,11 +69,12 @@ class RecommendationCard(Gtk.Box):
             return
 
         r = recos[0]
+        self.img.set_visible(True)
         desde_disco = _pixbuf(r.get("id"), "items", 96)
-        if desde_disco:
-            self.img.set_from_pixbuf(desde_disco)
-        else:
+        if not desde_disco:
             self.img.set_from_icon_name("image-missing")
+        else:
+            self.img.set_from_pixbuf(desde_disco)
 
         alcanza = r.get("alcanza")
         if alcanza is False:
@@ -105,7 +106,9 @@ class RecommendationCard(Gtk.Box):
         self.lbl_alternativas.set_label("luego: " + " · ".join(otras) if otras else "")
 
     def _sin_compra(self, d):
-        self.img.set_from_icon_name("image-missing")
+        # Sin ítem no hay icono que enseñar: el hueco con el icono roto de GTK parecía
+        # un fallo del panel en vez de un estado vacío.
+        self.img.set_visible(False)
         self.barra.set_visible(False)
         self.lbl_alternativas.set_label("")
         self.lbl_precio.set_label("")

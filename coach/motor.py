@@ -44,10 +44,8 @@ def componentes_de(poseidos):
 
 CFG_DEFECTO = {
     "slots": {"weapon": 4, "vitality": 4, "spirit": 4},
-    "flex": 0,
     "w_lift": 1.0,
     "w_counter": 0.75,
-    "w_fase": 0.40,
     "w_precio": 0.20,
     "w_flujo": 0.50,
     "w_cadena": 1.20,          # lo que suele venir después de lo que ya llevas
@@ -59,35 +57,32 @@ CFG_DEFECTO = {
     "duracion_tipica_s": 2400,
     "venta_minima_tasa": 0.40,
     "venta_margen_pp": 2.0,
-    "ventana_fase": 22.0,        # % de partida alrededor del minuto típico de compra
     "venta_margen_s": 60,
     # --- fase económica y power spikes (2026-11-07) ---
     "w_presupuesto": 0.30,       # castigo por gastar más de lo que falta para el hito
     "w_recuperacion": 0.90,      # castigo a ítems caros cuando vas atrás
     "recuperacion_desde": 3200,   # coste a partir del cual cuenta como "caro" yendo atrás
-    "contexto_activo": True,     # señales de composición (heurística, con datos de matchup)
+    "contexto_activo": True,     # ganancias por contexto y señales de composición
     "w_balance": 0.45,           # premia rellenar el slot más flojo del build
+    # --- scoring por contexto (docs/experto/scoring.md) ---
+    "contexto_delta": 1.0,       # tope en puntos de lo que el contexto mueve un score
+    "empate_margen": 0.5,        # puntos por debajo de los cuales dos ítems son un empate
+    "ctx_lift_cierre": 0.10,     # cuánto baja el peso del residual en el cierre (ver ganancias)
 }
 
 
 def _cap(estado, cfg):
-    s = dict(cfg["slots"])
-    if cfg.get("flex"):
-        for k in s:
-            s[k] += cfg["flex"]
-    return s
+    return dict(cfg["slots"])
 
 
 def economia(estado: Estado):
     """Resumen económico sin comparar líneas ni rivales concretos."""
     mias = estado.yo.almas
     enem = [j.almas for j in estado.enemigos if j.almas is not None]
-    aliad = [j.almas for j in estado.aliados if j.almas is not None]
     media_enem = sum(enem)/len(enem) if enem else None
-    media_aliad = sum(aliad)/len(aliad) if aliad else None
     delta = (mias - media_enem) if (mias is not None and media_enem is not None) else None
     pct = (delta/media_enem) if (delta is not None and media_enem) else None
-    return {"mias": mias, "media_enemiga": media_enem, "media_aliada": media_aliad,
+    return {"mias": mias, "media_enemiga": media_enem,
             "delta": delta, "delta_pct": pct}
 
 
@@ -119,17 +114,77 @@ def _slots_usados(estado, cat):
     return usados
 
 
-def _es_mejora_de(item_id, poseidos, cat):
-    """Deadlock no tiene árbol de mejoras: comprar siempre ocupa slot.
-    Se deja la función para no romper llamadas, pero siempre es False."""
-    return False
+def _acotar(x, lo=0.0, hi=1.0):
+    return lo if x < lo else hi if x > hi else x
 
 
-def _fase_fit(t_s, min_compra, cfg):
-    if not min_compra:
-        return 0.5
-    t_rel = (t_s / cfg["duracion_tipica_s"]) * 100.0
-    return max(0.0, 1.0 - abs(t_rel - min_compra) / 45.0)
+# 1.0 en cada peso = el scoring de siempre. Se usa cuando el contexto está apagado.
+GANANCIAS_NEUTRAS = {"lift": 1.0, "counter": 1.0, "precio": 1.0, "cadena": 1.0,
+                     "venta": 1.0, "comp": 0.0, "atras": 0.0, "adelante": 0.0,
+                     "late": 0.0, "delta_pct": 0.0}
+
+
+def ganancias_contexto(estado: Estado, econ, heroes_enemigos, cfg=CFG_DEFECTO):
+    """Cuánto se multiplica cada peso del scoring en este estado (1.0 = neutro).
+
+    Los pesos eran constantes, así que el score de un ítem era casi una propiedad suya y
+    el panel repetía la misma recomendación media partida. Aquí se mueven con cuatro
+    señales que ya llegan al motor: fase, almas relativas, composición enemiga y (por el
+    descuento de componentes, en `candidatos()`) inventario propio.
+
+    Todas son rampas lineales acotadas a [0.60, 1.40]: cruzar 25 %, 45 % o 10 pp de
+    déficit no produce ningún salto, y el reloj ya viene en bloques de 10 s, así que dos
+    lecturas del mismo momento dan exactamente el mismo número (invariante de los 10 s).
+    Los números y su medición están en docs/experto/scoring.md; aquí sólo se aplican.
+    """
+    # Mismo bloque de 10 s que usa el resto del motor: sin esto, dos consultas separadas
+    # por 4 s caen a lados distintos de la rampa y la recomendación cambia (QA 2026-11-07).
+    t = (int(max(0.0, float(estado.t))) // 10) * 10.0
+    fase_pct = t / cfg["duracion_tipica_s"] * 100.0
+    early = _acotar(1 - (fase_pct - 25) / 25)     # 1 hasta el 25 %, 0 desde el 50 %
+    late = _acotar((fase_pct - 45) / 25)          # 0 hasta el 45 %, 1 desde el 70 %
+    d = econ.get("delta_pct") or 0.0
+    atras = _acotar(-d / 0.10)                    # 0 parejo o arriba · 1 yendo 10 % atrás
+    adelante = _acotar(d / 0.10)
+    senales = situacionales.señales_composicion(heroes_enemigos)
+    comp = _acotar(max(senales.values()) / 3.0) if senales else 0.0
+
+    return {
+        # El promedio de 1.9 M de partidas describe a otro jugador: pesa menos cuando la
+        # composición está cargada, cuando vas atrás y en el cierre (mismo argumento que
+        # `cadena`: el build ya está hecho y la media describe a quien todavía lo arma), y
+        # algo más cuando vas arriba.
+        "lift": _acotar(1.25 - 0.35*comp - 0.25*atras + 0.10*adelante
+                        - cfg.get("ctx_lift_cierre", 0.20)*late, 0.60, 1.40),
+        # El matchup decide la línea en los primeros minutos: sube con composición y early.
+        "counter": _acotar(0.70 + 0.45*comp + 0.15*early, 0.60, 1.40),
+        # Yendo atrás cada alma pesa; yendo arriba gastarla es lo correcto.
+        "precio": _acotar(0.95 + 0.45*atras - 0.25*adelante, 0.60, 1.40),
+        # El grafo del build dice mucho temprano y poco en el cierre, cuando ya está hecho.
+        "cadena": _acotar(1.25 - 0.25*late - 0.20*atras + 0.15*adelante, 0.60, 1.40),
+        # En el cierre los slots están llenos y vender cuesta más.
+        "venta": _acotar(0.75 + 0.50*late, 0.60, 1.40),
+        "comp": comp, "atras": atras, "adelante": adelante, "late": late, "delta_pct": d,
+    }
+
+
+def motivo_ganancia(gan):
+    """Por qué el coeficiente no es el global, en una línea (None si no se movió)."""
+    if not gan:
+        return None
+    partes = []
+    d = gan.get("delta_pct") or 0.0
+    if gan.get("atras"):
+        partes.append(f"vas {abs(int(d*100))}% atrás en almas")
+    elif gan.get("adelante"):
+        partes.append(f"vas {int(d*100)}% arriba en almas")
+    if gan.get("comp"):
+        partes.append(f"{int(round(gan['comp']*3))} enemigo(s) con esa amenaza")
+    if gan.get("late"):
+        partes.append("a esta altura la media de partidas pesa menos")
+    if not partes:
+        return None
+    return "coeficiente ajustado ×{:.2f}: {}".format(gan["lift"], " y ".join(partes))
 
 
 def _bonus_counter(item_id, enemigos_heroes, conoc, cfg, indice=None):
@@ -272,6 +327,14 @@ def candidatos(estado: Estado, conoc, cat, cfg=CFG_DEFECTO, limite=3, heroe=None
             heroes_enemigos, senal_datos=senal_datos)
     else:
         ctx_puntos, ctx_razones = {}, {}
+    gan = (ganancias_contexto(estado, econ, heroes_enemigos, cfg)
+           if cfg.get("contexto_activo", True) else dict(GANANCIAS_NEUTRAS))
+    # pesos por contexto: la misma fórmula con w_lift, w_counter, w_precio, w_flujo,
+    # w_cadena y w_venta multiplicados por su ganancia. Se aplica como diferencia
+    # acotada contra el score base, así el contexto desempata y no reescribe el ranking.
+    pesos = {k: cfg["w_" + k] for k in ("lift", "counter", "precio", "flujo", "cadena", "venta")}
+    pesos_ctx = {k: v * gan.get(k, 1.0) for k, v in pesos.items()}
+    delta_max = cfg.get("contexto_delta", 1.0)
 
     # Lo que ya lleva puesto puede ser componente de lo que se recomienda: Deadlock
     # consume los componentes y solo cobra la diferencia, liberando sus slots. Antes el
@@ -293,6 +356,17 @@ def candidatos(estado: Estado, conoc, cat, cfg=CFG_DEFECTO, limite=3, heroe=None
     def _nombre_de(xid):
         return ((conoc["items"].get(xid) or {}).get("nombre")
                 or (cat.get(xid) or {}).get("nombre") or str(xid))
+
+    def _puntaje(w, residual, counter, precio, pareja, bonus_flujo, cadena, castigo_venta):
+        """Los términos que llevan peso; se evalúa dos veces (pesos de siempre y
+        pesos por contexto) y la diferencia es lo que el contexto puede mover."""
+        return (w["lift"]*residual*100
+                + w["counter"]*counter*100
+                + w["precio"]*precio
+                + pareja*100*0.5
+                + w["flujo"]*bonus_flujo*10
+                + w["cadena"]*cadena*10
+                + w["venta"]*castigo_venta)
 
     filas = []
     for iid, d in conoc["items"].items():
@@ -329,24 +403,24 @@ def candidatos(estado: Estado, conoc, cat, cfg=CFG_DEFECTO, limite=3, heroe=None
         mc = d.get("min_compra") if d.get("min_compra") is not None else t_rel
         distancia_t = abs(t_rel - mc)
 
-        mejora = _es_mejora_de(iid, poseidos, cat)
         # Los componentes absorbidos que ocupan el mismo slot devuelven su hueco:
         # upgrade sobre lo que ya llevas no necesita vender nada.
         libera = sum(1 for x in absorbe if _slot_de(x) == slot)
         libre = cap.get(slot, 4) - usados.get(slot, 0) + libera
         requiere_venta = False
-        if not mejora and libre <= 0:
+        if libre <= 0:
             # slot lleno: se permite si hay algo vendible en ese slot (swap)
             vendibles = [i for i in poseidos if (cat.get(i) or {}).get("slot") == slot
                          and conoc["items"].get(i, {}).get("tasa_venta", 0) >= cfg["venta_minima_tasa"]]
             if not vendibles:
                 continue
             requiere_venta = True
-        if costo > almas:
-            continue
+        # No se descarta lo que hoy no se paga: `recomendar()` saca de aquí el objetivo
+        # ("faltan N") con el mismo coste efectivo y los mismos huecos que el ranking.
+        alcanzable = costo <= almas
 
-        fase = _fase_fit(t_efectivo, d.get("min_compra"), cfg)
-        counter = _bonus_counter(iid, heroes_enemigos, conoc, cfg, indice)
+        counter = senal_datos[iid] if iid in senal_datos else _bonus_counter(
+            iid, heroes_enemigos, conoc, cfg, indice)
         pareja = _bonus_pareja(iid, poseidos, conoc)
         cadena = _bonus_cadena(iid, poseidos, conoc)
         precio = 1.0 - min(1.0, costo / max(1, almas))   # premia no gastarte todo
@@ -369,21 +443,32 @@ def candidatos(estado: Estado, conoc, cat, cfg=CFG_DEFECTO, limite=3, heroe=None
         hueco_max = max(1, max((cap.get(s, 4) - usados.get(s, 0)) for s in cap))
         premio_balance = cfg.get("w_balance", 0.0) * (hueco / hueco_max) * 2.0
 
+        # Dos ítems a menos de `empate_margen` puntos son indistinguibles para el jugador,
+        # y en ese empate ganaba siempre el primero del diccionario de conocimiento.json,
+        # así que el panel repetía el mismo ítem. El desempate premia lo que ya está medio
+        # pagado (tener el componente es pagar la diferencia) y lo que deja más caja.
+        # Suma acotada a 1 y multiplicada por `empate_margen`: nunca pasa del margen, así
+        # que no puede reescribir el ranking. No mira el reloj ni usa azar: el mismo
+        # estado da siempre la misma recomendación (invariante de los 10 s).
+        ahorro_frac = (ahorro / costo_lista) if costo_lista else 0.0
+        caja_frac = 1.0 - min(1.0, costo / max(1, almas))
+        premio_caja = cfg["empate_margen"] * _acotar(ahorro_frac + caja_frac)
+
         # todo en puntos porcentuales para que los pesos sean legibles
-        score = (cfg["w_lift"]*residual*100
-                 + cfg["w_counter"]*counter*100
-                 + cfg["w_fase"]*fase*2.0
-                 + cfg["w_precio"]*precio*1.0
-                 + pareja*100*0.5
-                 + cfg["w_flujo"]*bonus_flujo*10
-                 + cfg["w_cadena"]*cadena*10
+        castigo_venta = -1.0 if requiere_venta else 0.0
+        base = _puntaje(pesos, residual, counter, precio, pareja, bonus_flujo, cadena,
+                        castigo_venta)
+        din = _puntaje(pesos_ctx, residual, counter, precio, pareja, bonus_flujo, cadena,
+                       castigo_venta)
+        score = (base
+                 + _acotar(din - base, -delta_max, delta_max)
                  - cfg["w_tiempo"]*distancia_t
                  - castigo_apertura
                  - castigo_presupuesto
                  - castigo_recuperacion
                  + contexto_pts
                  + premio_balance
-                 - (cfg["w_venta"] if requiere_venta else 0.0))
+                 + premio_caja)
 
         # `min_compra` viene en porcentaje de la partida típica (0-100), no en minutos:
         # el panel llegó a decir "minuto 61 de partida" a los 25 minutos reales.
@@ -400,10 +485,17 @@ def candidatos(estado: Estado, conoc, cat, cfg=CFG_DEFECTO, limite=3, heroe=None
             nombres = ", ".join(sorted(_nombre_de(x) for x in absorbe))
             razones.append(f"aprovecha lo que ya llevas ({nombres}): "
                            f"pagas {costo:,} en vez de {costo_lista:,}")
+        # Con el peso contextual el panel puede decir por qué el número no es el global.
+        ajuste = motivo_ganancia(gan)
+        if ajuste and abs(gan["lift"] - 1.0) >= 0.02:
+            razones.append(ajuste)
 
         filas.append({"id": iid, "nombre": d["nombre"], "costo": costo, "slot": slot,
                       "score": round(score, 4), "residual": residual, "n": d["n"],
-                      "razones": razones, "mejora": mejora,
+                      "razones": razones, "alcanzable": alcanzable,
+                      # el coeficiente que ve el jugador: residual × ganancia del contexto
+                      "peso_lift": round(gan["lift"], 3),
+                      "coef_pp": round(residual*100*gan["lift"], 2),
                       "costo_lista": costo_lista, "ahorro": ahorro,
                       "absorbe": sorted(_nombre_de(x) for x in absorbe),
                       "min_compra": d.get("min_compra"),
@@ -411,11 +503,30 @@ def candidatos(estado: Estado, conoc, cat, cfg=CFG_DEFECTO, limite=3, heroe=None
                       "requiere_venta": requiere_venta,
                       "icono": d.get("icono") or f"/icono/{iid}"})
 
-    filas.sort(key=lambda x: -x["score"])
-    return filas[:limite], filas
+    # Orden por score. El desempate de los empates ya está dentro del score (`premio_caja`),
+    # así que `filas` queda ordenada para el objetivo y para el ranking a la vez.
+    filas.sort(key=lambda x: (-x["score"], x["costo"], x["id"]))
+    return [f for f in filas if f["alcanzable"]][:limite], filas
 
 
-def sugerir_venta(estado: Estado, conoc, cat, cfg=CFG_DEFECTO):
+def _peor_vendible(estado, conoc, cat, cfg, slot):
+    """El peor ítem del slot que además se vende de verdad en partidas reales."""
+    t_rel = (estado.t / cfg["duracion_tipica_s"]) * 100.0
+    en_slot = [str(i) for i in estado.yo.items if (cat.get(str(i)) or {}).get("slot") == slot]
+    if not en_slot:
+        return None, None
+    en_slot.sort(key=lambda i: conoc["items"].get(i, {}).get("lift_residual", -1))
+    for cand in en_slot:
+        info = conoc["items"].get(cand, {})
+        if info.get("tasa_venta", 0) < cfg["venta_minima_tasa"]:
+            continue
+        if info.get("min_venta") and t_rel < info["min_venta"] - cfg["venta_margen_s"]/60:
+            continue
+        return cand, info
+    return None, None
+
+
+def sugerir_venta(estado: Estado, conoc, cat, cfg=CFG_DEFECTO, filas=None):
     """Propone vender solo cuando un slot está lleno y lo que entra es claramente mejor.
 
     En Deadlock todo ítem se vende por su valor completo, así que la pregunta no es
@@ -423,58 +534,41 @@ def sugerir_venta(estado: Estado, conoc, cat, cfg=CFG_DEFECTO):
       1. el ítem que entra supera al que sale por al menos `venta_margen_pp`
       2. el ítem que sale se vende de verdad en partidas reales (tasa_venta)
       3. ya pasó su minuto típico de venta
+
+    El que entra ya no se recalcula aquí: sale de las filas de `candidatos()`, que traen
+    coste efectivo (componentes que ya llevas), huecos que libera el upgrade y score con
+    contexto. Antes esta función tenía su propia fórmula con sólo residual y counter, así
+    que podía proponer lo contrario que el ranking (medido: 29 candidatos pedían venta y
+    la venta devolvía None). Una fórmula, no dos.
     """
-    poseidos = {str(i) for i in estado.yo.items}
-    usados = _slots_usados(estado, cat)
-    cap = _cap(estado, cfg)
     almas = estado.yo.almas or 0
-    t_rel = (estado.t / cfg["duracion_tipica_s"]) * 100.0
-    indice = conoc.get("heroes_index", {})
-    heroes = [j.heroe for j in estado.enemigos if j.heroe]
-
-    for slot, n in usados.items():
-        if n < cap.get(slot, 4):
+    if filas is None:
+        filas = candidatos(estado, conoc, cat, cfg)[1]
+    for f in filas:
+        if not f["requiere_venta"] or not f["alcanzable"]:
             continue
-        en_slot = [i for i in poseidos if (cat.get(i) or {}).get("slot") == slot]
-        if not en_slot:
+        # El coste de lista es el que cuenta para el invariante de caja de la app: no se
+        # propone vender para un ítem que ni con el descuento de componentes alcanzaría.
+        if f["costo_lista"] > almas:
             continue
-        # el candidato a salir es el peor del slot que además se venda de verdad
-        ordenados = sorted(en_slot, key=lambda i: conoc["items"].get(i, {}).get("lift_residual", -1))
-        peor = None
-        for cand in ordenados:
-            info = conoc["items"].get(cand, {})
-            if info.get("tasa_venta", 0) < cfg["venta_minima_tasa"]:
-                continue
-            if info.get("min_venta") and t_rel < info["min_venta"] - cfg["venta_margen_s"]/60:
-                continue
-            peor = cand
-            break
-        if peor is None:
+        peor, info_peor = _peor_vendible(estado, conoc, cat, cfg, f["slot"])
+        if not peor or peor == f["id"]:
             continue
-        info_peor = conoc["items"].get(peor, {})
-        residual_peor = info_peor.get("lift_residual", -1)
-
-        mejor = None
-        for iid, d in conoc["items"].items():
-            if iid in poseidos or d["slot"] != slot:
-                continue
-            if (d["costo"] or 0) > almas:
-                continue
-            mejora_pp = (d["lift_residual"] - residual_peor)*100
-            if mejora_pp < cfg["venta_margen_pp"]:
-                continue
-            counter = _bonus_counter(iid, heroes, conoc, cfg, indice)
-            valor = mejora_pp + counter*100*cfg["w_counter"]
-            if not mejor or valor > mejor[1]:
-                mejor = (iid, valor, d, mejora_pp)
-        if mejor:
-            iid, valor, d, mejora_pp = mejor
-            return {"vender": peor, "nombre": info_peor.get("nombre", peor),
-                    "comprar": iid, "para": d["nombre"], "ganancia_pp": round(mejora_pp, 2),
-                    "se_vende": f"{info_peor.get('tasa_venta',0)*100:.0f}% de las partidas",
-                    "motivo": f"{d['nombre']} supera a {info_peor.get('nombre', peor)} "
-                              f"por {mejora_pp:+.1f}pp y {info_peor.get('nombre', peor)} "
-                              f"se vende en {info_peor.get('tasa_venta',0)*100:.0f}% de las partidas"}
+        mejora_pp = (f["residual"] - info_peor.get("lift_residual", -1)) * 100
+        if mejora_pp < cfg["venta_margen_pp"]:
+            continue
+        nombre_peor = info_peor.get("nombre", peor)
+        motivo = (f"{f['nombre']} supera a {nombre_peor} por {mejora_pp:+.1f}pp y "
+                  f"{nombre_peor} se vende en {info_peor.get('tasa_venta', 0)*100:.0f}% "
+                  f"de las partidas")
+        if f["ahorro"]:
+            motivo += (f"; pagas {f['costo']:,} por lo que ya llevas "
+                       f"(lista {f['costo_lista']:,})")
+        return {"vender": peor, "nombre": nombre_peor,
+                "comprar": f["id"], "para": f["nombre"], "costo": f["costo"],
+                "ahorro": f["ahorro"], "ganancia_pp": round(mejora_pp, 2),
+                "se_vende": f"{info_peor.get('tasa_venta',0)*100:.0f}% de las partidas",
+                "motivo": motivo}
     return None
 
 
@@ -487,32 +581,44 @@ def recomendar(estado: Estado, conoc, cat, cfg=None):
     tactico = estado_tactico(estado, econ, cfg)
     # 10 candidatos: el panel filtra por oro y así puede ofrecer algo comprable
     # en vez de enseñar siempre un tier 4 que no alcanza.
-    top, _ = candidatos(estado, conoc, cat, cfg, limite=10, heroe=h)
-    venta = sugerir_venta(estado, conoc, cat, cfg)
-    # objetivo: lo mejor que todavía no puedes pagar
-    objetivo = None
+    top, filas = candidatos(estado, conoc, cat, cfg, limite=10, heroe=h)
+    venta = sugerir_venta(estado, conoc, cat, cfg, filas)
     almas = estado.yo.almas or 0
-    for iid, d in conoc["items"].items():
-        if iid in {str(x) for x in estado.yo.items}:
+    # objetivo: lo mejor que todavía no puedes pagar, de la misma lista y con el mismo
+    # coste efectivo que el ranking (componentes que ya llevas = pagas la diferencia).
+    # Antes repetía el filtrado con otra regla (`dist > 30`) y cobraba precio de lista.
+    objetivo = None
+    for f in filas:
+        if f["alcanzable"] or f["residual"] < cfg["lift_minimo"]:
             continue
-        c = cat.get(iid) or {}
-        if not c.get("comprable", True) or not d.get("slot"):
-            continue
-        if (d["costo"] or 0) <= almas or d["lift_residual"] < cfg["lift_minimo"]:
-            continue
-        dist = abs((estado.t/cfg["duracion_tipica_s"])*100 - (d.get("min_compra") or 0))
-        if dist > 30:
-            continue
-        if not objetivo or d["lift_residual"] > objetivo["residual"]:
-            objetivo = {"id": iid, "nombre": d["nombre"], "costo": d["costo"],
-                        "faltan": (d["costo"] or 0) - almas,
-                        "residual": d["lift_residual"], "icono": f"/icono/{iid}"}
+        objetivo = {"id": f["id"], "nombre": f["nombre"], "costo": f["costo"],
+                    "faltan": f["costo"] - almas, "ahorro": f["ahorro"],
+                    "residual": f["residual"], "icono": f["icono"]}
+        break
 
+    # plan: los dos pasos siguientes del build. Sale del grafo real de compras (lo que
+    # suele venir justo después de la recomendada, con su número de veces) y pasa por la
+    # misma cuenta de componentes que el ranking: lo que ya llevas puesto no entra, lo que
+    # ya superaste tampoco, y el precio es el efectivo (comprar el componente de algo que
+    # ya llevas es pagar sólo la diferencia).
+    siguiente = (conoc.get("flujo") or {}).get("siguiente") or {}
+    poseidos = {str(i) for i in estado.yo.items}
+    ya_superados = componentes_de(poseidos)
     plan = []
-    if top:
-        sig = (conoc.get("flujo") or {}).get("siguiente", {}).get(top[0]["id"], [])
-        plan = [{"id": s["id"], "nombre": s["nombre"], "n": s["n"],
-                 "icono": f"/icono/{s['id']}"} for s in sig[:2]]
+    for s in (siguiente.get(top[0]["id"], []) if top else []):
+        iid = str(s["id"])
+        info = conoc["items"].get(iid)
+        if not info or iid in poseidos or iid in ya_superados:
+            continue
+        if not (cat.get(iid) or {}).get("comprable", True):
+            continue
+        absorbe = componentes_de([iid]) & poseidos
+        ahorro = sum((conoc["items"].get(x) or {}).get("costo") or 0 for x in absorbe)
+        plan.append({"id": iid, "nombre": info["nombre"], "n": s["n"],
+                     "costo": max(0, (info["costo"] or 0) - ahorro), "ahorro": ahorro,
+                     "icono": f"/icono/{iid}"})
+        if len(plan) >= 2:
+            break
     enemigos = []
     for j in estado.enemigos:
         if not j.heroe:
@@ -539,9 +645,15 @@ def recomendar(estado: Estado, conoc, cat, cfg=None):
     # ítems son negativos (los compra quien va perdiendo). Se muestran con su fuente y con
     # el coeficiente a la vista: sin el número, el panel parecía respaldarlos.
     residuales = {iid: d.get("lift_residual") for iid, d in conoc["items"].items()}
+    heroes_enemigos = [j.heroe for j in estado.enemigos if j.heroe]
+    # El coeficiente de esta lista es el contextual: el mismo `lift_residual` de 1.9 M de
+    # partidas multiplicado por la ganancia del estado, igual que en el ranking. Antes era
+    # el número global y no se movía nunca con la partida.
+    gan = (ganancias_contexto(estado, econ, heroes_enemigos, cfg)
+           if cfg.get("contexto_activo", True) else dict(GANANCIAS_NEUTRAS))
     contra = situacionales.sugerencias_composicion(
-        [j.heroe for j in estado.enemigos if j.heroe], estado.yo.items,
-        residuales=residuales)
+        heroes_enemigos, estado.yo.items, residuales=residuales,
+        ganancia=gan["lift"], motivo_ajuste=motivo_ganancia(gan))
     return {
         "t": estado.t,
         "estado": tactico,

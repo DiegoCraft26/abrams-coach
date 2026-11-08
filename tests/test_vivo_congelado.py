@@ -44,7 +44,7 @@ class Args:
     cuenta = 1
     intervalo = 1.0
 
-EV.partida_activa = lambda cuenta, timeout=20: 111
+EV.partida_activa = lambda cuenta, timeout=20, unico=False: 111
 EV.Escucha = EscuchaFalsa
 threading.Thread(target=R.bucle_vivo, args=(Args(), lambda d: {
     "t": d["t"], "almas": d["yo"].get("almas"), "listo": True, "fuente": "en_vivo"}),

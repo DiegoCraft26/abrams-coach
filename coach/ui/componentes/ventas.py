@@ -43,6 +43,9 @@ class Ventas(Gtk.Box):
         texto.append(motivo)
         gp = venta.get("ganancia_pp")
         if gp is not None:
-            texto.append(etiqueta(f"+{gp:.1f} pp de residual", "t11 acento"))
+            # El signo lo pone el formato: con el "+" fijo, una ganancia negativa
+            # salía como "+-3.2 pp".
+            texto.append(etiqueta(f"{gp:+.1f} pp de residual",
+                                  "t11 acento" if gp >= 0 else "t11 aviso"))
         caja.append(texto)
         self.append(caja)

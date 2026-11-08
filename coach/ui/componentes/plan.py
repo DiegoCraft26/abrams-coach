@@ -34,7 +34,7 @@ class BuildPlan(Gtk.Box):
         if objetivo:
             self.append(self._linea("$", objetivo.get("id"),
                                     objetivo.get("nombre") or "—",
-                                    f"faltan {objetivo.get('faltan', 0):,}",
+                                    f"faltan {objetivo.get('faltan', 0):,} almas",
                                     clase="aviso"))
 
     def _linea(self, marca, ident, nombre, detalle, clase="t12 tenue"):

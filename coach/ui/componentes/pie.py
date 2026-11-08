@@ -40,7 +40,9 @@ class StatusBar(Gtk.Box):
         conf = d.get("confianza")
         self.lbl_confianza.set_label(
             f"confianza {conf*100:.0f}%" if conf is not None else "confianza —")
-        self.lbl_fuente.set_label(f"fuente {d.get('fuente') or '—'}")
+        # "en_vivo" es el identificador interno del servidor; aquí se lee como texto.
+        self.lbl_fuente.set_label(
+            f"fuente {(d.get('fuente') or '—').replace('_', ' ')}")
         la = d.get("latencia") or {}
         piezas = []
         if la.get("captura_ms") is not None:

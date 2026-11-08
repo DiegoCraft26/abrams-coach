@@ -2,7 +2,7 @@
 from gi.repository import Gtk
 
 from ..iconos import pixbuf
-from .base import etiqueta, fila, vaciar
+from .base import elipse, etiqueta, fila, vaciar
 
 
 class PurchaseFeed(Gtk.Box):
@@ -30,7 +30,9 @@ class PurchaseFeed(Gtk.Box):
                 icono.set_pixel_size(12)
             caja.append(icono)
             lbl = etiqueta(c.get("texto") or "", "t12 tenue")
-            lbl.set_ellipsize(3)
+            # elipse también deja el texto completo en el tooltip: la columna es
+            # estrecha y las compras largas se cortaban sin forma de leerlas.
+            elipse(lbl, 60)
             lbl.set_hexpand(True)
             caja.append(lbl)
             self.append(caja)

@@ -7,7 +7,7 @@ mezclaba rivales con aliados; ahora usa las listas de jugadores, que traen nombr
 from gi.repository import Gtk
 
 from ..iconos import pixbuf
-from .base import etiqueta, fila, fmt_num, vaciar
+from .base import elipse, etiqueta, fila, fmt_num, nombre_heroe, vaciar
 
 
 def _clave(heroe):
@@ -38,9 +38,9 @@ class Equipo(Gtk.Box):
             if not pb:
                 icono.set_pixel_size(14)
             caja.append(icono)
-            nombre = etiqueta(str(a.get("heroe") or "?").capitalize(), "t12 fuerte")
+            nombre = etiqueta(nombre_heroe(a.get("heroe")), "t12 fuerte")
             nombre.set_size_request(70, -1)
-            nombre.set_ellipsize(3)
+            elipse(nombre, 10)
             caja.append(nombre)
             caja.append(etiqueta(fmt_num(a.get("almas")), "t12 num tenue"))
             if a.get("bajas") is not None:
