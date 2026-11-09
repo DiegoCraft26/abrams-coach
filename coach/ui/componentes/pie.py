@@ -2,9 +2,37 @@
 
 Nada de números decorativos: si la latencia no se midió, se dice "—".
 """
+import re
+
 from gi.repository import Gtk
 
 from .base import etiqueta
+
+# El console.log del juego dice en qué pantalla está (menú, cola, partida). Saberlo sin
+# adivinar es lo que permite decir «en partida» aunque no haya broadcast ni HUD legible.
+FASES_LEGIBLES = {
+    "GameInProgress": "en partida",
+    "MainMenu": "menú",
+    "Hideout": "hideout",
+    "HeroSelection": "eligiendo héroe",
+    "PostGame": "fin de partida",
+    "Lobby": "lobby",
+}
+
+
+def texto_fuente(d) -> str:
+    """«fuente pantalla · fase en partida» o lo que de verdad se sepa."""
+    d = d or {}
+    fuente = str(d.get("fuente") or "—").replace("_", " ")
+    partes = [f"fuente {fuente}"]
+    fase = d.get("fase_juego")
+    if fase:
+        # Una fase desconocida se separa por mayúsculas: «AlgoRaro» → «algo raro».
+        legible = FASES_LEGIBLES.get(str(fase))
+        if legible is None:
+            legible = re.sub(r"(?<!^)(?=[A-Z])", " ", str(fase)).lower()
+        partes.append(f"fase {legible}")
+    return " · ".join(partes)
 
 
 class StatusBar(Gtk.Box):
@@ -41,8 +69,7 @@ class StatusBar(Gtk.Box):
         self.lbl_confianza.set_label(
             f"confianza {conf*100:.0f}%" if conf is not None else "confianza —")
         # "en_vivo" es el identificador interno del servidor; aquí se lee como texto.
-        self.lbl_fuente.set_label(
-            f"fuente {(d.get('fuente') or '—').replace('_', ' ')}")
+        self.lbl_fuente.set_label(texto_fuente(d))
         la = d.get("latencia") or {}
         piezas = []
         if la.get("captura_ms") is not None:
