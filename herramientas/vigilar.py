@@ -82,13 +82,32 @@ def cuenta_guardada():
         return None
 
 
+def _es_panel(pid):
+    """True si ese pid es un panel de verdad y está vivo.
+
+    Un zombi contesta `os.kill(pid, 0)` como si estuviera vivo porque el padre no lo ha
+    recogido. Con eso, el vigilante se creía acompañado para siempre y no volvía a abrir
+    el panel: el panel se moría y nadie lo notaba. Se mira el estado en /proc y que la
+    línea de órdenes sea la del panel.
+    """
+    try:
+        with open(f"/proc/{pid}/stat", encoding="utf-8", errors="replace") as f:
+            estado = f.read().rsplit(")", 1)[-1].split()[0]
+        if estado == "Z":
+            return False
+        with open(f"/proc/{pid}/cmdline", "rb") as f:
+            return b"panel_nativo.py" in f.read()
+    except (OSError, IndexError):
+        return False
+
+
 def panel_vivo():
     """PID del panel si sigue vivo. Sirve para no abrir dos y para reabrirlo si muere."""
     try:
         with open("/tmp/abrams-panel.pid", encoding="utf-8") as f:
             pid = int(f.read().strip())
-        os.kill(pid, 0)
-        return pid
+        if _es_panel(pid):
+            return pid
     except (OSError, ValueError):
         pass
     # El PID puede estar viejo si el panel se abrió a mano: se busca por proceso antes
@@ -98,6 +117,10 @@ def panel_vivo():
                                 capture_output=True, text=True, timeout=5).stdout
         for linea in salida.split():
             pid = int(linea)
+            # `pgrep` también lista zombis y atérmicos: se confirma con /proc antes de
+            # dar el panel por vivo.
+            if not _es_panel(pid):
+                continue
             with open("/tmp/abrams-panel.pid", "w", encoding="utf-8") as f:
                 f.write(str(pid))
             return pid

@@ -51,3 +51,6 @@ datos/coach.db
 
 # Registros de cada sesión: cambian en cada partida y su copia durable es la BD.
 salida/*.jsonl
+# Estado de la última lectura: es dato de la máquina, no del repo.
+salida/estado_ultimo.json
+salida/.estado-*.tmp

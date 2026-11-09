@@ -92,17 +92,34 @@ if [ -t 0 ]; then
   echo
   read -r -p "¿Abrir el panel solo cuando abras Deadlock? [s/N]: " auto
   if [ "${auto,,}" = "s" ] || [ "${auto,,}" = "si" ] || [ "${auto,,}" = "sí" ]; then
-    mkdir -p "$HOME/.config/autostart"
-    cat > "$HOME/.config/autostart/abrams-coach-esperar.desktop" <<DESKTOP
-[Desktop Entry]
-Type=Application
-Name=Abrams Coach (espera)
-Comment=Arranca el coach y el panel cuando abres Deadlock
-Exec=$BASE/herramientas/cli.sh esperar
-Terminal=false
-NoDisplay=true
-DESKTOP
-    echo "  listo  se abrirá solo al jugar (quita ~/.config/autostart/abrams-coach-esperar.desktop para deshacerlo)"
+    # Servicio de usuario en vez de autostart de escritorio: si el vigilante se cae,
+    # systemd lo vuelve a levantar. Un .desktop solo arranca una vez al entrar.
+    mkdir -p "$HOME/.config/systemd/user"
+    cat > "$HOME/.config/systemd/user/abrams-coach-esperar.service" <<UNIT
+[Unit]
+Description=Abrams Coach en espera (arranca al abrir Deadlock)
+After=graphical-session.target
+
+[Service]
+Type=simple
+WorkingDirectory=$BASE
+ExecStart=$BASE/herramientas/cli.sh esperar
+Restart=always
+RestartSec=10
+TimeoutStopSec=15
+
+[Install]
+WantedBy=default.target
+UNIT
+    systemctl --user daemon-reload
+    systemctl --user enable --now abrams-coach-esperar.service
+    # El autostart viejo duplicaría el vigilante: se aparta, no se borra.
+    if [ -f "$HOME/.config/autostart/abrams-coach-esperar.desktop" ]; then
+      mv "$HOME/.config/autostart/abrams-coach-esperar.desktop" \
+         "$HOME/.config/autostart/abrams-coach-esperar.desktop.bak"
+      echo "  apartado  ~/.config/autostart/abrams-coach-esperar.desktop.bak"
+    fi
+    echo "  listo  se abrirá solo al jugar (deshacer: systemctl --user disable --now abrams-coach-esperar)"
   fi
 fi
 chmod +x "$BASE/herramientas/cli.sh" "$BASE/herramientas/partida.sh" 2>/dev/null
