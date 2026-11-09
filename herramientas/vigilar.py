@@ -20,6 +20,7 @@ RAIZ = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, RAIZ)
 
 LOG = "/tmp/abrams-vigilar.log"
+PUERTO = 8090
 
 
 def registrar(texto):
@@ -30,6 +31,22 @@ def registrar(texto):
             f.write(linea + "\n")
     except OSError:
         pass
+
+
+def puerto_libre(puerto=PUERTO):
+    import socket
+    with socket.socket() as s:
+        return s.connect_ex(("127.0.0.1", puerto)) != 0
+
+
+def cuenta_guardada():
+    """SteamID64 de .cuenta, si existe. Sin cuenta el modo vivo usa el HUD."""
+    try:
+        with open(os.path.join(RAIZ, ".cuenta"), encoding="utf-8") as f:
+            valor = f.read().strip()
+        return valor if valor.isdigit() else None
+    except OSError:
+        return None
 
 
 def juego_abierto():
@@ -57,15 +74,31 @@ def main():
             dentro = True
             registrar("Deadlock abierto: arrancando el coach")
             try:
-                procesos.append(subprocess.Popen(
-                    [sys.executable, os.path.join(RAIZ, "run.py"), "--fuente", "auto"],
-                    cwd=RAIZ, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL))
+                if puerto_libre():
+                    orden = [sys.executable, os.path.join(RAIZ, "run.py"),
+                             "--fuente", "auto", "--puerto", str(PUERTO)]
+                    cuenta = cuenta_guardada()
+                    if cuenta:
+                        orden += ["--cuenta", cuenta]
+                    procesos.append(subprocess.Popen(
+                        orden, cwd=RAIZ, stdout=subprocess.DEVNULL,
+                        stderr=subprocess.DEVNULL))
+                else:
+                    registrar("el coach ya estaba corriendo en :8090")
                 if not a.sin_panel:
                     time.sleep(2)
                     procesos.append(subprocess.Popen(
-                        [sys.executable, os.path.join(RAIZ, "panel_nativo.py")],
+                        [sys.executable, os.path.join(RAIZ, "panel_nativo.py"),
+                         "--url", f"http://127.0.0.1:{PUERTO}"],
                         cwd=RAIZ, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL))
-            except OSError as exc:
+                    time.sleep(2)
+                    # Wayland no deja que el panel se coloque solo: se le pide a KWin.
+                    subprocess.run(
+                        [sys.executable, os.path.join(RAIZ, "herramientas",
+                                                      "colocar_panel.py")],
+                        cwd=RAIZ, stdout=subprocess.DEVNULL,
+                        stderr=subprocess.DEVNULL, timeout=20)
+            except (OSError, subprocess.SubprocessError) as exc:
                 registrar(f"no pude arrancar: {exc}")
         elif not abierto and dentro:
             dentro = False

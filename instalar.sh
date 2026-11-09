@@ -71,6 +71,40 @@ fi
 
 mkdir -p "$DESTINO"
 ln -sfn "$BASE/herramientas/cli.sh" "$DESTINO/abrams-coach"
+
+# Entrada de menú: deja «Abrams Coach» en el lanzador de aplicaciones. Desde ahí se
+# le puede asignar un atajo global en Ajustes → Atajos.
+mkdir -p "$HOME/.local/share/applications"
+cat > "$HOME/.local/share/applications/abrams-coach.desktop" <<DESKTOP
+[Desktop Entry]
+Type=Application
+Name=Abrams Coach
+Comment=Panel de decisiones para Deadlock
+Exec=$BASE/herramientas/cli.sh abrir
+Icon=applications-games
+Terminal=false
+Categories=Game;
+DESKTOP
+echo "  menú   Abrams Coach (atajo: Ajustes → Atajos → añadir comando «abrams-coach abrir»)"
+
+# Arranque automático opcional: al iniciar sesión queda esperando a Deadlock.
+if [ -t 0 ]; then
+  echo
+  read -r -p "¿Abrir el panel solo cuando abras Deadlock? [s/N]: " auto
+  if [ "${auto,,}" = "s" ] || [ "${auto,,}" = "si" ] || [ "${auto,,}" = "sí" ]; then
+    mkdir -p "$HOME/.config/autostart"
+    cat > "$HOME/.config/autostart/abrams-coach-esperar.desktop" <<DESKTOP
+[Desktop Entry]
+Type=Application
+Name=Abrams Coach (espera)
+Comment=Arranca el coach y el panel cuando abres Deadlock
+Exec=$BASE/herramientas/cli.sh esperar
+Terminal=false
+NoDisplay=true
+DESKTOP
+    echo "  listo  se abrirá solo al jugar (quita ~/.config/autostart/abrams-coach-esperar.desktop para deshacerlo)"
+  fi
+fi
 chmod +x "$BASE/herramientas/cli.sh" "$BASE/herramientas/partida.sh" 2>/dev/null
 
 case ":$PATH:" in

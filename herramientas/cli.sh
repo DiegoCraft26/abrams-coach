@@ -2,6 +2,7 @@
 # Comando único del Abrams Coach.
 #
 #   abrams-coach demo      panel con datos de ejemplo (sin juego)
+#   abrams-coach abrir     abre coach + panel ahora (sin preparar la máquina)
 #   abrams-coach jugar     prepara la máquina y abre coach + panel
 #   abrams-coach estado    qué corre, RAM, VRAM y última lectura
 #   abrams-coach archivar  importa la sesión a la base local
@@ -25,8 +26,8 @@ case "${1:-estado}" in
     ( sleep 2; "$PY" herramientas/colocar_panel.py >/dev/null 2>&1 || true ) &
     exec "$PY" panel_nativo.py
     ;;
-  jugar)
-    # `prep` ya abre el coach y el panel, y lo coloca en el monitor secundario.
+  jugar|abrir)
+    # `prep` abre el coach y el panel, y lo coloca en el monitor secundario.
     # Antes se ejecutaba otro panel aquí: salían dos ventanas.
     exec ./herramientas/partida.sh prep
     ;;

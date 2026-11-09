@@ -105,6 +105,17 @@ python3 run.py --fuente vivo --cuenta TU_ID     # broadcast identificado
 Atajos del panel: `1` compra, `2` enemigos, `3` compras, `?` ayuda, `Esc` cerrar. La
 ventana recuerda tamaño y posición.
 
+### Abrirla sin pensar
+
+- `abrams-coach abrir` abre el coach y el panel ahora, y lo coloca en el monitor
+  secundario.
+- `abrams-coach esperar` se queda en segundo plano y hace lo mismo **cuando abres
+  Deadlock**; al salir archiva la partida. `instalar.sh` puede dejarlo al iniciar sesión.
+- Atajo global: Ajustes → Atajos → añadir comando → `abrams-coach abrir` (por ejemplo
+  `Meta+J`). Funciona con el juego en primer plano porque lo captura KWin, no el juego.
+- No hay botón *dentro* del juego: sería un overlay y el proyecto no dibuja ni inyecta
+  nada. El atajo y el arranque automático hacen lo mismo sin tocar Deadlock.
+
 ## Qué te dice
 
 | Sección | Contenido |

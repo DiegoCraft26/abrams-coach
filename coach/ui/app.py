@@ -254,14 +254,13 @@ class Panel(Gtk.ApplicationWindow):
         # resto se abre con «Más». Con la ventana baja se quedan plegadas aunque el
         # botón esté activo, para no cortar frases a media altura.
         self._secundarias = [seccion_tend, seccion_comp, seccion_venta,
-                             seccion_equipo, seccion_contra]
+                             seccion_equipo, seccion_contra, seccion_revisar]
 
         if modo == "angosto":
             principal.append(self.recomendacion)
             principal.append(seccion_plan)
             principal.append(seccion_inv)
             principal.append(seccion_enem)
-            principal.append(seccion_revisar)
             for seccion in self._secundarias:
                 principal.append(seccion)
             self.cuerpo.append(principal)

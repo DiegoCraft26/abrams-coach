@@ -194,6 +194,53 @@ def bucle_ocr(a, analizar):
 
 
 def bucle_auto(a, analizar):
+    """Siempre el bucle en vivo: broadcast si lo hay, pantalla si no.
+
+    Antes decidía una sola vez al arrancar y, si lo abrías en el menú del juego (sin
+    partida todavía), se quedaba en el lector de marcador para siempre. Ahora no hay
+    decisión que tomar: `bucle_vivo` busca el id en el HUD, engancha el broadcast si
+    existe y, si no, publica reloj y plan de apertura desde la pantalla. Es lo que
+    necesita el arranque automático de `abrams-coach esperar`.
+    """
+    print("automático: HUD y broadcast si hay partida; si no, pantalla")
+    bucle_vivo(a, analizar)
+
+
+def bucle_ocr(a, analizar):
+    """Modo OCR: captura de pantalla + plantillas del propio juego."""
+    from coach import lector, marcador, registro
+    mi_heroe = (a.mi_heroe or "").strip().lower() or None
+    while True:
+        if not a.imagen and not juego_abierto():
+            servidor.EST.publicar({"listo": False,
+                                   "mensaje": "Deadlock no está abierto: en espera"})
+            time.sleep(5.0)
+            continue
+        try:
+            img = a.imagen or lector.capturar(fuente=a.captura)
+            lec = marcador.leer_captura(img, mi_heroe=mi_heroe)
+            almas_12 = lec["almas"]["aliados"] + lec["almas"]["enemigos"]
+
+            propias = lec.get("almas_propias")
+            if propias is None and a.mi_columna is not None:
+                propias = lec["almas"]["aliados"][a.mi_columna]
+            if propias is None:
+                publicar_sin_columna(lec, almas_12)
+                time.sleep(max(0.2, a.intervalo))
+                continue
+
+            estado = estado_desde_ocr(lec, a, propias)
+            salida = analizar(estado)
+            salida["almas_12"] = almas_12
+            servidor.EST.publicar(salida)
+            if salida.get("recomendaciones"):
+                registro.anotar(salida, estado)
+        except Exception as exc:                                    # noqa: BLE001
+            servidor.EST.publicar({"listo": False, "mensaje": f"error de lectura: {exc}"})
+        time.sleep(max(0.2, a.intervalo))
+
+
+def bucle_auto(a, analizar):
     """Decide al arrancar: broadcast si tu cuenta está en partida, si no OCR.
 
     Si tu cuenta está en una partida, el broadcast da todo (almas por jugador,
