@@ -30,6 +30,9 @@ def main():
     ap.add_argument("--alto", type=int, default=None, help="alto inicial en px")
     a = ap.parse_args()
 
+    # Antes de tocar GTK: si la ventana se cae sin traza, el registro ya está puesto.
+    from coach import diagnostico
+    diagnostico.activar("panel")
     from coach.ui import App
     tamano = (a.ancho, a.alto) if a.ancho and a.alto else None
     App(a.url, a.breakpoint, a.intervalo, tamano).run(None)

@@ -4,6 +4,8 @@ from collections import deque
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urlparse, parse_qs
 
+from coach import estado_guardado
+
 AQUI = os.path.dirname(os.path.abspath(__file__))
 
 # El panel web se retiró el 2026-11-07: hay una sola interfaz, la nativa (GTK4). El
@@ -47,6 +49,9 @@ class Estado:
             if firma is None or firma != self._firma or not datos.get("t"):
                 self._firma = firma
                 self.ts = time.time()
+            # Respaldo en disco: si el coach se cae, el panel aún puede enseñar el
+            # último estado con su edad en vez de «sin respuesta».
+            estado_guardado.guardar(datos)
             if isinstance(datos, dict) and datos.get("listo") is False:
                 self.avisos.append({"ts": round(time.time(), 1),
                                     "mensaje": str(datos.get("mensaje") or "")[:200]})
@@ -206,6 +211,13 @@ class Manejador(BaseHTTPRequestHandler):
             self._enviar(200, AVISO_RAIZ, "text/plain; charset=utf-8")
         elif ruta == "/api/estado":
             datos, _, edad = EST.encuesta()
+            if EST.ts == 0:
+                # El coach arrancó y todavía no publicó nada: se sirve lo último que
+                # quedó en disco, con su edad real y diciendo que viene de ahí.
+                respaldo = estado_guardado.como_respaldo()
+                if respaldo is not None:
+                    datos = respaldo
+                    edad = respaldo.get("edad_s")
             if isinstance(datos, dict):
                 datos = dict(datos)
                 datos["edad_s"] = round(edad, 1) if edad is not None else None

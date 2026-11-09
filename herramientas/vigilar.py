@@ -12,6 +12,7 @@ Al terminar la partida: cierra el coach, archiva en SQLite y escribe el informe.
 """
 import argparse
 import os
+import signal
 import subprocess
 import sys
 import time
@@ -20,6 +21,7 @@ RAIZ = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, RAIZ)
 
 LOG = "/tmp/abrams-vigilar.log"
+PANEL_LOG = "/tmp/abrams-panel.log"
 PUERTO = 8090
 
 
@@ -31,6 +33,37 @@ def registrar(texto):
             f.write(linea + "\n")
     except OSError:
         pass
+
+
+def describir_fin(codigo):
+    """Cómo terminó un proceso: código, señal o «sigue vivo».
+
+    Distinguir «matado por SIGKILL» (casi siempre falta de memoria) de «código 1» (error
+    propio) es lo que faltaba para entender por qué el panel desaparecía sin traza.
+    """
+    if codigo is None:
+        return "sigue vivo"
+    if codigo < 0:
+        try:
+            nombre = signal.Signals(-codigo).name
+        except ValueError:
+            nombre = f"señal {-codigo}"
+        aviso = " (falta de memoria o cierre forzado)" if -codigo == signal.SIGKILL else ""
+        return f"matado por {nombre}{aviso}"
+    return f"código {codigo}"
+
+
+def revisar_hijos(procesos):
+    """Anota los hijos que ya terminaron y devuelve los que siguen vivos."""
+    vivos = []
+    for p in procesos:
+        codigo = p.poll()
+        if codigo is None:
+            vivos.append(p)
+        else:
+            registrar(f"{os.path.basename(p.args[1] if len(p.args) > 1 else p.args[0])} "
+                      f"(pid {p.pid}) terminó: {describir_fin(codigo)}")
+    return vivos
 
 
 def puerto_libre(puerto=PUERTO):
@@ -74,10 +107,16 @@ def panel_vivo():
 
 
 def abrir_panel(a, procesos):
+    # La salida del panel NO va a /dev/null: era la razón de que su muerte no dejara
+    # rastro. El mismo archivo que revisa Diego en /tmp/abrams-panel.log.
+    try:
+        salida = open(PANEL_LOG, "a", encoding="utf-8")
+    except OSError:
+        salida = subprocess.DEVNULL
     procesos.append(subprocess.Popen(
         [sys.executable, os.path.join(RAIZ, "panel_nativo.py"),
          "--url", f"http://127.0.0.1:{PUERTO}"],
-        cwd=RAIZ, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL))
+        cwd=RAIZ, stdout=salida, stderr=subprocess.STDOUT))
     with open("/tmp/abrams-panel.pid", "w", encoding="utf-8") as f:
         f.write(str(procesos[-1].pid))
     time.sleep(2)
@@ -107,6 +146,7 @@ def main():
     procesos = []
     dentro = False
     while True:
+        procesos = revisar_hijos(procesos)
         abierto = juego_abierto()
         if abierto and not dentro:
             dentro = True

@@ -6,7 +6,7 @@
 import argparse, collections, os, sys, time
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from coach import servidor
+from coach import diagnostico, servidor
 from coach.motor_api import Motor
 from coach.estabilizador import Estabilizador
 from coach.nucleo_demo import aviso_vram, estado_simulado, juego_abierto, leer_conocimiento
@@ -395,6 +395,9 @@ def leer_argumentos():
 
 
 def main():
+    # Si el bucle se cae sin traza, queda la señal o la excepción en
+    # /tmp/abrams-coach-crash.log en vez de un proceso que desaparece en silencio.
+    diagnostico.activar("coach")
     a = leer_argumentos()
     # En vivo, el modo pantalla va encendido: es el único que sirve en ranked, práctica
     # y bots, donde Valve no retransmite nada. `--sin-hud` lo apaga junto con el OCR.

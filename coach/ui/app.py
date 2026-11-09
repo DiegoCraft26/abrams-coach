@@ -93,6 +93,17 @@ class Sondeo(threading.Thread):
                     self._ultimo_error_log = ahora
                     print(f"{time.strftime('%H:%M:%S')} sin respuesta: {exc}",
                           flush=True)
+                # Coach apagado o reiniciándose: se pinta lo último que quedó guardado,
+                # con su edad y marcado como guardado. Una pantalla vacía no informa.
+                if self.datos is None:
+                    try:
+                        from coach.estado_guardado import como_respaldo
+                        respaldo = como_respaldo()
+                    except Exception:                  # noqa: BLE001
+                        respaldo = None
+                    if respaldo is not None:
+                        with self.lock:
+                            self.datos = respaldo
             time.sleep(max(0.1, self.intervalo - (time.perf_counter() - t0)))
 
     def ultimo(self):
