@@ -82,6 +82,25 @@ def _arrancar_vision(a):
                                      modo=getattr(a, "vision_modo", "tira"))
 
 
+def disparo_por_compra(oro_previo, oro_actual, items_previos=None, items_actuales=None):
+    """¿Acaba de comprar o vender? Entonces toca leer la tienda ya.
+
+    Comprar baja el oro de golpe (el ítem más barato son 800) y cambia la rejilla de
+    ítems. Con la cadencia fija de tienda se llegaba tarde: Diego abría B, compraba y
+    cerraba. Con esta señal, la lectura sale en cuanto se ve el gasto.
+    """
+    if isinstance(oro_previo, int) and isinstance(oro_actual, int):
+        if oro_previo - oro_actual >= 500:
+            return "tienda"
+    if isinstance(items_previos, int) and isinstance(items_actuales, int):
+        if items_actuales != items_previos:
+            return "tienda"
+    return None
+
+
+_MEMORIA_VISION = {"oro": None, "items_visibles": None}
+
+
 def _latido_vision(cola, sched, estado_hud):
     """Un paso de visión: guarda lo leído y decide si manda otro cuadro.
 
@@ -104,6 +123,18 @@ def _latido_vision(cola, sched, estado_hud):
                 estado.get("items") or [], estado.get("slots") or {},
                 fuente="tienda" if estado.get("tienda_abierta") else "vision",
                 confianza=estado.get("confianza") or 0.0)
+    if estado is not None:
+        # La tienda se mira más o menos según si estaba abierta la última vez.
+        if "tienda_abierta" in estado:
+            sched.ajustar_tienda(bool(estado.get("tienda_abierta")))
+        # Y si acaba de comprar, se mira ya: la cadencia fija llegaba tarde.
+        disparo = disparo_por_compra(_MEMORIA_VISION["oro"], estado.get("oro"),
+                                     _MEMORIA_VISION["items_visibles"],
+                                     estado.get("items_visibles"))
+        _MEMORIA_VISION["oro"] = estado.get("oro")
+        _MEMORIA_VISION["items_visibles"] = estado.get("items_visibles")
+        if disparo:
+            sched.quizas_encolar(disparo, fuerza=True)
     if estado_hud.get("t") is not None:
         sched.quizas_encolar(cbd.motivo_por_estado(estado))
     inventario = inventario_propio.como_estado()

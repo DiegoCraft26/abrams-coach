@@ -127,3 +127,12 @@ def test_cada_tantas_lecturas_mira_la_tienda():
         sched.quizas_encolar("periodico")
         motivos.append(cola.pedidos[-1][0])
     assert motivos == ["periodico", "tienda", "periodico", "tienda"]
+
+
+def test_la_cadencia_de_tienda_se_adapta():
+    """Abierta se mira seguido; cerrada, poco. Así no se gasta en balde."""
+    sched = cbd.SchedulerVision(None, intervalo_s=25.0)
+    sched.ajustar_tienda(True)
+    assert sched.cada_tienda == 2
+    sched.ajustar_tienda(False)
+    assert sched.cada_tienda == 8

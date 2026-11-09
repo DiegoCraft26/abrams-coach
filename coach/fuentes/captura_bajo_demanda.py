@@ -158,6 +158,14 @@ class SchedulerVision:
             self.descartes += 1
         return entro
 
+    def ajustar_tienda(self, abierta: bool):
+        """Sube o baja la frecuencia de miradas a la tienda según lo último que se vio.
+
+        Tienda abierta = es donde está el inventario, se mira seguido (cada 2 lecturas).
+        Cerrada = no gasta: cada 8. Sin esto, o se gasta de más o se llega tarde.
+        """
+        self.cada_tienda = 2 if abierta else 8
+
     def estado(self) -> dict:
         return {"enviados": self.enviados, "descartes": self.descartes,
                 "intervalo_s": self.intervalo_s, "caja": self.caja_fn(),

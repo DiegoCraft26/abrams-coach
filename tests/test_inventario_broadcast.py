@@ -80,3 +80,14 @@ def test_el_pie_traduce_fases_desconocidas_sin_romperse():
     from coach.ui.componentes.pie import texto_fuente
 
     assert "fase algo raro" in texto_fuente({"fuente": "x", "fase_juego": "AlgoRaro"})
+
+
+def test_una_compra_dispara_la_lectura_de_tienda():
+    import run as R
+
+    assert R.disparo_por_compra(1200, 400) == "tienda"      # gastó 800
+    assert R.disparo_por_compra(400, 1200) is None          # ganó almas, no compró
+    assert R.disparo_por_compra(1200, 1100) is None         # 100 no es una compra
+    assert R.disparo_por_compra(1000, 900, 3, 4) == "tienda"  # cambió la rejilla
+    assert R.disparo_por_compra(None, None) is None
+    assert R.disparo_por_compra("mucho", 5) is None
