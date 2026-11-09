@@ -61,19 +61,9 @@ def bucle_vivo(a, analizar):
         try:
             match = buscar_match(a, st)
             if match is None:
-                # Sin broadcast (ranked, práctica, bots) lo único que hay es la
-                # pantalla: reloj y almas. Si el modo está encendido y hay lectura
-                # fresca, se publica eso en vez del build de apertura.
-                if getattr(a, "pantalla", False):
-                    if publicar_pantalla(estado_hud, analizar, medir_latencias(a), conoc):
-                        time.sleep(max(1.0, a.intervalo))
-                        continue
-                    # Con el modo pantalla encendido y el HUD ya leído alguna vez, no se
-                    # publica el build de apertura: haría saltar el reloj a 0:00. El
-                    # panel marca los datos como viejos por su cuenta.
-                    if estado_hud.get("ts"):
-                        time.sleep(max(1.0, a.intervalo))
-                        continue
+                # Sin id de partida no hay reloj que publicar: la lectura del HUD en
+                # el menú o en una partida que la API no reconoce no es una partida.
+                # Antes se publicaba esa pantalla y el panel parecía estar jugando.
                 if publicar_apertura(conoc):
                     time.sleep(3.0)
                     continue

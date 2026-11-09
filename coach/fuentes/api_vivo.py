@@ -99,8 +99,9 @@ def descubrir(cuenta=None, forzar=False, timeout=20.0, con_hud=True):
         mid = _leer_hud()
         if mid:
             # El id del HUD se lee de una fuente pequeña y a veces se confunde. Si hay
-            # cuenta, se contrasta con la partida que la API le asigna: un id mal leído
-            # enganchaba una partida que no existe y el panel se quedaba sin datos.
+            # cuenta, se contrasta con la partida que la API le asigna; si no, se
+            # contrasta con la lista de partidas con retransmisión. Un id mal leído
+            # enganchaba una partida inexistente y el panel se quedaba sin datos.
             if cuenta is not None:
                 try:
                     de_cuenta = en_vivo.partida_activa(cuenta, timeout=timeout)
@@ -117,7 +118,17 @@ def descubrir(cuenta=None, forzar=False, timeout=20.0, con_hud=True):
                 if de_cuenta:
                     return _guardar(mid, "hud",
                                     f"match id del HUD verificado con la cuenta ({int(mid)})")
-            return _guardar(mid, "hud", f"match id leído del HUD ({int(mid)})")
+            try:
+                con_broadcast = en_vivo.partidas_con_broadcast(timeout=timeout)
+            except Exception as exc:                           # noqa: BLE001
+                con_broadcast = set()
+                en_vivo.DIARIO.error(f"descubrir/hud-urls: {type(exc).__name__}: {exc}")
+            if con_broadcast and int(mid) not in con_broadcast:
+                en_vivo.DIARIO.error(
+                    f"HUD {int(mid)} no está en la lista de partidas con "
+                    f"retransmisión; se descarta")
+            else:
+                return _guardar(mid, "hud", f"match id del HUD ({int(mid)})")
 
     if cuenta is None:
         return _guardar(None, None, "sin cuenta: solo queda la capa del HUD")

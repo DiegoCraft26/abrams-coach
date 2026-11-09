@@ -159,14 +159,34 @@ def leer_hud(ruta=None):
     return {"t": t, "oro": _oro_amplio(cajas), "ts": time.time()}
 
 
-def leer_match_id(ruta=None):
-    """Lee el 'MATCH: 123456789' de la esquina inferior derecha."""
-    # La caja recorta solo los dígitos: no hace falta pedirle a tesseract las letras.
+def _una_lectura_match(ruta=None):
     texto = _Cajas(ruta).texto(CAJA_MATCH, 8, "0123456789", "7")
     if not texto:
         return None
     m = re.search(r"(\d{6,})", texto.replace(" ", ""))
     return int(m.group(1)) if m else None
+
+
+def leer_match_id(ruta=None):
+    """Lee el 'MATCH: 123456789' de la esquina inferior derecha.
+
+    Con una sola lectura, un dígito mal reconocido enganchaba una partida que no
+    existía (visto: 134344094 en vez de 134294885). Se leen tres cuadros y gana el
+    valor repetido; si los tres discrepan, se devuelve el primero y la capa de API
+    decide si sirve.
+    """
+    if ruta:
+        return _una_lectura_match(ruta)
+    lecturas = []
+    for i in range(3):
+        valor = _una_lectura_match()
+        if valor:
+            lecturas.append(valor)
+        if i < 2:
+            time.sleep(0.15)
+    if not lecturas:
+        return None
+    return max(set(lecturas), key=lecturas.count)
 
 
 if __name__ == "__main__":
