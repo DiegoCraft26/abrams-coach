@@ -85,6 +85,16 @@ def bucle_vivo(a, analizar):
                 st["tick"], st["tick_desde"], st["avisado"] = None, time.time(), False
             escucha = st["escucha"]
             est = escucha.estado
+            # Cuota de espectador agotada: no es un fallo del panel ni de la partida.
+            # Se dice con el tiempo de espera en vez de fingir datos de pantalla.
+            if est is None and "esperar" in str(escucha.error or "").lower():
+                servidor.EST.publicar({
+                    "listo": False,
+                    "mensaje": f"cuota de espectador: {escucha.error}",
+                    "fuente": "en_vivo",
+                })
+                time.sleep(20.0)
+                continue
             # El modo pantalla es el respaldo, no el principal: solo entra cuando el
             # broadcast lleva 15 s sin dar nada. Si no, el panel cambiaba de aspecto
             # cada pocos segundos (5 ítems del plan contra los del motor).
