@@ -746,13 +746,19 @@ def recomendar(estado: Estado, conoc, cat, cfg=None):
     slots = {}
     categorias = {}
     for categoria, tope in (cfg.get("slots") or {}).items():
-        usados = sum(1 for iid in poseidos
+        # El broadcast devuelve a veces el componente y el ítem mejorado a la vez, así que
+        # salían cuentas imposibles como «vitalidad 6/4» (visto el 2026-11-09). El juego
+        # no puede tener más de 4: se acota, y el número crudo queda en `brutos` para
+        # quien quiera mirar la fuente.
+        brutos = sum(1 for iid in poseidos
                      if (conoc["items"].get(iid) or {}).get("slot") == categoria)
+        usados = min(int(tope), brutos)
         gastado_cat = sum((conoc["items"].get(iid) or {}).get("costo") or 0
                           for iid in poseidos
                           if (conoc["items"].get(iid) or {}).get("slot") == categoria)
         slots[categoria] = {"usados": usados, "total": int(tope),
-                            "libres": max(0, int(tope) - usados)}
+                            "libres": max(0, int(tope) - usados),
+                            "brutos": brutos}
         categorias[categoria] = {
             "gastado": gastado_cat,
             "umbral": 4800,
