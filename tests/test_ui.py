@@ -55,7 +55,7 @@ def main():
 
     print("breakpoints")
     # En un runner sin GTK (CI de GitHub) estas dos partes se saltan y se dice. El gate
-    # completo solo corre en la máquina de desarrollo, que es donde se usa el panel.
+    # completo corre en la máquina donde se usa el panel.
     try:
         import gi  # noqa: F401
         from coach.ui.app import ANCHO_AMPLIO, ANCHO_ANGOSTO, Panel
