@@ -4,8 +4,9 @@ Uso: python3 tests/test_invariantes.py
 Sin dependencias. Sale con 0 solo si las 6 invariantes quedan con 0 violaciones.
 
 Invariantes verificadas
-  1. NUNCA se recomienda un ítem cuyo coste supere las almas actuales
-     (recomendaciones y la compra sugerida tras una venta).
+  1. NUNCA se sugiere comprar un ítem cuyo coste supere las almas actuales. La
+     excepción es el objetivo de una decisión AHORRAR: se enseña a propósito, con
+     "faltan" y ETA, porque el panel te dice cuánto juntar (no que lo compres ya).
   2. NUNCA se recomienda un ítem que el jugador ya tiene comprado, ni un
      componente cuyo tier superior ya está completo en el inventario
      (árbol `component_items` de data/items.json).
@@ -302,15 +303,24 @@ def main():
     # ---- 1 y 2: coste y recompra, sobre recomendaciones y venta ----------
     for i, (est, r) in enumerate(zip(estados, resultados)):
         almas = est["yo"]["almas"] or 0
+        # El motor decide con lo que puedes gastar: oro, o patrimonio menos lo que
+        # costó el inventario. Comparar contra el patrimonio neto marcaba como
+        # "pagable" un ítem que ya está gastado en los slots.
+        bolsillo = r.get("bolsillo")
+        if bolsillo is None:
+            bolsillo = almas
         poseidos = {str(x) for x in est["yo"]["items"]}
         objetivo = r.get("objetivo")
 
         for x in r.get("recomendaciones") or []:
             revisado[1] += 1
-            if x["costo"] > almas:
+            # El objetivo de AHORRAR se muestra a propósito aunque no alcance: el
+            # panel dice cuánto falta y el ETA. No es una compra sugerida.
+            if x["costo"] > bolsillo and not (
+                    x.get("accion") == "AHORRAR" and (x.get("faltan") or 0) > 0):
                 viol[1].append((etiqueta(i, est),
                                 f"recomienda '{x['nombre']}' ({x['costo']} almas) "
-                                f"con {almas} en el bolsillo"))
+                                f"con {bolsillo} en el bolsillo"))
             revisado[2] += 1
             if str(x["id"]) in poseidos:
                 viol[2].append((etiqueta(i, est),
@@ -331,7 +341,7 @@ def main():
             if costo > almas:
                 viol[1].append((etiqueta(i, est),
                                 f"propone cambiar a '{venta['para']}' ({costo} almas) "
-                                f"con {almas} en el bolsillo"))
+                                f"con {bolsillo} en el bolsillo"))
             revisado[2] += 1
             if iid in poseidos:
                 viol[2].append((etiqueta(i, est),
@@ -343,7 +353,7 @@ def main():
                                 f"propone cambiar a '{venta['para']}' pero su tier "
                                 f"superior {nombres} ya está comprado"))
 
-        if objetivo and objetivo["costo"] <= almas:
+        if objetivo and objetivo["costo"] <= bolsillo:
             viol[1].append((etiqueta(i, est),
                             f"'objetivo' pagable ({objetivo['costo']} <= {almas}) "
                             f"cuando debería ser lo que falta por pagar"))
@@ -400,7 +410,9 @@ def main():
             if valor is not None and not (0 <= valor <= ALMAS_MAX):
                 problemas.append(f"{campo}={valor} se propaga sin clamar")
         sano = min(max(almas, 0), ALMAS_MAX)
-        caros = [x for x in (r.get("recomendaciones") or []) if x["costo"] > sano]
+        caros = [x for x in (r.get("recomendaciones") or [])
+                 if x["costo"] > sano
+                 and not (x.get("accion") == "AHORRAR" and (x.get("faltan") or 0) > 0)]
         if caros:
             problemas.append(
                 f"recomienda {[(x['nombre'], x['costo']) for x in caros]} "

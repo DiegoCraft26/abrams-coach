@@ -13,6 +13,7 @@ python3 tests/test_invariantes.py                            # 6/6 invariantes
 | Suite | Qué garantiza |
 |---|---|
 | `test_motor.py` | decisiones coherentes, nada por encima de tus almas, latencia < 20 ms |
+| `test_camino.py` | camino apertura→core→spike, estados COMPRAR/AHORRAR/VENDER y componente del objetivo |
 | `test_robustez.py` | 308 entradas basura sin excepciones |
 | `test_invariantes.py` | 6 invariantes del motor sobre 50 estados sintéticos + informe de violaciones |
 | `test_lectura.py` | lectura de marcador contra tu verdad terreno (se salta sin capturas) |

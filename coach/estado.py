@@ -9,6 +9,7 @@ SLOTS_POR_CATEGORIA = {"weapon": 4, "vitality": 4, "spirit": 4}
 class Jugador:
     heroe: Optional[str] = None
     almas: Optional[int] = None
+    oro: Optional[int] = None                       # sin gastar, si la fuente lo trae
     items: list = field(default_factory=list)       # ids como str
     bajas: int = 0
     muertes: int = 0
@@ -70,6 +71,7 @@ def _jugador(x):
     return Jugador(
         heroe=str(x["heroe"]) if x.get("heroe") else None,
         almas=int(_num(x.get("almas"))) if _num(x.get("almas")) is not None else None,
+        oro=int(_num(x.get("oro"))) if _num(x.get("oro")) is not None else None,
         items=items,
         bajas=int(_num(x.get("bajas"), 0) or 0),
         muertes=int(_num(x.get("muertes"), 0) or 0),

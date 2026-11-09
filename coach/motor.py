@@ -2,6 +2,7 @@
 import json
 import os
 
+from .decision import camino as camino_mod
 from .decision import explicador, heroe as heroes, patrones, situacionales
 from .estado import Estado
 
@@ -32,7 +33,8 @@ def componentes_de(poseidos):
     componente de algo que ya tenés es tirar las almas. Detectado por QA el 2026-11-07.
     """
     mapa = mapa_componentes()
-    vistos, pila = set(), [str(x) for x in poseidos]
+    propios = {str(x) for x in poseidos}
+    vistos, pila = set(), list(propios)
     while pila:
         actual = pila.pop()
         for componente in mapa.get(actual, ()):
@@ -40,7 +42,9 @@ def componentes_de(poseidos):
             if componente not in vistos:
                 vistos.add(componente)
                 pila.append(componente)
-    return vistos
+    # Un ciclo en el mapa (A compone B y B compone A) hacía que `componentes_de`
+    # devolviera el propio ítem; entonces "el componente del objetivo" era el objetivo.
+    return vistos - propios
 
 CFG_DEFECTO = {
     "slots": {"weapon": 4, "vitality": 4, "spirit": 4},
@@ -586,17 +590,66 @@ def recomendar(estado: Estado, conoc, cat, cfg=None):
     top, filas = candidatos(estado, conoc, cat, cfg, limite=10, heroe=h)
     venta = sugerir_venta(estado, conoc, cat, cfg, filas)
     almas = estado.yo.almas or 0
+    decision = camino_mod.decidir(estado, conoc, cat, cfg, heroe=h, venta=venta)
+
+    def _fila(iid):
+        return next((f for f in filas if f["id"] == str(iid)), None)
+
+    # La recomendación principal es el siguiente paso del camino, no el ítem más
+    # barato que quepa. Si toca ahorrar, el objetivo sube igual: el panel enseña
+    # cuánto falta y el ETA en vez de empujarte a otro 800.
+    if decision.get("item"):
+        iid = str(decision["item"]["id"])
+        fila = _fila(iid)
+        if fila is None:
+            d = decision["item"]
+            fila = {"id": iid, "nombre": d["nombre"], "costo": d["costo"],
+                    "slot": (conoc["items"].get(iid) or {}).get("slot"),
+                    "score": 0.0, "residual": 0.0, "n": 0,
+                    "razones": [decision.get("motivo") or ""], "alcanzable": False,
+                    "peso_lift": 1.0, "coef_pp": 0.0,
+                    "costo_lista": d.get("costo_lista", d["costo"]),
+                    "ahorro": d.get("ahorro", 0), "absorbe": [],
+                    "min_compra": None, "fase": None, "requiere_venta": False,
+                    "icono": d.get("icono")}
+            filas = [fila] + filas
+        fila = dict(fila)
+        fila.update({"accion": decision["accion"], "modo": decision.get("modo"),
+                     "eta_s": decision.get("eta_s"), "faltan": decision.get("faltan")})
+        if decision.get("motivo"):
+            fila["razones"] = [decision["motivo"]] + [
+                r for r in (fila.get("razones") or []) if r != decision["motivo"]]
+        top = [fila] + [f for f in top if f["id"] != iid]
+        # El ranking viejo usa patrimonio; comprar se paga con lo que queda en el
+        # bolsillo. Se descartan las alternativas que no se pagan, salvo el objetivo
+        # de AHORRAR, que se enseña con su "faltan".
+        _bolsillo = decision.get("bolsillo")
+        if _bolsillo is not None:
+            top = [f for f in top
+                   if (f.get("costo") or 0) <= _bolsillo or f["id"] == iid]
+        top = top[:3]
     # objetivo: lo mejor que todavía no puedes pagar, de la misma lista y con el mismo
     # coste efectivo que el ranking (componentes que ya llevas = pagas la diferencia).
     # Antes repetía el filtrado con otra regla (`dist > 30`) y cobraba precio de lista.
     objetivo = None
-    for f in filas:
-        if f["alcanzable"] or f["residual"] < cfg["lift_minimo"]:
-            continue
-        objetivo = {"id": f["id"], "nombre": f["nombre"], "costo": f["costo"],
-                    "faltan": f["costo"] - almas, "ahorro": f["ahorro"],
-                    "residual": f["residual"], "icono": f["icono"]}
-        break
+    # `objetivo` es, por contrato con la UI y con las invariantes, lo que todavía NO
+    # se puede pagar. Si el paso del camino ya se paga, la acción es COMPRAR y no hay
+    # objetivo pendiente.
+    if decision.get("objetivo") and decision.get("faltan", 0) > 0:
+        d = decision["objetivo"]
+        f = _fila(d["id"]) or {}
+        objetivo = {"id": str(d["id"]), "nombre": d["nombre"], "costo": d["costo"],
+                    "faltan": decision.get("faltan", max(0, d["costo"] - almas)),
+                    "ahorro": d.get("ahorro", 0),
+                    "residual": f.get("residual", 0.0), "icono": d.get("icono")}
+    else:
+        for f in filas:
+            if f["alcanzable"] or f["residual"] < cfg["lift_minimo"]:
+                continue
+            objetivo = {"id": f["id"], "nombre": f["nombre"], "costo": f["costo"],
+                        "faltan": f["costo"] - almas, "ahorro": f["ahorro"],
+                        "residual": f["residual"], "icono": f["icono"]}
+            break
 
     # plan: los dos pasos siguientes del build. Sale del grafo real de compras (lo que
     # suele venir justo después de la recomendada, con su número de veces) y pasa por la
@@ -666,6 +719,9 @@ def recomendar(estado: Estado, conoc, cat, cfg=None):
         "economia": econ,
         "recomendaciones": top,
         "venta": venta,
+        "decision": decision,
+        "bolsillo": decision.get("bolsillo"),
+        "camino": decision.get("camino") or [],
         "plan": plan,
         "objetivo": objetivo,
         "enemigos": enemigos,

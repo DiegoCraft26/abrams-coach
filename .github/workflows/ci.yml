@@ -59,6 +59,11 @@ jobs:
             --partidas 60 --max-estados 800 \
             --salida /tmp/evaluacion-ci.json
 
+      - name: Camino de build (sin abusar de los 800)
+        run: |
+          python herramientas/validar_camino.py \
+            --cache data/replay_muestra.json --partidas 60
+
       - name: Archivado idempotente
         run: |
           python herramientas/archivar.py --db /tmp/ci.db | tee /tmp/archivo-1.txt

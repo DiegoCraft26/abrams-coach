@@ -9,6 +9,8 @@
 - Si no hay cuenta, `--mi-heroe` identifica tu columna cuando el héroe es único.
 - Lectura del HUD a 7.9 Hz con captura KWin compartida; sin tirones en partida.
 - Motor con componentes, frescura de datos y filtro por oro; 4.5 ms por decisión.
+- Build como camino apertura → core → spike, con estado COMPRAR/AHORRAR/VENDER, ETA y
+  componentes del objetivo. Baja de 4–5 a 1.4 ítems de 800 en los primeros 10 minutos.
 - Base SQLite con archivado idempotente e informe de partida.
 - Repo público: fuera datos personales, cuentas y arte de Valve; iconos en runtime.
 - CI real: GTK bajo Xvfb, suite completa, motor sobre muestra anonimizada.

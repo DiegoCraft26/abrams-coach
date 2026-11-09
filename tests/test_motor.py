@@ -35,8 +35,13 @@ def main():
     check("trae razones", all(x["razones"] or x["n"] for x in rs))
 
     r2 = m.analizar_dict(base(yo={"heroe": "Abrams", "almas": 200, "items": []}))
-    check("con 200 almas no inventa compras", r2["recomendaciones"] == [],
-          str(r2["recomendaciones"][:1]))
+    recs2 = r2["recomendaciones"]
+    # Con 200 almas no se compra nada: o no hay recomendación, o es el objetivo de
+    # un AHORRAR (con cuánto falta). Nunca una compra que no se paga.
+    check("con 200 almas no inventa compras",
+          recs2 == [] or (len(recs2) == 1 and recs2[0].get("accion") == "AHORRAR"
+                          and (recs2[0].get("faltan") or 0) > 0),
+          str(recs2[:1]))
 
     r3 = m.analizar_dict(base(t=300))
     check("antes de 10 min no da estado táctico", r3["estado"]["estado"] == "INICIO")

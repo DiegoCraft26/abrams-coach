@@ -104,7 +104,7 @@ ventana recuerda tamaño y posición.
 | Sección | Contenido |
 |---|---|
 | Cabecera | reloj, oro sin gastar, patrimonio, ventaja de almas y estado táctico |
-| Compra | un ítem, con sus razones y lo que falta si no alcanza |
+| Compra | el siguiente paso del build, con estado **COMPRAR / AHORRAR / VENDER**, cuánto falta y ETA |
 | Inventario | tus 12 slots y el rendimiento de cada ítem frente a lo esperado |
 | Enemigos | almas y KDA de los cinco rivales |
 | Plan | las compras que suelen seguir, del grafo de partidas públicas |
@@ -118,13 +118,27 @@ ventana recuerda tamaño y posición.
 2. **Lee** el reloj, el oro y el id de partida del HUD con OCR; el marcador, con
    plantillas del propio juego. Nada de memoria del proceso.
 3. **Engancha** el broadcast público por `deadlock-api` usando el id del HUD o tu cuenta.
-4. **Decide** con un motor que ordena ítems por *lift residual* y respeta lo que puedes
-   pagar; no recomienda lo que no alcanza.
+4. **Decide** siguiendo un camino de build: tres aperturas de 800, tres piezas de core
+   (1,600–3,200) y los spikes. Si no alcanza, no te empuja a otro 800: te dice cuánto
+   falta y en cuántos segundos. Los componentes del objetivo se compran siempre.
 5. **Publica** el estado en `http://127.0.0.1:8090`; el panel nativo lo consume.
 
 Detalle técnico: [`docs/ARQUITECTURA.md`](docs/ARQUITECTURA.md).
 Qué hace y qué no hace con el juego: [`POLITICA.md`](POLITICA.md).
 Qué viene: [`ROADMAP.md`](ROADMAP.md).
+
+### El build como camino
+
+El motor ya no puntúa ítems sueltos. Arma una secuencia con el grafo de compras reales
+(apertura → core → spike) y en cada lectura te dice el siguiente paso:
+
+- **COMPRAR** si lo pagas (o si pagas un componente suyo, que se absorbe al subir).
+- **AHORRAR** si no alcanza: `faltan N almas`, `ETA` en segundos, y si es un ítem caro
+  el modo es `rush`; si el ETA es largo, `farm`.
+- **VENDER** si el slot está lleno y conviene vender antes de comprar.
+
+Medido sobre 626 partidas reales: **1.39 ítems de 800** de media en los primeros 10
+minutos (máximo 3), 1.8 ms por decisión. Antes eran 4–5.
 
 ## Privacidad
 
