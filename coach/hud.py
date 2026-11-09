@@ -46,7 +46,9 @@ from .fuentes import captura_kwin
 CAJA_RELOJ = (3150, 8, 3265, 52)
 CAJA_ALMAS = (2050, 1190, 2210, 1260)
 CAJA_ORO = (1950, 1080, 2450, 1440)
-CAJA_MATCH = (4050, 1330, 4480, 1440)
+# El id va diminuto abajo a la derecha; la caja vieja metía el minimapa y el texto
+# "SERVER CPU" y el OCR no sacaba nada. Ajustada el 2026-11-09 sobre un cuadro real.
+CAJA_MATCH = (4335, 1390, 4475, 1412)
 
 
 _LOCK = threading.Lock()
@@ -63,12 +65,16 @@ def _capturar():
     return ruta
 
 
-def _ocr(im, caja, escala, whitelist, psm="7"):
-    c = im.crop(caja)
+def _ocr(im, caja, escala, whitelist, psm="7", umbral=100):
+    """OCR de una caja del HUD.
+
+    Antes usaba autocontrast + invertir y no leía el id de partida (devolvía vacío o
+    basura). Con un umbral duro sobre el brillo el mismo recorte devuelve el número
+    exacto: medido con el cuadro real de la ranked 123456789.
+    """
+    c = im.crop(caja).convert("L")
     c = c.resize((c.width * escala, c.height * escala), Image.LANCZOS)
-    c = ImageOps.autocontrast(c)
-    # texto claro sobre fondo oscuro: se invierte para tesseract
-    c = ImageOps.invert(c)
+    c = c.point(lambda p: 255 if p > umbral else 0)
     # Archivo ÚNICO por llamada: el reloj y el MATCH se leen desde hilos distintos y con
     # un nombre fijo una hebra pisaba la imagen de la otra.
     fd, ruta = tempfile.mkstemp(prefix="abrams-ocr-", suffix=".png")
@@ -155,10 +161,11 @@ def leer_hud(ruta=None):
 
 def leer_match_id(ruta=None):
     """Lee el 'MATCH: 123456789' de la esquina inferior derecha."""
-    texto = _Cajas(ruta).texto(CAJA_MATCH, 3, "MATCH:0123456789", "6")
+    # La caja recorta solo los dígitos: no hace falta pedirle a tesseract las letras.
+    texto = _Cajas(ruta).texto(CAJA_MATCH, 8, "0123456789", "7")
     if not texto:
         return None
-    m = re.search(r"MATCH:?\s*(\d{6,})", texto)
+    m = re.search(r"(\d{6,})", texto.replace(" ", ""))
     return int(m.group(1)) if m else None
 
 

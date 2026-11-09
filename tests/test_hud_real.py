@@ -42,6 +42,7 @@ def main():
 
     from PIL import Image
 
+    from coach import hud
     from coach.fuentes import hud_rapido
     from coach.nucleo_demo import leer_conocimiento
     from coach.nucleo_vivo import plan_inicial
@@ -57,6 +58,11 @@ def main():
         leido = int(m.group(1)) * 60 + int(m.group(2)) if m else None
         check(f"{caso['caso']} = {caso['reloj']}", leido == caso["tiempo_s"],
               f"leyó {texto!r} ({leido})")
+
+    print("id de partida")
+    ruta = os.path.join(CARPETA, "match_id_full.png")
+    leido = hud.leer_match_id(ruta)
+    check("lee MATCH: 123456789 del recorte real", leido == 123456789, str(leido))
 
     print("plan de apertura")
     conoc = leer_conocimiento()
