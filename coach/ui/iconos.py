@@ -41,5 +41,8 @@ def pixbuf(ident, tipo="items", lado=48):
     if len(_cache) > _MAX:                                  # presupuesto de RAM
         for k in list(_cache)[:40]:
             _cache.pop(k, None)
-    _cache[clave] = pb
+    # No se cachea el fallo: los iconos se bajan en segundo plano al arrancar, y el
+    # siguiente refresco (1 Hz) tiene que poder encontrarlos sin reiniciar el panel.
+    if pb is not None:
+        _cache[clave] = pb
     return pb

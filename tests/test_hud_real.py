@@ -30,6 +30,10 @@ def _casos():
 
 
 def main():
+    if not os.path.isdir(CARPETA):
+        print("hud real: saltado (no hay recortes en verdad/hud_*/; "
+              "los genera quien juega, ver README)")
+        return 0
     fallos = 0
 
     def check(nombre, condicion, detalle=""):
@@ -61,8 +65,14 @@ def main():
 
     print("id de partida")
     ruta = os.path.join(CARPETA, "match_id_full.png")
-    leido = hud.leer_match_id(ruta)
-    check("lee MATCH: 123456789 del recorte real", leido == 123456789, str(leido))
+    esperado_id = datos.get("match_id")
+    if esperado_id is None:
+        print("  .... hud.json no declara match_id: no se comprueba")
+    elif not os.path.exists(ruta):
+        print("  .... no hay match_id_full.png: no se comprueba")
+    else:
+        leido = hud.leer_match_id(ruta)
+        check(f"lee MATCH: {esperado_id} del recorte real", leido == esperado_id, str(leido))
 
     print("plan de apertura")
     conoc = leer_conocimiento()
@@ -96,6 +106,9 @@ def main():
 
 def test_suite():
     """Entrada para `pytest -q`."""
+    if not os.path.isdir(CARPETA):
+        import pytest
+        pytest.skip("sin recortes reales del HUD en verdad/hud_*/")
     assert main() == 0
 
 

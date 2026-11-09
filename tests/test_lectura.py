@@ -335,6 +335,14 @@ def main():
     lector, err_lector = cargar_lector()
     entradas, errs_verdad, ignorados = cargar_verdad()
 
+    # La verdad terreno es de quien juega: no viaja en el repo. Sin un solo *.json
+    # no hay nada que medir y se dice, en vez de inventar un verde o un rojo.
+    if not DIR_VERDAD.is_dir() or not any(DIR_VERDAD.glob("*.json")):
+        print("\nSALTADO: no hay verdad terreno en verdad/ (la genera quien juega).")
+        print("  Forma de cada archivo: {\"archivo\": \"salida/calibracion/001.png\",")
+        print("   \"tiempo_s\": 460, \"aliados\": [...], \"enemigos\": [...]}")
+        return 0
+
     if err_lector:
         problemas.append(err_lector)
         print(f"\nLECTOR NO DISPONIBLE\n  {err_lector}")

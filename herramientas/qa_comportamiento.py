@@ -28,6 +28,11 @@ import urllib.request
 RAIZ = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, RAIZ)
 
+# Cuenta de prueba para los escenarios que consultan el API. Sin ABRAMS_CUENTA el
+# escenario 6 usa 0: sirve igual para probar que un fallo de red no cuelga ni miente,
+# que es lo único que mide.
+CUENTA_QA = int(os.environ.get("ABRAMS_CUENTA", "0"))
+
 EXTRA_HEALTH = "3633614685"
 COLOSSUS = "2407781327"
 WITCHMAIL = "3028234315"
@@ -285,12 +290,12 @@ def escenario6():
     urllib.request.urlopen = sin_red
     try:
         t0 = time.perf_counter()
-        match = en_vivo.partida_activa(TU_STEAMID64)
+        match = en_vivo.partida_activa(CUENTA_QA)
         dt = time.perf_counter() - t0
         probar("partida_activa no se cuelga y devuelve None", match is None and dt < 5,
                f"{dt:.2f} s, match={match}")
         t0 = time.perf_counter()
-        hallado = api_vivo.descubrir(cuenta=TU_STEAMID64, forzar=True, con_hud=False)
+        hallado = api_vivo.descubrir(cuenta=CUENTA_QA, forzar=True, con_hud=False)
         dt = time.perf_counter() - t0
         probar("descubrir no se cuelga y no inventa un match",
                hallado["match"] is None and dt < 15, f"{dt:.2f} s")

@@ -78,7 +78,8 @@ def bucle_vivo(a, analizar):
                     time.sleep(3.0)
                     continue
                 servidor.EST.publicar({"listo": False,
-                                       "mensaje": f"la cuenta {a.cuenta} no está en partida"})
+                                       "mensaje": (f"la cuenta {a.cuenta} no está en partida"
+                                                   if a.cuenta else "esa partida no está en vivo")})
                 time.sleep(10.0)
                 continue
             if match != st["match"]:
@@ -196,7 +197,7 @@ def bucle_auto(a, analizar):
     héroes, KDA) sin depender del marcador; si no, se lee la pantalla como siempre.
     """
     from coach import en_vivo
-    match = a.match or en_vivo.partida_activa(a.cuenta)
+    match = a.match or (en_vivo.partida_activa(a.cuenta) if a.cuenta else None)
     if match:
         print(f"automático: partida en vivo {match} -> broadcast")
         a.match = match
@@ -310,8 +311,11 @@ def leer_argumentos():
                          "los 3 tamaños sobre el mismo estado)")
     ap.add_argument("--t-inicial", type=float, default=900.0,
                     help="segundo de partida en el que arranca/congela el demo")
-    ap.add_argument("--cuenta", type=int, default=TU_STEAMID64,
-                    help="SteamID64 de Diego, para el modo vivo")
+    ap.add_argument("--cuenta", type=int,
+                    default=(int(os.environ["ABRAMS_CUENTA"])
+                             if os.environ.get("ABRAMS_CUENTA", "").isdigit() else None),
+                    help="tu SteamID64 (obligatorio en vivo/auto si no pasas --match; "
+                         "también se lee de la variable ABRAMS_CUENTA)")
     ap.add_argument("--match", type=int, default=None,
                     help="match_id directo (en vez de buscarlo por cuenta)")
     ap.add_argument("--pantalla", action="store_true",
@@ -325,7 +329,16 @@ def leer_argumentos():
     ap.add_argument("--imagen", default=None,
                     help="en modo ocr, leer esta captura en vez de la pantalla "
                          "(para probar sin el juego abierto)")
-    return ap.parse_args()
+    a = ap.parse_args()
+    # Sin cuenta no hay forma de buscar tu partida en el listado de Valve. Se exige
+    # explícitamente en vez de traer una cuenta de fábrica: el repo es público y una
+    # cuenta por defecto sería un dato personal. La cuenta va en --cuenta o en
+    # ABRAMS_CUENTA (los lanzadores leen `.cuenta`, que está en .gitignore).
+    if a.fuente in ("vivo", "auto") and a.match is None and a.cuenta is None:
+        ap.error("falta --cuenta (tu SteamID64), ABRAMS_CUENTA o --match (id de "
+                 "partida): en vivo/auto no hay a quién buscar; usa --fuente ocr si "
+                 "no quieres pasar cuenta")
+    return a
 
 
 def main():
@@ -339,6 +352,11 @@ def main():
         aviso_vram()
 
     cfg_motor = configurar(a)
+
+    # El arte de Deadlock no se distribuye: se baja del bucket público la primera vez,
+    # sin retrasar el panel. Mientras llega, los componentes usan iconos de respaldo.
+    from coach import iconos
+    iconos.en_segundo_plano()
 
     print("cargando conocimiento…")
     m = Motor(cfg=cfg_motor)

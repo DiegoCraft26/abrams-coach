@@ -70,7 +70,7 @@ def _ocr(im, caja, escala, whitelist, psm="7", umbral=100):
 
     Antes usaba autocontrast + invertir y no leía el id de partida (devolvía vacío o
     basura). Con un umbral duro sobre el brillo el mismo recorte devuelve el número
-    exacto: medido con el cuadro real de la ranked 123456789.
+    exacto: medido con un cuadro real de una ranked en curso.
     """
     c = im.crop(caja).convert("L")
     c = c.resize((c.width * escala, c.height * escala), Image.LANCZOS)

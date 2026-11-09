@@ -3,14 +3,27 @@ __pycache__/
 *.pyc
 *.pyo
 
-# Capturas del escritorio: pesan y son de la máquina de desarrollo.
-# Se conserva UNA captura real, la que es verdad terreno del test de lectura.
+# Capturas del escritorio: pesan y son de la máquina que corre la app.
 salida/*.png
 salida/calibracion/*
 salida/diagnostico/
-!salida/calibracion/marcador_real_juego.png
 
-# Datos crudos grandes (se bajan con mineria.py / descargar_mis_partidas.py).
+# Datos personales: la cuenta, el historial propio y las capturas de verdad terreno
+# no pueden viajar en el repo. Cada quien genera los suyos (ver README).
+.cuenta
+data/mis_*.json
+verdad/hud_*/
+verdad/*_full.png
+
+# Arte de Deadlock (© Valve): no se distribuye. `coach/iconos.py` lo baja en el
+# primer arranque a data/iconos/.
+data/iconos/
+
+# Informes de sesión y archivo de partidas: locales.
+informes/
+salida/archivo/
+
+# Datos crudos grandes (se bajan con mineria.py / descargar_partidas.py).
 data/ability-order.json
 data/flujo.json
 data/items.json

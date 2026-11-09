@@ -1,6 +1,9 @@
 #!/bin/bash
 # Arranca el coach en segundo plano y guarda el PID.
 cd "$(dirname "$0")"
+# La cuenta de Steam no viaja en el repo: se lee de .cuenta (ignorado por git) o de
+# ABRAMS_CUENTA. En modo simulado no hace falta.
+[ -f .cuenta ] && export ABRAMS_CUENTA="$(tr -d '[:space:]' < .cuenta)"
 FUENTE="${1:-simulado}"
 PUERTO="${2:-8090}"
 [ -f /tmp/abrams-coach.pid ] && kill "$(cat /tmp/abrams-coach.pid)" 2>/dev/null

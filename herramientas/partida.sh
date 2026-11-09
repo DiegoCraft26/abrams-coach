@@ -12,9 +12,12 @@
 
 set -uo pipefail
 
-BASE="$HOME/Desktop/Chat/abrams-coach"
+BASE="$(cd "$(dirname "$0")/.." && pwd)"
 PUERTO=8090
 GRAB="$BASE/grabaciones"
+# Cuenta de Steam para el modo vivo: no viaja en el repo. `instalar.sh` la pide una
+# vez y la deja en .cuenta (ignorado por git); o exporta ABRAMS_CUENTA a mano.
+[ -f "$BASE/.cuenta" ] && export ABRAMS_CUENTA="$(tr -d '[:space:]' < "$BASE/.cuenta")"
 PID_COACH=/tmp/abrams-coach.pid
 PID_PANEL=/tmp/abrams-panel.pid
 PID_GSR=/tmp/abrams-gsr.pid
