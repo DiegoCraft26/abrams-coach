@@ -67,12 +67,14 @@ def _arrancar_vision(a):
         return None, None
     # La cola se pide al módulo (singleton): así /api/vision informa de la misma que
     # trabaja y no de una copia vacía.
-    from coach.agente import vision_zonas
     from coach.agente import vision as vision_base
-    # Lector de tira: reloj, oro, almas e ítems visibles en una imagen de 10 kB. Medido
-    # el 2026-11-09: los cuatro números correctos, 650-1 000 tokens.
-    lector = lambda jpeg: vision_zonas.leer_jpeg(jpeg, prov,
-                                                 timeout_s=vision_base.TIMEOUT_S)
+    from coach.agente import vision_tienda, vision_zonas
+
+    def lector(jpeg, motivo="periodico"):
+        """Tira del HUD para el reloj y el oro; recorte de la tienda para los ítems."""
+        if motivo == "tienda":
+            return vision_tienda.leer_jpeg(jpeg, prov, timeout_s=vision_base.TIMEOUT_S)
+        return vision_zonas.leer_jpeg(jpeg, prov, timeout_s=vision_base.TIMEOUT_S)
     cola = vision_cola.cola(proveedor=prov, lector=lector).arrancar()
     print(f"visión: {prov.nombre} · un cuadro cada "
           f"{getattr(a, 'vision_cada', 20.0):.0f} s")

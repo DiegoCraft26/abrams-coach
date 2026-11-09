@@ -89,7 +89,7 @@ class SchedulerVision:
     """Decide qué cuadros se mandan a la cola y con qué motivo."""
 
     def __init__(self, cola, intervalo_s: float = 20.0, capturador=None,
-                 caja_fn=None, modo: str = "tira"):
+                 caja_fn=None, modo: str = "tira", cada_tienda: int = 4):
         self.cola = cola
         self.intervalo_s = float(intervalo_s)
         self.capturador = capturador or _capturar
@@ -97,6 +97,11 @@ class SchedulerVision:
         # "tira": recorte de las zonas del HUD (reloj, oro, ítems) — 10 kB y correcto.
         # "cuadro": el monitor entero a 640 px — más caro y más lento, para la tienda.
         self.modo = modo
+        # Cada cuántas lecturas periódicas se mira la tienda. Con una lectura cada 25 s,
+        # 4 significa una mirada a la tienda por minuto y medio: suficiente para pillar
+        # a Diego comprando sin gastar en balde.
+        self.cada_tienda = max(1, int(cada_tienda))
+        self._ciclos = 0
         self._ultimo = 0.0
         self._ultimo_tienda = 0.0
         self.enviados = 0
@@ -122,9 +127,17 @@ class SchedulerVision:
             self.descartes += 1
             return False
         caja = self.caja_fn()
+        self._ciclos += 1
+        mirar_tienda = (motivo == "tienda"
+                        or (self.modo == "tira" and self._ciclos % self.cada_tienda == 0))
         try:
             from ..agente import vision as _vision
-            if self.modo == "tira" and caja is not None:
+            if mirar_tienda and caja is not None:
+                from ..agente import vision_tienda as _tienda
+                enviado = _tienda.imagen_tienda(cuadro, caja)
+                caja_envio = None
+                motivo = "tienda"
+            elif self.modo == "tira" and caja is not None:
                 from ..agente import vision_zonas as _zonas
                 enviado = _zonas.tira_hud(cuadro, caja)
                 caja_envio = None

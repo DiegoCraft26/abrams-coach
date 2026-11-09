@@ -170,3 +170,23 @@ def test_la_prioridad_esta_declarada_para_los_motivos_conocidos():
     for motivo in ("tienda", "marcador", "muerte", "periodico"):
         assert motivo in vision_cola.PRIORIDAD
     assert vision_cola.PRIORIDAD["tienda"] < vision_cola.PRIORIDAD["periodico"]
+
+
+def test_el_lector_sabe_de_que_va_la_imagen():
+    """La cola le dice al lector el motivo: no es lo mismo una tira que la tienda."""
+    vision._CACHE.clear()
+    vistos = []
+
+    def lector(jpeg, motivo):
+        vistos.append(motivo)
+        return {"fase": "en_partida", "_tokens": 10}
+
+    cola = vision_cola.ColaVision(proveedor=ProveedorLento(), intervalo_s=0.0,
+                                  lector=lector).arrancar()
+    try:
+        cola.encolar(_cuadro(91), "periodico")
+        cola.encolar(_cuadro(92), "tienda")
+        assert _esperar(lambda: len(vistos) >= 2, 4.0)
+        assert "tienda" in vistos and "periodico" in vistos
+    finally:
+        cola.parar()

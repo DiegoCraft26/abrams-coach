@@ -112,3 +112,18 @@ def test_el_motivo_sale_de_lo_ultimo_leido():
     assert cbd.motivo_por_estado({"tienda_abierta": True}) == "tienda"
     assert cbd.motivo_por_estado({"marcador_abierto": True}) == "marcador"
     assert cbd.motivo_por_estado({"fase": "en_partida"}) == "periodico"
+
+
+def test_cada_tantas_lecturas_mira_la_tienda():
+    """Con una lectura periódica cada 25 s, una mirada a la tienda cada 4."""
+    from PIL import Image
+
+    cuadro = Image.new("RGB", (2560, 1440), (30, 40, 50))
+    cola = ColaFalsa()
+    sched = cbd.SchedulerVision(cola, intervalo_s=0.0, capturador=lambda: cuadro,
+                                caja_fn=lambda: (0, 0, 2560, 1440), cada_tienda=2)
+    motivos = []
+    for _ in range(4):
+        sched.quizas_encolar("periodico")
+        motivos.append(cola.pedidos[-1][0])
+    assert motivos == ["periodico", "tienda", "periodico", "tienda"]

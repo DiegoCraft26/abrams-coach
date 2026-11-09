@@ -148,7 +148,12 @@ class ColaVision:
             self._ultimo_arranque = time.time()
             try:
                 if self.lector is not None:
-                    estado = self.lector(jpeg)
+                    # El lector sabe de qué va la imagen: una tira del HUD se lee
+                    # distinto que un recorte de la tienda.
+                    try:
+                        estado = self.lector(jpeg, motivo)
+                    except TypeError:
+                        estado = self.lector(jpeg)
                     self.tope.gastar((estado or {}).get("_tokens"))
                 else:
                     estado = vision.interpretar(jpeg, proveedor=self.proveedor,

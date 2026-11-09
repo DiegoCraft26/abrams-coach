@@ -115,3 +115,22 @@ son:
 | Oro + rejilla de ítems | `[0.00, 0.80, 0.16, 0.18]` |
 
 Están en `coach/agente/vision_zonas.py`; `regiones.json` hay que recalibrarlo aparte.
+
+## Tienda: los nombres se leen, los ids se buscan en local
+
+Pedirle ids al modelo es pedirle que se los invente. La cadena es:
+
+1. recorte del centro (640 px, ~15–30 kB) → el modelo **transcribe nombres**;
+2. `vision_tienda.resolver()` los traduce a id contra `data/catalogo.json` (exacto,
+   contenido y parecido con corte 0.82);
+3. lo que no casa se descarta y se apunta en `no_resueltos`; nunca se adivina.
+
+Medido con la partida en curso y la tienda **cerrada**:
+
+| Lectura | Peso | Tokens | Resultado |
+|---|---|---|---|
+| Recorte de tienda (cerrada) | 29.5 kB | 439 | `{"tienda_abierta": false, "items": []}` ✔ |
+
+Cadencia: una lectura de tira cada 25 s y una mirada a la tienda cada 4 lecturas
+(~100 s). Cuando Diego abre B, la siguiente mirada trae los ítems; si está cerrada, no se
+toca el inventario y el estado sigue diciendo «solo reloj».
