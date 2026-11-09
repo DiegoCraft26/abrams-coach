@@ -56,6 +56,11 @@ class Header(Gtk.Box):
         elif fuente == "simulado":
             self.lbl_conexion.set_label("● demo")
             clase_unica(self.lbl_conexion, INSIGNIAS, "insignia-vivo")
+        elif fuente == "pantalla":
+            edad = d.get("edad_s")
+            etiqueta_lat = f" · hace {round(edad)} s" if edad not in (None, 0) else ""
+            self.lbl_conexion.set_label(f"● pantalla{etiqueta_lat}")
+            clase_unica(self.lbl_conexion, INSIGNIAS, "insignia-vivo")
         else:
             # La latencia del broadcast se muestra, no se esconde: es un dato del panel.
             edad = d.get("edad_s")

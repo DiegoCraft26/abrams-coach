@@ -29,8 +29,17 @@ class BuildPlan(Gtk.Box):
             self.append(self.lbl_vacio)
             return
         for i, p in enumerate(plan, 1):
-            self.append(self._linea(i, p.get("id"), p.get("nombre") or "—",
-                                    f"{p.get('n', 0):,} veces después" if p.get("n") else ""))
+            # En el arranque no hay almas ni estadística de flujo: se enseña el costo y
+            # el minuto típico de compra, que sí salen de `data/conocimiento.json`.
+            if p.get("n"):
+                detalle = f"{p.get('n', 0):,} veces después"
+            elif p.get("costo"):
+                detalle = f"{p.get('costo'):,} almas"
+                if p.get("min"):
+                    detalle += f" · min {p.get('min'):.0f}"
+            else:
+                detalle = ""
+            self.append(self._linea(i, p.get("id"), p.get("nombre") or "—", detalle))
         if objetivo:
             self.append(self._linea("$", objetivo.get("id"),
                                     objetivo.get("nombre") or "—",

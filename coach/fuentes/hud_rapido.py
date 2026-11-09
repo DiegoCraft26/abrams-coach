@@ -38,18 +38,50 @@ def _escalar(caja, tamano):
     return (int(caja[0] * fx), int(caja[1] * fy), int(caja[2] * fx), int(caja[3] * fy))
 
 
+def _otsu(recorte):
+    """Umbral que mejor separa tinta de fondo en ESE recorte (Otsu).
+
+    Un umbral fijo no sirve: con el mismo HUD, el contador de almas se lee bien a 110
+    en un cuadro y solo a 140 en otro, porque el brillo del borde cambia con la escena.
+    Otsu lo calcula por recorte, así la lectura no depende de acertar la constante.
+    """
+    hist = recorte.histogram()
+    total = sum(hist)
+    if not total:
+        return 140
+    suma = sum(i * h for i, h in enumerate(hist))
+    peso_fondo = 0
+    suma_fondo = 0
+    mejor, umbral = -1.0, 140
+    for i, h in enumerate(hist):
+        peso_fondo += h
+        if not peso_fondo:
+            continue
+        peso_frente = total - peso_fondo
+        if not peso_frente:
+            break
+        suma_fondo += i * h
+        media_fondo = suma_fondo / peso_fondo
+        media_frente = (suma - suma_fondo) / peso_frente
+        varianza = peso_fondo * peso_frente * (media_fondo - media_frente) ** 2
+        if varianza > mejor:
+            mejor, umbral = varianza, i
+    return umbral
+
+
 def _ocr(imagen, caja, escala=6, whitelist="0123456789:", psm="7", umbral=140):
     """OCR de un recorte con el preprocesado que se midió como mejor (130 ms/12 números).
 
     Antes era `autocontrast` + `invert`, y contra el HUD real del juego fallaba: el reloj
     salía vacío o como «7 5» (medido el 2026-11-09 con la partida abierta). Con un umbral
-    duro sobre el brillo, el mismo recorte lee «9:15» sin error en 130, 150 y 170. El
-    texto del HUD es blanco sobre fondo oscuro, así que no hay que invertir.
+    sobre el brillo el mismo recorte lee «9:15» sin error. El texto del HUD es blanco
+    sobre fondo oscuro, así que no hay que invertir. Con `umbral=None` se usa Otsu.
     """
     recorte = imagen.crop(caja).convert("L")   # spectacle entrega RGBA
     recorte = recorte.resize((recorte.width * escala, recorte.height * escala),
                              Image.LANCZOS)
-    recorte = recorte.point(lambda p: 255 if p > umbral else 0)
+    corte = _otsu(recorte) if umbral is None else umbral
+    recorte = recorte.point(lambda p: 255 if p > corte else 0)
     # Archivo ÚNICO por llamada: el reloj y el oro se leen en paralelo y, compartiendo
     # nombre, una hebra pisaba la imagen de la otra (leía 3,807 donde decía 9,801).
     fd, ruta = tempfile.mkstemp(prefix="abrams-hud-", suffix=".png")

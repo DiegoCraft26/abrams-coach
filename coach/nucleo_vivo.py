@@ -9,7 +9,22 @@ from coach import servidor
 from coach.nucleo_demo import juego_abierto
 
 
-APERTURA = ["800", "1548066885", "1437614329"]   # ítems de apertura reales
+# Apertura real de Abrams: los tres ítems de 800 que más se compran (1.9 M de partidas).
+# Aquí había un "800" en lugar de un id: es un costo, no un ítem, así que el panel
+# enseñaba dos compras donde van tres (visto el 2026-11-09 en la ranked).
+APERTURA = ["1437614329", "1342610602", "2829638276"]
+
+# Estado del filtro de almas del modo pantalla (ver `_oro_estable`).
+_PANTALLA = {"oro": None, "cand": None, "veces": 0}
+
+# El contador de almas del HUD todavía no se puede leer con seguridad: tesseract
+# confunde dígitos con el font del juego (leyó 89 y 221 donde decía 4489) y el banco de
+# plantillas no tiene el glifo '6'. Hasta que las plantillas lean 4 de 4, el modo
+# pantalla publica el reloj y calla las almas: antes nada que un número falso.
+ORO_PANTALLA_FIABLE = False
+
+# Último reloj bueno del modo pantalla (ver `_reloj_estable`).
+_RELOJ = {"t": None, "cand": None, "veces": 0}
 
 
 def estado_desde_vivo(est, cuenta=None):
@@ -91,9 +106,142 @@ def arrancar_hud(a, hud_cfg, flags):
     estado_hud = {"t": None, "oro": None, "ts": 0.0}
     if getattr(a, "sin_hud", False) or not (flags or {}).get("hud_ocr", True):
         return estado_hud
+    if getattr(a, "pantalla", False):
+        # El reloj solo cambia una vez por segundo y las almas no necesitan más: con
+        # la captura a 0.15 s se paga un cuadro cada 150 ms para leer a 1 Hz. A 0.4 s
+        # sobra y el juego respira mejor.
+        from coach.fuentes import captura
+        captura.global_().intervalo = 0.4
     threading.Thread(target=hilo_hud, args=(estado_hud, hud_cfg or {}),
                      daemon=True).start()
     return estado_hud
+
+
+def _oro_estable(oro):
+    """Solo publica un número de almas que se repita tres veces y que sea creíble.
+
+    El OCR del contador del HUD todavía confunde dígitos (leyó 89 y 221 donde decía
+    4489, y una vez 23 751 con la ranked del 2026-11-09), y la confianza de tesseract
+    no sirve para filtrarlo: sale 0-18 en todas. Mientras el banco de plantillas no
+    tenga los dígitos que le faltan, se exige que el mismo número salga tres lecturas
+    seguidas y que no pegue un salto imposible respecto al anterior. Si no, el panel
+    no enseña almas: antes nada que un dato falso.
+    """
+    if oro is None:
+        return _PANTALLA["oro"]
+    if oro == _PANTALLA["oro"]:
+        _PANTALLA["cand"], _PANTALLA["veces"] = None, 0
+        return _PANTALLA["oro"]
+    previo = _PANTALLA["oro"]
+    if previo is not None and abs(oro - previo) > 2500:
+        _PANTALLA["cand"], _PANTALLA["veces"] = None, 0
+        return previo
+    if oro == _PANTALLA["cand"]:
+        _PANTALLA["veces"] += 1
+    else:
+        _PANTALLA["cand"], _PANTALLA["veces"] = oro, 1
+    if _PANTALLA["veces"] >= 3:
+        _PANTALLA["oro"], _PANTALLA["cand"], _PANTALLA["veces"] = oro, None, 0
+    return _PANTALLA["oro"]
+
+
+def _reloj_estable(t):
+    """Descarta lecturas de reloj imposibles sin quedarse clavado.
+
+    El OCR del reloj acierta casi siempre (44 de 45 lecturas seguidas de un segundo a
+    otro), pero de vez en cuando devuelve una barbaridad: en la ranked del 2026-11-09
+    saltó de 2:14 a 79:22. El reloj solo puede avanzar; un salto de más de 30 s o un
+    retroceso se ignoran. Si el valor raro se repite tres veces se acepta, porque
+    también es lo que pasa al empezar una partida nueva (el reloj vuelve a cero).
+    """
+    previo = _RELOJ["t"]
+    if previo is None:
+        _RELOJ["t"] = t
+        return t
+    if 0 <= t - previo <= 30:
+        _RELOJ["t"], _RELOJ["cand"], _RELOJ["veces"] = t, None, 0
+        return t
+    if t == _RELOJ["cand"]:
+        _RELOJ["veces"] += 1
+    else:
+        _RELOJ["cand"], _RELOJ["veces"] = t, 1
+    if _RELOJ["veces"] >= 3:
+        _RELOJ["t"], _RELOJ["cand"], _RELOJ["veces"] = t, None, 0
+    return _RELOJ["t"]
+
+
+def plan_inicial(conoc, cuantos=5):
+    """Las compras del arranque, con su costo, para cuando no hay broadcast.
+
+    Primero la apertura fija (los tres 800 que más se compran) y después las siguientes
+    por volumen real de compras, todas de 800. No se usa `min_compra` para ordenar: ese
+    campo es la mediana de todo el juego, no el minuto de la primera compra, y ponía
+    «min 16» en ítems que se compran al minuto 2.
+    """
+    if not conoc:
+        return []
+    items = conoc.get("items") if isinstance(conoc.get("items"), dict) else conoc
+    items = {str(k): v for k, v in (items or {}).items() if isinstance(v, dict)}
+
+    orden = [iid for iid in APERTURA if iid in items]
+    resto = [(d.get("n", 0), iid) for iid, d in items.items()
+             if iid not in orden and d.get("tier") == 1 and (d.get("costo") or 9999) <= 800]
+    resto.sort(reverse=True)
+    orden += [iid for _, iid in resto[:max(0, cuantos - len(orden))]]
+
+    plan = []
+    for iid in orden:
+        d = items[iid]
+        costo = d.get("costo")
+        plan.append({"id": iid, "nombre": d.get("nombre", iid),
+                     "costo": int(costo) if costo else None, "n": 0,
+                     "icono": f"/icono/{iid}"})
+    return plan
+
+
+def _notas_pantalla(oro):
+    """Lo que el panel dice del modo pantalla, sin adornar lo que no se sabe."""
+    notas = ["reloj leído de tu pantalla; sin broadcast no hay enemigos, equipo ni "
+             "historial"]
+    if oro is None:
+        notas.append("las almas todavía no se leen con seguridad: no se muestran")
+    return notas
+
+
+def publicar_pantalla(estado_hud, analizar, latencias=None, conoc=None,
+                      max_edad_s=3.0):
+    """Modo pantalla: sin broadcast, se lee el reloj y las almas del propio HUD.
+
+    Es el camino que sirve en ranked, práctica y bots, donde Valve no retransmite
+    nada. Da lo que de verdad está en la pantalla: reloj y almas. No inventa
+    enemigos, equipo ni ítems, y lo dice en las notas.
+    """
+    t = estado_hud.get("t")
+    ts = estado_hud.get("ts") or 0.0
+    if t is None or (time.time() - ts) > max_edad_s:
+        return False
+    t = _reloj_estable(int(t))
+    oro = _oro_estable(estado_hud.get("oro")) if ORO_PANTALLA_FIABLE else None
+    crudo = {
+        "t": int(t),
+        "yo": {"almas": oro, "items": [], "bajas": 0, "muertes": 0, "asistencias": 0},
+        "aliados": [], "enemigos": [],
+        "confianza": 0.6,
+        "fuente": "pantalla",
+        "notas": _notas_pantalla(oro),
+    }
+    salida = analizar(crudo)
+    if not salida.get("plan"):
+        salida["plan"] = plan_inicial(conoc)
+    salida["oro"] = oro
+    salida["fuente"] = "pantalla"
+    # `listo` viene del motor y con medio estado sale False; aquí sí hay datos
+    # frescos de la pantalla, así que la cabecera no debe decir «sin partida».
+    salida["listo"] = True
+    if latencias:
+        salida["latencia"] = latencias
+    servidor.EST.publicar(salida)
+    return True
 
 
 def publicar_apertura(conoc):

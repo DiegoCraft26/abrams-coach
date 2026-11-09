@@ -13,7 +13,7 @@ from coach.nucleo_demo import aviso_vram, estado_simulado, juego_abierto, leer_c
 from coach.nucleo_vivo import (ajustar_con_hud, anotar_compras, arrancar_hud,
                                buscar_match, estado_desde_vivo, filtrar_por_oro,
                                medir_latencias, publicar_apertura, publicar_congelado,
-                               publicar_fuera_de_partida)
+                               publicar_fuera_de_partida, publicar_pantalla)
 
 
 _CFG = {"hud": {}, "flags": {}}   # lo llena configurar(), visible desde los bucles
@@ -59,6 +59,19 @@ def bucle_vivo(a, analizar):
         try:
             match = buscar_match(a, st)
             if match is None:
+                # Sin broadcast (ranked, práctica, bots) lo único que hay es la
+                # pantalla: reloj y almas. Si el modo está encendido y hay lectura
+                # fresca, se publica eso en vez del build de apertura.
+                if getattr(a, "pantalla", False):
+                    if publicar_pantalla(estado_hud, analizar, medir_latencias(a), conoc):
+                        time.sleep(max(1.0, a.intervalo))
+                        continue
+                    # Con el modo pantalla encendido y el HUD ya leído alguna vez, no se
+                    # publica el build de apertura: haría saltar el reloj a 0:00. El
+                    # panel marca los datos como viejos por su cuenta.
+                    if estado_hud.get("ts"):
+                        time.sleep(max(1.0, a.intervalo))
+                        continue
                 if publicar_apertura(conoc):
                     time.sleep(3.0)
                     continue
@@ -76,6 +89,10 @@ def bucle_vivo(a, analizar):
             escucha = st["escucha"]
             est = escucha.estado
             if est is None or not est.get("jugadores"):
+                if getattr(a, "pantalla", False) and publicar_pantalla(
+                        estado_hud, analizar, medir_latencias(a), conoc):
+                    time.sleep(max(1.0, a.intervalo))
+                    continue
                 if publicar_apertura(conoc):
                     time.sleep(3.0)
                     continue
@@ -91,6 +108,13 @@ def bucle_vivo(a, analizar):
                 st["tick"], st["tick_desde"], st["avisado"] = (
                     est.get("tick"), time.time(), False)
             else:
+                # El stream existe pero no manda nada (una partida sin broadcast). Si
+                # el modo pantalla está encendido, se sigue con lo que se ve en el HUD
+                # en vez de dejar el panel clavado en «datos congelados».
+                if getattr(a, "pantalla", False) and publicar_pantalla(
+                        estado_hud, analizar, medir_latencias(a), conoc):
+                    time.sleep(max(1.0, a.intervalo))
+                    continue
                 if time.time() - st["tick_desde"] > 12 and not st["avisado"]:
                     publicar_congelado(st["tick"])
                     st["avisado"] = True
@@ -282,6 +306,8 @@ def leer_argumentos():
                     help="SteamID64 de Diego, para el modo vivo")
     ap.add_argument("--match", type=int, default=None,
                     help="match_id directo (en vez de buscarlo por cuenta)")
+    ap.add_argument("--pantalla", action="store_true",
+                    help="sin broadcast, lee reloj y almas de tu propia pantalla")
     ap.add_argument("--sin-hud", action="store_true",
                     help="no leer reloj/almas del HUD por OCR (usa solo el broadcast)")
     ap.add_argument("--mi-heroe", default=None,
@@ -296,6 +322,10 @@ def leer_argumentos():
 
 def main():
     a = leer_argumentos()
+    # En vivo, el modo pantalla va encendido: es el único que sirve en ranked, práctica
+    # y bots, donde Valve no retransmite nada. `--sin-hud` lo apaga junto con el OCR.
+    if a.fuente in ("vivo", "auto") and not a.sin_hud:
+        a.pantalla = True
 
     if a.fuente in ("ocr", "vivo", "auto"):
         aviso_vram()
