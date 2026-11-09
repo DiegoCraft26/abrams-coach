@@ -284,13 +284,22 @@ def publicar_apertura(conoc):
 
 
 def publicar_congelado(tick):
-    """Aviso único: el stream se paró y el estado viejo no se republica."""
-    servidor.EST.publicar({
-        "listo": False,
-        "fuente": "en_vivo",
+    """El stream se paró: se conserva lo último y se marca rancio.
+
+    Antes publicaba `listo: False`, así que el panel cambiaba a «sin partida» y
+    parecía que se había desconectado. Ahora mantiene la última foto (reloj, almas,
+    ítems) y deja que la edad haga su trabajo: «datos congelados · hace N s».
+    """
+    ultimo, _ = servidor.EST.leer()
+    datos = dict(ultimo) if isinstance(ultimo, dict) else {}
+    datos.update({
+        "listo": True,
+        "rancio": True,
+        "fuente": datos.get("fuente") or "en_vivo",
         "mensaje": ("el broadcast dejó de mandar datos (último tick "
                     f"{tick}); reintentando"),
     })
+    servidor.EST.publicar(datos)
 
 
 def publicar_fuera_de_partida(est, cuenta):

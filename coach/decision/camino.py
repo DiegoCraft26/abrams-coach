@@ -251,8 +251,15 @@ def _objetivo(conoc, cat, camino, poseidos, superados, t, contra=None):
     aperturas = sum(1 for p in camino
                     if (p.get("costo") or 0) <= 800 and str(p["id"]) in poseidos)
     permitir_apertura = t < 720 and aperturas < 3
-    camino_elegible = [p for p in camino
-                       if str(p["id"]) not in poseidos
+    # Si ya compraste algo que va más adelante en el camino, se salta hasta ahí: no
+    # tiene sentido seguir pidiendo los pasos previos. Es lo que pasaba al comprar
+    # adelantado un ítem de la línea de tiempo.
+    indices = [i for i, p in enumerate(camino)
+               if str(p["id"]) in poseidos or str(p["id"]) in superados]
+    desde = (max(indices) + 1) if indices else 0
+    camino_elegible = [p for i, p in enumerate(camino)
+                       if i >= desde
+                       and str(p["id"]) not in poseidos
                        and str(p["id"]) not in superados
                        and _elegible(conoc, p, t, permitir_apertura)]
 
@@ -298,8 +305,9 @@ def _objetivo(conoc, cat, camino, poseidos, superados, t, contra=None):
         candidato = camino_elegible[0]
     else:
         # Último recurso: algo del camino que no sea apertura tardía.
-        candidato = next((p for p in camino
-                          if str(p["id"]) not in poseidos
+        candidato = next((p for i, p in enumerate(camino)
+                          if i >= desde
+                          and str(p["id"]) not in poseidos
                           and str(p["id"]) not in superados
                           and (permitir_apertura or (p.get("costo") or 0) > 800)), None)
     if candidato is None:

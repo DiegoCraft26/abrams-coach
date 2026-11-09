@@ -94,6 +94,14 @@ def main():
               d["accion"] == "COMPRAR" and d["modo"] == "componente",
               f'{d["item"]["nombre"]} de {p["nombre"]}')
 
+    # Comprar adelantado: no se vuelve a pedir lo anterior del camino.
+    r = m.analizar_dict(_estado(1200, 20000, [ids[4]]))
+    d = r["decision"]
+    antes = {p["nombre"] for p in ruta[:4]}
+    check("comprar adelantado salta los pasos previos",
+          (d.get("item") or {}).get("nombre") not in antes,
+          str((d.get("item") or {}).get("nombre")))
+
     # Rama por composición: dos móviles justifican antimovilidad; sin enemigos no.
     r = m.analizar_dict(_estado(900, 6000, [], enemigos=["haze", "seven", "lash"]))
     d = r["decision"]
