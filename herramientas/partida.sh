@@ -40,7 +40,7 @@ estado() {
   echo "VRAM: $(vram_usada) / $(vram_total) GiB · busy $(gpu_busy)% · $(gpu_temp) °C"
   echo
   echo "== Servicios =="
-  for u in dsh-buffer-pantalla llama-server ia-local-guard gamemoded; do
+  for u in gamemoded; do
     printf '%-24s %s\n' "$u" "$(systemctl --user is-active "$u" 2>/dev/null || true)"
   done
   echo
@@ -58,9 +58,11 @@ estado() {
 }
 
 prep() {
-  # 1. Lo que roba VRAM o CPU durante el juego.
-  systemctl --user stop dsh-buffer-pantalla.service 2>/dev/null || true
-  systemctl --user stop llama-server.service 2>/dev/null || true
+  # 1. Lo que roba VRAM o CPU durante el juego. Son servicios opcionales: si no
+  # existen, no pasa nada. Si usas otro tapa-VRAM, agrégalo aquí.
+  for u in dsh-buffer-pantalla llama-server; do
+    systemctl --user stop "$u.service" 2>/dev/null || true
+  done
   command -v gamemoded >/dev/null && systemctl --user start gamemoded.service 2>/dev/null || true
 
   # 2. Aviso si la RAM no alcanza (no bloquea: el usuario decide).

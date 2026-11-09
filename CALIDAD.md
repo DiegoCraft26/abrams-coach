@@ -6,7 +6,7 @@ Actualizado el 2026-11-07 con las puertas de la sesión de 9 h.
 ## Suite de pruebas (`pytest -q`)
 
 ```bash
-PYTHONPATH=$HOME/.dsh/bin/pylib python3 -m pytest -q        # 25 tests, 0 fallos
+python3 -m pytest -q                                        # 29 pruebas
 python3 tests/test_invariantes.py                            # 6/6 invariantes
 ```
 
@@ -15,7 +15,7 @@ python3 tests/test_invariantes.py                            # 6/6 invariantes
 | `test_motor.py` | decisiones coherentes, nada por encima de tus almas, latencia < 20 ms |
 | `test_robustez.py` | 308 entradas basura sin excepciones |
 | `test_invariantes.py` | 6 invariantes del motor sobre 50 estados sintéticos + informe de violaciones |
-| `test_lectura.py` | lectura de marcador contra la captura real de terreno |
+| `test_lectura.py` | lectura de marcador contra tu verdad terreno (se salta sin capturas) |
 | `test_deteccion.py` / `test_autocalibrado.py` | reconocimiento de iconos ≥ 90 % con semilla fija |
 | `test_en_vivo.py` / `test_vivo_*.py` | mapeo del broadcast, congelado y no publicar datos viejos |
 | `test_servidor.py` | `/api/estado` con `edad_s` y `rancio` |

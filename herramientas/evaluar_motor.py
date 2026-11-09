@@ -33,8 +33,8 @@ from coach.motor_api import Motor  # noqa: E402
 CACHE = os.path.join(RAIZ, "data", "replay_cache.json")
 
 
-def cargar_cache(limite):
-    with open(CACHE, encoding="utf-8") as f:
+def cargar_cache(limite, ruta=CACHE):
+    with open(ruta, encoding="utf-8") as f:
         datos = json.load(f)
     return datos[:limite] if limite else datos
 
@@ -57,7 +57,7 @@ def almas_en(stats, t):
 def estado_en(partida, t, heroes_por_id):
     yo = partida["yo"]
     propios = [i["id"] for i in yo["items"]
-               if i["t"] <= t and (not i["vendido"] or i["vendido"] > t)]
+               if i["t"] < t and (not i["vendido"] or i["vendido"] > t)]
     enemigos, aliados = [], []
     for j in partida["jugadores"]:
         if j["slot"] == yo["slot"]:
@@ -140,6 +140,9 @@ def main():
     ap.add_argument("--max-estados", type=int, default=4000)
     ap.add_argument("--config", default=None, help="overrides JSON del motor")
     ap.add_argument("--etiqueta", default="actual")
+    ap.add_argument("--cache", default=CACHE,
+                    help="JSON con partidas (por defecto data/replay_cache.json); "
+                         "en CI se usa data/replay_muestra.json")
     ap.add_argument("--salida", default=None)
     a = ap.parse_args()
 
@@ -147,7 +150,7 @@ def main():
     motor = Motor(cfg=cfg)
     heroes_por_id = {k: v["nombre"].lower().replace(" ", "_")
                      for k, v in json.load(open(os.path.join(RAIZ, "data", "heroes.json"))).items()}
-    partidas = cargar_cache(a.partidas)
+    partidas = cargar_cache(a.partidas, a.cache)
     filas = evaluar(motor, partidas, heroes_por_id, a.desde_min, a.max_estados)
     resumen = resumir(filas)
 
@@ -163,7 +166,8 @@ def main():
     print(f"latencia .................. {resumen['ms_medio']} ms medio / {resumen['ms_max']} ms máx")
     print("top5:", resumen["top5"])
 
-    ruta = a.salida or os.path.join(RAIZ, "informes", f"evaluacion-{a.etiqueta}.json")
+    ruta = a.salida or os.path.join(RAIZ, "salida", "evaluaciones",
+                                    f"evaluacion-{a.etiqueta}.json")
     os.makedirs(os.path.dirname(ruta), exist_ok=True)
     with open(ruta, "w", encoding="utf-8") as f:
         json.dump({"etiqueta": a.etiqueta, "config": cfg, "resumen": resumen,

@@ -11,6 +11,7 @@ RAIZ = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, RAIZ)
 
 from coach import en_vivo as EV  # noqa: E402
+from coach import nucleo_vivo as NV  # noqa: E402
 
 HECHOS = {}
 
@@ -55,6 +56,25 @@ def main():
     probar("lista vacía devuelve None", EV.interpretar([], cuenta=1000) is None)
     sin_mi = EV.interpretar(filas_sinteticas(100)[:3], cuenta=999)
     probar("sin mi cuenta no inventa equipos", "aliados" not in sin_mi)
+
+    # Sin cuenta: el match se montó por el id del HUD y tu columna se busca por héroe.
+    fs = filas_sinteticas(200)
+    for f in fs:
+        f["m_PlayerDataGlobal__m_nHeroID"] = 1
+    fs[4]["m_PlayerDataGlobal__m_nHeroID"] = 10          # único Paradox
+    est = EV.interpretar(fs, cuenta=None, heroes={1: "Infernus", 10: "Paradox"},
+                         heroe="paradox")
+    probar("sin cuenta: héroe único marca yo",
+           (est.get("yo") or {}).get("cuenta") == 1004)
+    probar("sin cuenta: 6 aliados y 6 enemigos",
+           len(est.get("aliados") or []) == 6 and len(est.get("enemigos") or []) == 6)
+    crudo = NV.estado_desde_vivo(est, None)
+    probar("sin cuenta: el estado del motor saca a yo de aliados",
+           len(crudo["aliados"]) == 5, str(len(crudo["aliados"])))
+    fs[7]["m_PlayerDataGlobal__m_nHeroID"] = 10          # ahora hay dos Paradox
+    est2 = EV.interpretar(fs, cuenta=None, heroes={1: "Infernus", 10: "Paradox"},
+                          heroe="paradox")
+    probar("dos Paradox: no adivina cuál eres", "yo" not in est2)
     probar("no toca la red", True)
 
     fallos = [k for k, v in HECHOS.items() if not v]

@@ -1,0 +1,32 @@
+# NOTICE — Abrams Coach
+
+## Código
+
+Copyright (c) 2026 DiegoCraft26. Distribuido bajo la licencia MIT de [`LICENSE`](LICENSE).
+
+## Arte de Deadlock
+
+Los iconos de héroes e ítems son propiedad de **Valve Corporation**. No se incluyen en
+este repositorio ni se redistribuyen: `coach/iconos.py` los descarga en el primer arranque
+desde el bucket público de [deadlock-api](https://deadlock-api.com) y los guarda en
+`data/iconos/`, que está en `.gitignore`.
+
+Si Valve pide retirarlos, se quita la descarga y la app usa iconos de respaldo.
+
+## Datos de partidas
+
+- `data/replay_muestra.json` es una **muestra anonimizada** de 60 partidas: sin
+  `match_id`, sin cuentas de jugador, solo slots, equipos, héroes, compras y patrimonio.
+  Se usa para que la CI pueda validar el motor sin depender de datos personales.
+- El resto de los datos de partidas se descargan en tu máquina desde la API pública de
+  `deadlock-api` y no se publican.
+
+## Marcas
+
+Deadlock es una marca de Valve Corporation. Este proyecto es no oficial y no está
+afiliado, respaldado ni patrocinado por Valve.
+
+## Dependencias
+
+Pillow, NumPy, PyYAML, PyGObject/GTK 4, Tesseract y Spectacle conservan sus propias
+licencias.

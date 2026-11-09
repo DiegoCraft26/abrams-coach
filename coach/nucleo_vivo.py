@@ -39,7 +39,14 @@ def olvidar_reloj_hud():
 def estado_desde_vivo(est, cuenta=None):
     """Traduce el estado del cliente en vivo al formato que come el motor."""
     yo = est.get("yo") or {}
-    cuenta_txt = str(int(cuenta)) if cuenta else None
+    # La cuenta puede faltar (match montado por el id del HUD). Si el "yo" se
+    # identificó por héroe, se usa su cuenta para no repetirlo en aliados.
+    if cuenta:
+        cuenta_txt = str(int(cuenta))
+    elif yo.get("cuenta") is not None:
+        cuenta_txt = str(yo["cuenta"])
+    else:
+        cuenta_txt = None
 
     def limpio(lista):
         return [{"heroe": j.get("heroe"), "almas": j.get("almas"),
@@ -286,11 +293,15 @@ def publicar_congelado(tick):
 
 def publicar_fuera_de_partida(est, cuenta):
     """Espectando una partida donde no está tu cuenta: el reloj sirve, el resto no."""
+    if cuenta:
+        detalle = f"pero tu cuenta {cuenta} no está en ella"
+    else:
+        detalle = ("pero no sé cuál jugador eres: pasa --cuenta o --mi-heroe "
+                   "si quieres el panel completo")
     servidor.EST.publicar({
         "listo": False,
         "mensaje": (f"la partida va {int(est.get('t', 0))//60}:"
-                    f"{int(est.get('t', 0)) % 60:02d}, pero tu cuenta "
-                    f"{cuenta} no está en ella"),
+                    f"{int(est.get('t', 0)) % 60:02d}, {detalle}"),
         "t": est.get("t"),
         "fuente": "en_vivo",
     })

@@ -1,63 +1,79 @@
-# Integración continua del Abrams Coach.
-# OJO: este flujo NO se ha ejecutado todavía (la sesión del 2026-11-07 no tenía runner
-# de GitHub). Se deja listo para que el primer push lo valide.
+# Integración continua real: se ejecuta en cada push y en cada PR.
+# Lo que corre aquí es lo mismo que corre un contribuidor en su máquina, incluida la
+# puerta de pintado de la UI bajo Xvfb.
 name: ci
 
 on:
   push:
-    branches: [main, master]
+    branches: [main]
   pull_request:
 
 jobs:
   pruebas:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     strategy:
+      fail-fast: false
       matrix:
         python-version: ["3.12", "3.13"]
+
     steps:
       - uses: actions/checkout@v4
 
       - uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
+          cache: pip
 
-      - name: Dependencias del sistema (GTK4 para la UI y tesseract para el OCR)
+      - name: Dependencias del sistema (GTK4, PyGObject, Tesseract, Xvfb)
         run: |
           sudo apt-get update
-          sudo apt-get install -y libgtk-4-1 libgirepository1.0-dev python3-gi \
-            gir1.2-gtk-4.0 xvfb tesseract-ocr sqlite3
-          sudo apt-get install -y xvfb || true
+          sudo apt-get install -y --no-install-recommends \
+            libgirepository-2.0-dev libcairo2-dev pkg-config python3-dev \
+            libgtk-4-1 gir1.2-gtk-4.0 xvfb tesseract-ocr sqlite3
 
       - name: Dependencias de Python
         run: |
           python -m pip install --upgrade pip
-          pip install pytest pillow numpy pyyaml
+          python -m pip install -r requirements.txt
+          python -m pip install pygobject pytest
 
-      - name: Compilación
-        run: python -m py_compile run.py panel_nativo.py coach/*.py coach/*/*.py
+      - name: Compilación completa
+        run: python -m compileall -q coach herramientas tests run.py panel_nativo.py
 
-      # Suites portables (sin GTK, sin capturas del escritorio, sin iconos dependientes
-      # de la versión de Pillow). Las otras tres se corren en la máquina de desarrollo:
-      #   test_deteccion / test_autocalibrado -> dependen de cómo remuestrea Pillow
-      #   test_lectura                        -> necesita capturas que no se versionan
-      #   test_ui                             -> necesita PyGObject y un servidor X
-      - name: Pruebas portables
-        run: |
-          python -m pytest -q             --ignore=tests/test_autocalibrado.py             --ignore=tests/test_deteccion.py             --ignore=tests/test_lectura.py             --ignore=tests/test_ui.py
+      - name: Arte de Deadlock (no versionado, se baja en runtime)
+        run: python3 coach/iconos.py
+
+      - name: Suite completa (incluye la UI bajo Xvfb)
+        env:
+          GDK_BACKEND: x11
+          GSK_RENDERER: cairo
+        run: xvfb-run -a python -m pytest -q
 
       - name: Invariantes del motor
         run: python tests/test_invariantes.py
 
-      - name: A/B del motor (sin red, usa data/replay_cache.json)
+      - name: A/B del motor sobre muestra versionada
         run: |
-          if [ -f data/replay_cache.json ]; then
-            python herramientas/evaluar_motor.py --partidas 40
-          else
-            echo "sin replay_cache.json (está en .gitignore): se omite"
-          fi
+          python herramientas/evaluar_motor.py \
+            --cache data/replay_muestra.json \
+            --partidas 60 --max-estados 800 \
+            --salida /tmp/evaluacion-ci.json
 
       - name: Archivado idempotente
         run: |
-          python herramientas/archivar.py --db /tmp/ci.db || true
-          python herramientas/archivar.py --db /tmp/ci.db
-          sqlite3 /tmp/ci.db ".tables"
+          python herramientas/archivar.py --db /tmp/ci.db | tee /tmp/archivo-1.txt
+          python herramientas/archivar.py --db /tmp/ci.db | tee /tmp/archivo-2.txt
+          python - <<'PY'
+          import sqlite3
+
+          texto = open("/tmp/archivo-2.txt", encoding="utf-8").read()
+          sucias = [l for l in texto.splitlines()
+                    if "filas nuevas" in l and not l.endswith(": 0 filas nuevas")]
+          assert not sucias, f"la segunda pasada agregó filas: {sucias}"
+          db = sqlite3.connect("/tmp/ci.db")
+          tablas = {r[0] for r in db.execute(
+              "select name from sqlite_master where type='table'")}
+          faltan = {"partidas", "muestras", "recomendaciones", "compras"} - tablas
+          assert not faltan, f"faltan tablas: {faltan}"
+          print("archivado idempotente: ok")
+          PY

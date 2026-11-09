@@ -42,13 +42,16 @@ def cargar_cfg():
     return base
 
 
-BUFER_IMG = os.path.expanduser("~/.dsh/state/ultima.png")
+# Opcional: si otro servicio deja un PNG fresco del escritorio, se reutiliza en vez de
+# capturar otra vez. No es necesario; `spectacle`/KWin basta. Se puede cambiar con
+# ABRAMS_BUFER.
+BUFER_IMG = os.path.expanduser(os.environ.get("ABRAMS_BUFER", "~/.dsh/state/ultima.png"))
 
 
 def capturar(destino=None, fuente="auto", edad_max=5.0, recortar=True):
     """Foto del escritorio.
 
-    fuente="bufer": reutiliza el frame del servicio dsh-buffer-pantalla si está fresco.
+    fuente="bufer": reutiliza un PNG reciente de ABRAMS_BUFER, si existe.
     fuente="spectacle": captura propia.
     fuente="auto": lo que esté más fresco.
     """

@@ -309,11 +309,15 @@ def _items_upgrades(valor):
     return salida
 
 
-def interpretar(filas, cuenta=None, heroes=None):
+def interpretar(filas, cuenta=None, heroes=None, heroe=None):
     """Convierte filas del stream en un estado de partida.
 
     Las filas son por jugador y comparten el mismo tick. Devuelve un dict con
-    `t`, `tick`, `jugadores`, y si hay `cuenta`, separa `aliados`/`enemigos` y marca `yo`.
+    `t`, `tick`, `jugadores`, y separa `aliados`/`enemigos` marcando `yo`.
+
+    `yo` se identifica por cuenta; si no hay cuenta (o no aparece), por héroe, y solo
+    cuando ese héroe es único en la partida. Con dos Abrams no se adivina: es preferible
+    un panel sin "yo" que uno con el Abrams equivocado.
     """
     heroes = heroes if heroes is not None else _heroes()
     if not filas:
@@ -358,13 +362,23 @@ def interpretar(filas, cuenta=None, heroes=None):
         })
     estado = {"tick": tick, "t": round(tick / TICKS_POR_SEGUNDO, 1),
               "jugadores": jugadores, "fuente": "en_vivo"}
+
+    mio = None
     if cuenta is not None:
         cuenta_txt = str(int(cuenta))
         mio = next((j for j in jugadores if str(j["cuenta"]) == cuenta_txt), None)
+    if mio is None and heroe:
+        buscado = str(heroe).strip().lower()
+        candidatos = [j for j in jugadores
+                      if (j.get("heroe") or "").lower() == buscado]
+        # Solo si no hay duda: dos Abrams (uno por equipo) es el caso normal en espejo.
+        mio = candidatos[0] if len(candidatos) == 1 else None
         if mio is not None:
-            estado["yo"] = mio
-            estado["aliados"] = [j for j in jugadores if j["equipo"] == mio["equipo"]]
-            estado["enemigos"] = [j for j in jugadores if j["equipo"] != mio["equipo"]]
+            estado["yo_por_heroe"] = True
+    if mio is not None:
+        estado["yo"] = mio
+        estado["aliados"] = [j for j in jugadores if j["equipo"] == mio["equipo"]]
+        estado["enemigos"] = [j for j in jugadores if j["equipo"] != mio["equipo"]]
     return estado
 
 
@@ -378,16 +392,19 @@ class Escucha:
     descubrimiento de `coach.fuentes.api_vivo` (90 s sin un solo estado).
 
     Uso:
-        e = Escucha(match_id=123, cuenta=TU_STEAMID64)
+        e = Escucha(match_id=123, cuenta=TU_STEAMID64)   # cuenta opcional
+        e = Escucha(match_id=123, heroe="abrams")        # sin cuenta, por héroe
         e.arrancar()
         ... e.estado          # dict o None
         ... e.edad_s()        # segundos desde el último estado
         e.parar()
     """
 
-    def __init__(self, match_id, cuenta=None, sql=SQL, max_segundos=None):
+    def __init__(self, match_id, cuenta=None, sql=SQL, max_segundos=None,
+                 heroe=None):
         self.match_id = int(match_id)
         self.cuenta = cuenta
+        self.heroe = heroe
         self.sql = sql
         self.max_segundos = max_segundos
         self.estado = None
@@ -412,7 +429,7 @@ class Escucha:
         return ESPERA_SIN_DATOS_S
 
     def _publicar(self, grupo):
-        estado = interpretar(grupo, self.cuenta, self._heroes)
+        estado = interpretar(grupo, self.cuenta, self._heroes, self.heroe)
         if estado is None:
             return None
         # El SSE manda el estado por trozos: un grupo que llega sin tu fila NO significa

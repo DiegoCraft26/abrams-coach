@@ -1,0 +1,10 @@
+Pillow>=10.0
+numpy>=1.26
+PyYAML>=6.0
+
+# PyGObject y GTK 4 no se instalan con pip en este proyecto: van con el gestor de
+# paquetes de tu distro (ver README). Instalarlos con pip exige libgirepository,
+# cairo y un compilador, y en Arch/Debian ya vienen empaquetados.
+#
+# Para desarrollo:
+#   pytest>=8.0

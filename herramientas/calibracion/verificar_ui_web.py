@@ -15,9 +15,8 @@ RAIZ = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 try:                                    # ¿está Playwright en este intérprete?
     import playwright                   # noqa: F401
 except ImportError:
-    _extra = os.path.expanduser("~/.dsh/bin/pylib")
-    if os.path.isdir(_extra) and _extra not in sys.path:
-        sys.path.insert(0, _extra)
+    print("falta Playwright: pip install playwright && playwright install chromium")
+    raise SystemExit(2)
 
 URL = sys.argv[1] if len(sys.argv) > 1 else "http://127.0.0.1:8090"
 SALIDA = os.path.join(RAIZ, "salida")

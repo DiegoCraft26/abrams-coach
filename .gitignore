@@ -19,9 +19,12 @@ verdad/*_full.png
 # primer arranque a data/iconos/.
 data/iconos/
 
-# Informes de sesión y archivo de partidas: locales.
+# Informes de sesión, experimentos y notas de traspaso: locales, no del repo público.
 informes/
+experimentos/
 salida/archivo/
+RELEVO.md
+docs/SIGUIENTE-CHAT.md
 
 # Datos crudos grandes (se bajan con mineria.py / descargar_partidas.py).
 data/ability-order.json

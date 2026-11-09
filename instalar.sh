@@ -38,10 +38,35 @@ command -v sqlite3    >/dev/null && ok "sqlite3"   || falta "sqlite3" "sqlite"
 
 echo
 if [ ${#FALTAN[@]} -gt 0 ]; then
-  echo "Faltan ${#FALTAN[@]} piezas. En CachyOS/Arch:"
-  echo "  sudo pacman -S --needed ${FALTAN[*]}"
+  echo "Faltan ${#FALTAN[@]} piezas."
+  if command -v pacman >/dev/null; then
+    echo "  sudo pacman -S --needed ${FALTAN[*]}"
+  elif command -v apt >/dev/null; then
+    # Traduce los nombres de Arch a los de Debian/Ubuntu.
+    declare -A EQUIV=(
+      [python3]=python3 [python-gobject]=python3-gi [gtk4]=gir1.2-gtk-4.0
+      [python-pillow]=python3-pil [python-numpy]=python3-numpy [python-yaml]=python3-yaml
+    )
+    apt=(); for paquete in "${FALTAN[@]}"; do apt+=("${EQUIV[$paquete]:-$paquete}"); done
+    echo "  sudo apt install ${apt[*]}"
+  elif command -v dnf >/dev/null; then
+    echo "  sudo dnf install ${FALTAN[*]}    # nombres a revisar en Fedora"
+  else
+    echo "  instala: ${FALTAN[*]}"
+  fi
   echo
   echo "El comando se instala igual; el panel arrancará cuando estén todas."
+fi
+
+# Cuenta de Steam opcional: sin ella el modo vivo usa el id de partida del HUD.
+if [ ! -f "$BASE/.cuenta" ] && [ -t 0 ]; then
+  echo
+  read -r -p "SteamID64 para el modo vivo (Enter para omitir, se guarda en .cuenta): " cuenta
+  if [ -n "$cuenta" ]; then
+    printf '%s\n' "$cuenta" > "$BASE/.cuenta"
+    chmod 600 "$BASE/.cuenta"
+    echo "  guardada en .cuenta (ignorada por git)"
+  fi
 fi
 
 mkdir -p "$DESTINO"

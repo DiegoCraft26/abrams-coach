@@ -79,14 +79,17 @@ def bucle_vivo(a, analizar):
                     continue
                 servidor.EST.publicar({"listo": False,
                                        "mensaje": (f"la cuenta {a.cuenta} no está en partida"
-                                                   if a.cuenta else "esa partida no está en vivo")})
+                                                   if a.cuenta else
+                                                   "no hay partida en vivo: lee el HUD o "
+                                                   "pasa --cuenta / --match")})
                 time.sleep(10.0)
                 continue
             if match != st["match"]:
                 if st["escucha"]:
                     st["escucha"].parar()
                 print(f"partida en vivo: {match}")
-                st["escucha"] = en_vivo.Escucha(match, cuenta=a.cuenta).arrancar()
+                st["escucha"] = en_vivo.Escucha(match, cuenta=a.cuenta,
+                                              heroe=getattr(a, "mi_heroe", None)).arrancar()
                 st["match"] = match
                 olvidar_reloj_hud()
                 st["tick"], st["tick_desde"], st["avisado"] = None, time.time(), False
@@ -197,7 +200,13 @@ def bucle_auto(a, analizar):
     héroes, KDA) sin depender del marcador; si no, se lee la pantalla como siempre.
     """
     from coach import en_vivo
-    match = a.match or (en_vivo.partida_activa(a.cuenta) if a.cuenta else None)
+    if a.cuenta is None:
+        # Sin cuenta no se puede preguntar "¿está mi cuenta en partida?", pero sí se
+        # puede leer el MATCH del HUD y enganchar el broadcast a esa partida.
+        print("automático: sin cuenta -> match_id del HUD y respaldo por pantalla")
+        bucle_vivo(a, analizar)
+        return
+    match = a.match or en_vivo.partida_activa(a.cuenta)
     if match:
         print(f"automático: partida en vivo {match} -> broadcast")
         a.match = match
@@ -314,7 +323,7 @@ def leer_argumentos():
     ap.add_argument("--cuenta", type=int,
                     default=(int(os.environ["ABRAMS_CUENTA"])
                              if os.environ.get("ABRAMS_CUENTA", "").isdigit() else None),
-                    help="tu SteamID64 (obligatorio en vivo/auto si no pasas --match; "
+                    help="tu SteamID64 (opcional: sin ella el match_id sale del HUD; "
                          "también se lee de la variable ABRAMS_CUENTA)")
     ap.add_argument("--match", type=int, default=None,
                     help="match_id directo (en vez de buscarlo por cuenta)")
@@ -329,16 +338,12 @@ def leer_argumentos():
     ap.add_argument("--imagen", default=None,
                     help="en modo ocr, leer esta captura en vez de la pantalla "
                          "(para probar sin el juego abierto)")
-    a = ap.parse_args()
-    # Sin cuenta no hay forma de buscar tu partida en el listado de Valve. Se exige
-    # explícitamente en vez de traer una cuenta de fábrica: el repo es público y una
-    # cuenta por defecto sería un dato personal. La cuenta va en --cuenta o en
-    # ABRAMS_CUENTA (los lanzadores leen `.cuenta`, que está en .gitignore).
-    if a.fuente in ("vivo", "auto") and a.match is None and a.cuenta is None:
-        ap.error("falta --cuenta (tu SteamID64), ABRAMS_CUENTA o --match (id de "
-                 "partida): en vivo/auto no hay a quién buscar; usa --fuente ocr si "
-                 "no quieres pasar cuenta")
-    return a
+    # La cuenta es opcional a propósito. Sin ella, el match_id sale del HUD (capa 1 de
+    # `api_vivo.descubrir`), así que el panel se monta sobre cualquier ranked sin pedir
+    # el SteamID. Con `--mi-heroe` se intenta identificar tu columna por héroe; con
+    # `--cuenta` se identifica sin ambigüedad. Nada de cuentas de fábrica: el repo es
+    # público y una cuenta por defecto sería un dato personal.
+    return ap.parse_args()
 
 
 def main():

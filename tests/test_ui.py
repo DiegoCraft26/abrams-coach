@@ -81,17 +81,18 @@ def main():
     if not (os.environ.get("WAYLAND_DISPLAY") or os.environ.get("DISPLAY")):
         print("  (saltado: sin servidor gráfico)")
     else:
-        # Si hay coach corriendo se exige una captura con contenido (más pesada); si no,
-        # basta con que la ventana se pinte y se avisa de que está vacía.
+        # La captura se mide por contenido, no por peso: un PNG puede pesar poco y
+        # estar bien, o pesar mucho y ser un rectángulo vacío. Se exige el tamaño exacto
+        # y que la imagen tenga contraste (stddev de los píxeles), que es lo que
+        # distingue "se pintó" de "salió en blanco".
         try:
             import urllib.request
             with urllib.request.urlopen("http://127.0.0.1:8090/api/estado", timeout=2):
                 con_datos = True
         except Exception:                                # noqa: BLE001
             con_datos = False
-        minimo_kb = 60 if con_datos else 20
         print(f"  (servidor con datos: {'sí' if con_datos else 'no'}; "
-              f"mínimo {minimo_kb} KB por captura)")
+              f"se mide tamaño exacto y contraste)")
 
         with tempfile.TemporaryDirectory() as tmp:
             cmd = [sys.executable, os.path.join(RAIZ, "herramientas", "capturar_ui.py"),
@@ -108,14 +109,31 @@ def main():
                           f"{(r.stderr or '')[-300:]}")
                     fallos += 1
                 else:
+                    from PIL import Image, ImageStat
                     for tam in TAMANOS:
                         ruta_png = os.path.join(tmp, f"ui-{tam}.png")
-                        peso = os.path.getsize(ruta_png) if os.path.exists(ruta_png) else 0
-                        if peso < minimo_kb * 1024:
-                            print(f"  FALLA {tam}: PNG ausente o vacío ({peso} B)")
+                        ancho, alto = (int(x) for x in tam.split("x"))
+                        if not os.path.exists(ruta_png):
+                            print(f"  FALLA {tam}: no se generó el PNG")
+                            fallos += 1
+                            continue
+                        try:
+                            im = Image.open(ruta_png).convert("RGB")
+                            desvio = sum(ImageStat.Stat(im).stddev) / 3.0
+                        except Exception as exc:            # noqa: BLE001
+                            print(f"  FALLA {tam}: PNG ilegible ({exc})")
+                            fallos += 1
+                            continue
+                        if im.size != (ancho, alto):
+                            print(f"  FALLA {tam}: el PNG mide {im.size}")
+                            fallos += 1
+                        elif desvio < 3.0:
+                            print(f"  FALLA {tam}: se pintó casi vacío (contraste "
+                                  f"{desvio:.1f})")
                             fallos += 1
                         else:
-                            print(f"  ok   {tam}: {peso // 1024} KB")
+                            print(f"  ok   {tam}: {im.size[0]}x{im.size[1]}, "
+                                  f"contraste {desvio:.1f}")
 
     print()
     if fallos:
