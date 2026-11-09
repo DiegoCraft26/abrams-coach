@@ -223,6 +223,13 @@ class Manejador(BaseHTTPRequestHandler):
                 datos["edad_s"] = round(edad, 1) if edad is not None else None
                 datos["rancio"] = bool(edad is not None and edad > UMBRAL_RANCIO_S)
             self._enviar(200, datos)
+        elif ruta == "/api/vision":
+            # Lo que la visión sabe, sin imágenes ni claves: inventario con su edad y el
+            # estado de la cola (cuántos cuadros van, cuántos fallaron, si se agotó).
+            from coach import inventario_propio
+            from coach.agente import vision_cola
+            self._enviar(200, {"inventario": inventario_propio.estado(),
+                               "cola": vision_cola.estado()})
         elif ruta.startswith("/icono/"):
             iid = ruta.split("/")[-1].replace(".webp", "").replace(".png", "")
             if not iid.isdigit():

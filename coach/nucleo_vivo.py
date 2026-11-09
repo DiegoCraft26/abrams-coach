@@ -237,7 +237,7 @@ def _notas_pantalla(oro):
 
 
 def publicar_pantalla(estado_hud, analizar, latencias=None, conoc=None,
-                      max_edad_s=3.0):
+                      max_edad_s=3.0, inventario=None):
     """Modo pantalla: sin broadcast, se lee el reloj y las almas del propio HUD.
 
     Es el camino que sirve en ranked, práctica y bots, donde Valve no retransmite
@@ -250,9 +250,13 @@ def publicar_pantalla(estado_hud, analizar, latencias=None, conoc=None,
         return False
     t = _reloj_estable(int(t))
     oro = _oro_estable(estado_hud.get("oro")) if ORO_PANTALLA_FIABLE else None
+    # Inventario de la tienda leído por visión: llega con su edad y su fuente. Si no hay,
+    # se sigue jugando sin inventario y se dice; nunca se rellena con lo que no se vio.
+    items = list((inventario or {}).get("inventario") or [])
     crudo = {
         "t": int(t),
-        "yo": {"almas": oro, "items": [], "bajas": 0, "muertes": 0, "asistencias": 0},
+        "yo": {"almas": oro, "items": [i.get("id") for i in items],
+               "bajas": 0, "muertes": 0, "asistencias": 0},
         "aliados": [], "enemigos": [],
         "confianza": 0.6,
         "fuente": "pantalla",
@@ -263,9 +267,17 @@ def publicar_pantalla(estado_hud, analizar, latencias=None, conoc=None,
         salida["plan"] = plan_inicial(conoc)
     salida["oro"] = oro
     salida["fuente"] = "pantalla"
-    # Sin broadcast no hay inventario ni rivales: pasado el arranque, recomendar una
-    # compra con el inventario vacío es inventarse la partida. Se dice y se calla.
-    if t > 600:
+    if inventario:
+        salida["inventario"] = items
+        salida["slots"] = dict(inventario.get("slots") or {})
+        notas = list(salida.get("notas") or [])
+        edad = inventario.get("edad_s")
+        notas.append("inventario leído en la tienda por visión"
+                     + (f" hace {int(edad)} s" if isinstance(edad, (int, float)) else ""))
+        salida["notas"] = notas
+    # Sin broadcast y sin inventario, pasado el arranque, recomendar una compra es
+    # inventarse la partida. Con el inventario de la tienda sí se puede decidir.
+    if t > 600 and not items:
         salida.update({
             "solo_reloj": True,
             "recomendaciones": [],

@@ -48,3 +48,37 @@ recortes de zona —HUD, tienda— en vez del cuadro entero del juego.
   confianza?
 - Cuadro con la tienda abierta: ¿devuelve 6–12 ids válidos contra `data/catalogo.json`?
 - Coste real de tokens por partida con la cadencia final.
+
+## Primera lectura con la partida en curso (integrada al coach)
+
+Con la cola conectada al bucle, `--vision-cada 20` y el recorte del monitor del juego
+(2560×1440 → 640 px), sobre una ranked en curso:
+
+| Medición | Valor |
+|---|---|
+| Latencia por cuadro (huggingface primero) | **23.3 s** |
+| Tokens por cuadro | **3 612** |
+| Proveedor que contestó | huggingface (`deepseek-ai/DeepSeek-V4.1-Flash`) |
+| Fallos de la cola | 0 |
+| Fase leída | `en_partida` ✔ |
+| Reloj | `null` — el HUD a 640 px no se lee |
+| Oro | 4 348 (confianza 0.40, sin verificar contra el HUD) |
+
+Y con commandcode primero (como estaba antes), el mismo cuadro:
+
+| | |
+|---|---|
+| Latencia | **56.1 s** (30 s de tiempo de espera agotado + ~23 s de huggingface) |
+| Tokens | 3 612 |
+| Fallos | 0 (el respaldo lo salvó) |
+
+Por eso `cadena_vision()` pone **huggingface primero** y commandcode como respaldo: el
+orden no es estético, son 33 s de diferencia por cuadro.
+
+## Lo que la visión todavía no lee (y por qué)
+
+A 640 px el cuadro entero del juego es demasiado pequeño para el reloj y para el texto de
+la tienda. El reloj ya lo da el OCR local del HUD (exacto, 200 ms) y el inventario necesita
+**recortes de zona**: la tira del reloj, el bloque de oro y, con B abierta, el panel de la
+tienda. Eso es la siguiente medición: cuánto baja la latencia y cuánto sube la confianza
+al mandar 6–10 kB de la zona en vez de 33 kB del cuadro completo.

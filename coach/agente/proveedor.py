@@ -150,20 +150,21 @@ class ProveedorOpenAICompatible:
             raise ErrorProveedor(f"{self.nombre}: respuesta no es JSON") from exc
 
     def chat(self, mensajes: list[dict], herramientas: list[dict] | None = None,
-             timeout_s: float = 45) -> dict:
-        """Una llamada con 1 reintento tras 1 s de espera."""
+             timeout_s: float = 45, reintentos: int = 1) -> dict:
+        """Una llamada con 1 reintento tras 1 s de espera (configurable)."""
         try:
             return self._intentar(mensajes, herramientas, timeout_s)
         except ErrorProveedor as primero:
             # Sin credencial no hay nada que reintentar: conviene fallar ya.
-            if "falta credencial" in str(primero):
+            if reintentos <= 0 or "falta credencial" in str(primero):
                 raise
             time.sleep(1.0)
             return self._intentar(mensajes, herramientas, timeout_s)
 
 
     def chat_vision(self, imagen: bytes, texto: str, sistema: str | None = None,
-                    timeout_s: float = 8.0, tipo: str = "image/jpeg") -> dict:
+                    timeout_s: float = 30.0, tipo: str = "image/jpeg",
+                    reintentos: int = 0) -> dict:
         """Una llamada con imagen (content array de OpenAI + data URL).
 
         No hay cadena de respaldo aquí: quién la usa decide a qué modelo manda una
@@ -185,9 +186,64 @@ class ProveedorOpenAICompatible:
         self_sin_tools = self.soporta_herramientas
         try:
             self.soporta_herramientas = False
-            return self.chat(mensajes, None, timeout_s=timeout_s)
+            # Sin reintento por defecto: una lectura de pantalla tiene respaldo (el
+            # último estado con su edad) y reintentar solo alarga la espera.
+            return self.chat(mensajes, None, timeout_s=timeout_s, reintentos=reintentos)
         finally:
             self.soporta_herramientas = self_sin_tools
+
+
+# Orden medido el 2026-11-09 con cuadros de partida reales: huggingface contesta en
+# ~23 s con 33 kB; commandcode se cae por tiempo de espera con ese mismo cuadro (solo
+# respondió con imágenes de menos de 1 kB). El Qwen local no ve y queda fuera.
+ORDEN_VISION = ("huggingface", "commandcode")
+
+
+def cadena_vision() -> list[ProveedorOpenAICompatible]:
+    """Los proveedores que de verdad leen imágenes, en el orden medido."""
+    disponibles = {p.nombre: p for p in cadena_por_defecto()}
+    return [disponibles[n] for n in ORDEN_VISION if n in disponibles]
+
+
+class RespaldoVision:
+    """Prueba los proveedores de visión en orden: el primero que contesta, gana.
+
+    Se comporta como un proveedor más (`hay_clave` y `chat_vision`), así que la cola no
+    sabe si detrás hay uno o tres. Cada uno se intenta una sola vez: la lectura de
+    pantalla tiene respaldo (el último estado con su edad).
+    """
+
+    def __init__(self, proveedores: list[ProveedorOpenAICompatible] | None = None):
+        self.proveedores = proveedores if proveedores is not None else cadena_vision()
+        self.ultimo_bueno: str | None = None
+
+    @property
+    def nombre(self) -> str:
+        return "visión:" + "+".join(p.nombre for p in self.proveedores)
+
+    @property
+    def modelo(self) -> str:
+        return self.proveedores[0].modelo if self.proveedores else "sin modelo"
+
+    def hay_clave(self) -> bool:
+        return any(p.hay_clave() for p in self.proveedores)
+
+    def chat_vision(self, imagen: bytes, texto: str, sistema: str | None = None,
+                    timeout_s: float = 30.0, tipo: str = "image/jpeg") -> dict:
+        errores = []
+        for prov in self.proveedores:
+            if not prov.hay_clave():
+                continue
+            try:
+                respuesta = prov.chat_vision(imagen, texto, sistema=sistema,
+                                             timeout_s=timeout_s, tipo=tipo,
+                                             reintentos=0)
+                self.ultimo_bueno = prov.nombre
+                return respuesta
+            except ErrorProveedor as exc:
+                errores.append(str(exc))
+        raise ErrorProveedor(
+            "visión: ningún proveedor contestó" + (f" ({'; '.join(errores)})" if errores else ""))
 
 
 def cadena_por_defecto() -> list[ProveedorOpenAICompatible]:

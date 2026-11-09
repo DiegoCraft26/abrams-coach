@@ -48,10 +48,63 @@ def bucle_simulado(a, analizar):
         time.sleep(max(0.2, a.intervalo))
 
 
+def _arrancar_vision(a):
+    """Cola y planificador de visión, o (None, None) si no se puede usar.
+
+    Se apaga sola cuando no hay credencial o el primer proveedor no lee imágenes: la app
+    tiene que funcionar igual sin visión, solo con menos datos.
+    """
+    if getattr(a, "sin_vision", False):
+        print("visión: apagada a propósito (--sin-vision)")
+        return None, None
+    from coach.agente import proveedor as P
+    from coach.agente import vision_cola
+    from coach.fuentes import captura_bajo_demanda as cbd
+
+    prov = P.RespaldoVision()
+    if not prov.hay_clave():
+        print("visión: no hay credencial para ningún proveedor con imágenes")
+        return None, None
+    # La cola se pide al módulo (singleton): así /api/vision informa de la misma que
+    # trabaja y no de una copia vacía.
+    cola = vision_cola.cola(proveedor=prov).arrancar()
+    print(f"visión: {prov.nombre} · un cuadro cada "
+          f"{getattr(a, 'vision_cada', 20.0):.0f} s")
+    return cola, cbd.SchedulerVision(cola, intervalo_s=getattr(a, "vision_cada", 20.0))
+
+
+def _latido_vision(cola, sched, estado_hud):
+    """Un paso de visión: guarda lo leído y decide si manda otro cuadro.
+
+    Devuelve el inventario listo para el panel (o None). No espera a la API: lee lo que
+    haya y encola. El panel sigue pintando con el reloj del HUD mientras tanto.
+    """
+    if not cola:
+        return None
+    from coach import inventario_propio
+    from coach.fuentes import captura_bajo_demanda as cbd
+
+    ultimo = cola.ultimo()
+    estado = ultimo.get("estado")
+    if estado:
+        if estado.get("espectando"):
+            # Mirar la partida de otro no puede tocar tu inventario.
+            pass
+        elif estado.get("tienda_abierta") or estado.get("items"):
+            inventario_propio.actualizar(
+                estado.get("items") or [], estado.get("slots") or {},
+                fuente="tienda" if estado.get("tienda_abierta") else "vision",
+                confianza=estado.get("confianza") or 0.0)
+    if estado_hud.get("t") is not None:
+        sched.quizas_encolar(cbd.motivo_por_estado(estado))
+    return inventario_propio.como_estado()
+
+
 def bucle_vivo(a, analizar):
     """Modo en vivo: deadlock-api + HUD por OCR para reloj y oro en tiempo real."""
     from coach import en_vivo, registro
     estado_hud = arrancar_hud(a, _CFG["hud"], _CFG["flags"])
+    cola_vision, sched_vision = _arrancar_vision(a)
     conoc = leer_conocimiento()
     items_previos, heroes_cta, compras = {}, {}, []
     st = {"match": None, "escucha": None, "ultimo_hud": 0.0,
@@ -85,7 +138,9 @@ def bucle_vivo(a, analizar):
                 # Con la partida en marcha, el reloj del HUD sí es dato de partida:
                 # se publica aunque el id todavía no se sepa.
                 if (getattr(a, "pantalla", False) and publicar_pantalla(
-                        estado_hud, analizar, medir_latencias(a), conoc)):
+                        estado_hud, analizar, medir_latencias(a), conoc,
+                        inventario=_latido_vision(cola_vision, sched_vision,
+                                                  estado_hud))):
                     time.sleep(max(1.0, a.intervalo))
                     continue
                 # Mientras el descubrimiento del id sigue en curso no se anuncia
@@ -131,7 +186,9 @@ def bucle_vivo(a, analizar):
             sin_vivo = time.time() - st["ultimo_vivo"] > 15
             if est is None or not est.get("jugadores"):
                 if (getattr(a, "pantalla", False) and sin_vivo and publicar_pantalla(
-                        estado_hud, analizar, medir_latencias(a), conoc)):
+                        estado_hud, analizar, medir_latencias(a), conoc,
+                        inventario=_latido_vision(cola_vision, sched_vision,
+                                                  estado_hud))):
                     time.sleep(max(1.0, a.intervalo))
                     continue
                 if publicar_apertura(conoc):
@@ -407,6 +464,10 @@ def leer_argumentos():
                     help="match_id directo (en vez de buscarlo por cuenta)")
     ap.add_argument("--pantalla", action="store_true",
                     help="sin broadcast, lee reloj y almas de tu propia pantalla")
+    ap.add_argument("--sin-vision", action="store_true",
+                    help="no mandar cuadros al modelo (modo pantalla con reloj y oro)")
+    ap.add_argument("--vision-cada", type=float, default=20.0,
+                    help="segundos entre cuadros enviados al modelo de visión")
     ap.add_argument("--sin-hud", action="store_true",
                     help="no leer reloj/almas del HUD por OCR (usa solo el broadcast)")
     ap.add_argument("--mi-heroe", default=None,
