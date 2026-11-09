@@ -56,4 +56,5 @@ salida/vision-zonas/
 # Estado de la última lectura: es dato de la máquina, no del repo.
 salida/estado_ultimo.json
 salida/inventario.json
+salida/vision_uso.json
 salida/.estado-*.tmp
