@@ -10,9 +10,9 @@
   0.0292
  ],
  "almas": [
-  0.36,
-  0.93,
-  0.12,
+  0.43,
+  0.03,
+  0.17,
   0.045
  ],
  "retrato": [
@@ -35,16 +35,22 @@
  ],
  "filas_total": 10,
  "mis_items": [
-  0.355,
-  0.905,
-  0.29,
-  0.045
+  0.005,
+  0.885,
+  0.13,
+  0.075
  ],
- "mis_items_nx": 12,
- "mis_items_ny": 1,
+ "mis_items_nx": 6,
+ "mis_items_ny": 2,
  "slots_por_categoria": 4,
  "filas_enemigas": 4,
  "filas_aliadas": 5,
  "iconos_por_fila": 8,
- "_nota": "regiones en fracciones del area de JUEGO, no del escritorio completo"
+ "_nota": "regiones en fracciones del area de JUEGO, no del escritorio completo. Calibradas el 2026-11-09 sobre una captura 2560x1440: reloj, almas de equipo arriba, oro ('$N SOULS') y rejilla de items abajo a la izquierda. La version anterior de 'almas' apuntaba a un trozo sin numeros.",
+ "oro": [
+  0.02,
+  0.815,
+  0.085,
+  0.045
+ ]
 }
