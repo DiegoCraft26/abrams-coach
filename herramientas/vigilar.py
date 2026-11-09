@@ -49,6 +49,31 @@ def cuenta_guardada():
         return None
 
 
+def panel_vivo():
+    """PID del panel si sigue vivo. Sirve para no abrir dos y para reabrirlo si muere."""
+    try:
+        with open("/tmp/abrams-panel.pid", encoding="utf-8") as f:
+            pid = int(f.read().strip())
+        os.kill(pid, 0)
+        return pid
+    except (OSError, ValueError):
+        return None
+
+
+def abrir_panel(a, procesos):
+    procesos.append(subprocess.Popen(
+        [sys.executable, os.path.join(RAIZ, "panel_nativo.py"),
+         "--url", f"http://127.0.0.1:{PUERTO}"],
+        cwd=RAIZ, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL))
+    with open("/tmp/abrams-panel.pid", "w", encoding="utf-8") as f:
+        f.write(str(procesos[-1].pid))
+    time.sleep(2)
+    subprocess.run(
+        [sys.executable, os.path.join(RAIZ, "herramientas", "colocar_panel.py")],
+        cwd=RAIZ, stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL, timeout=20)
+
+
 def juego_abierto():
     """True si Deadlock corre. Se mira la lista de argumentos porque `comm` es wine."""
     try:
@@ -85,21 +110,16 @@ def main():
                         stderr=subprocess.DEVNULL))
                 else:
                     registrar("el coach ya estaba corriendo en :8090")
-                if not a.sin_panel:
-                    time.sleep(2)
-                    procesos.append(subprocess.Popen(
-                        [sys.executable, os.path.join(RAIZ, "panel_nativo.py"),
-                         "--url", f"http://127.0.0.1:{PUERTO}"],
-                        cwd=RAIZ, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL))
-                    time.sleep(2)
-                    # Wayland no deja que el panel se coloque solo: se le pide a KWin.
-                    subprocess.run(
-                        [sys.executable, os.path.join(RAIZ, "herramientas",
-                                                      "colocar_panel.py")],
-                        cwd=RAIZ, stdout=subprocess.DEVNULL,
-                        stderr=subprocess.DEVNULL, timeout=20)
+                if not a.sin_panel and panel_vivo() is None:
+                    abrir_panel(a, procesos)
             except (OSError, subprocess.SubprocessError) as exc:
                 registrar(f"no pude arrancar: {exc}")
+        elif abierto and dentro and not a.sin_panel:
+            # El panel es de solo mirar: si se cierra o se cae, se reabre solo. Sin
+            # botones, sin atajos y sin que tengas que tocar nada.
+            if panel_vivo() is None:
+                registrar("el panel no está: reabriéndolo")
+                abrir_panel(a, procesos)
         elif not abierto and dentro:
             dentro = False
             registrar("Deadlock cerrado: cerrando y archivando")
