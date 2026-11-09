@@ -167,6 +167,15 @@ class RecommendationCard(Gtk.Box):
             self.lbl_razon.set_label(d.get("mensaje") or "")
             self.lbl_contexto.set_label(" ")
             return
+        if d.get("solo_reloj"):
+            self.lbl_accion.set_label("MODO PANTALLA")
+            clase_unica(self.lbl_accion, CLASES_ACCION, "accion-nada")
+            self.lbl_nombre.set_label("Solo reloj")
+            self.lbl_razon.set_label(
+                "Sin broadcast no puedo ver tu inventario ni los rivales. "
+                "Abre Tab para el marcador o juega una partida con retransmisión.")
+            self.lbl_contexto.set_label(" ")
+            return
         est = (d.get("estado") or {}).get("estado") or "INICIO"
         self.lbl_accion.set_label("SIN COMPRA")
         clase_unica(self.lbl_accion, CLASES_ACCION, "accion-nada")

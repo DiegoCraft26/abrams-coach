@@ -253,6 +253,21 @@ def publicar_pantalla(estado_hud, analizar, latencias=None, conoc=None,
         salida["plan"] = plan_inicial(conoc)
     salida["oro"] = oro
     salida["fuente"] = "pantalla"
+    # Sin broadcast no hay inventario ni rivales: pasado el arranque, recomendar una
+    # compra con el inventario vacío es inventarse la partida. Se dice y se calla.
+    if t > 600:
+        salida.update({
+            "solo_reloj": True,
+            "recomendaciones": [],
+            "decision": None,
+            "objetivo": None,
+            "camino": [],
+            "estado": {"estado": "INICIO",
+                       "motivo": "sin broadcast: solo puedo leer el reloj",
+                       "objetivo": None},
+            "notas": ["sin broadcast no veo tu inventario ni los rivales; "
+                      "abre Tab para el marcador o juega una partida con retransmisión"],
+        })
     # `listo` viene del motor y con medio estado sale False; aquí sí hay datos
     # frescos de la pantalla, así que la cabecera no debe decir «sin partida».
     salida["listo"] = True
