@@ -62,3 +62,29 @@ def test_revisar_hijos_anota_y_descarta():
     finally:
         vivo.kill()
         vivo.wait(timeout=10)
+
+
+def test_un_solo_vigilante_a_la_vez(tmp_path):
+    """El 2026-11-09 quedó un vigilante viejo junto al servicio y abrían dos paneles."""
+    ruta = tmp_path / "vigilar.lock"
+    primero = vigilar.tomar_bloqueo(str(ruta))
+    assert primero is not None
+    try:
+        assert vigilar.tomar_bloqueo(str(ruta)) is None
+    finally:
+        primero.close()
+    segundo = vigilar.tomar_bloqueo(str(ruta))
+    assert segundo is not None
+    segundo.close()
+
+
+def test_el_modo_silencio_se_lee_de_un_archivo(tmp_path):
+    marca = tmp_path / "silencio"
+    assert vigilar.en_silencio(str(marca)) is False
+    marca.write_text("", encoding="utf-8")
+    assert vigilar.en_silencio(str(marca)) is True
+
+
+def test_el_freno_de_reapertura_existe():
+    # Cinco minutos entre reaperturas: sin freno, un panel que se cae solo entra en bucle.
+    assert vigilar.MIN_ENTRE_REAPERTURAS_S >= 60

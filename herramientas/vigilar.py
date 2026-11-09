@@ -11,6 +11,7 @@ Uso:
 Al terminar la partida: cierra el coach, archiva en SQLite y escribe el informe.
 """
 import argparse
+import fcntl
 import os
 import signal
 import subprocess
@@ -23,6 +24,15 @@ sys.path.insert(0, RAIZ)
 LOG = "/tmp/abrams-vigilar.log"
 PANEL_LOG = "/tmp/abrams-panel.log"
 PUERTO = 8090
+# Un solo vigilante por máquina. El 2026-11-09 quedó uno viejo corriendo 4 h junto al
+# servicio de systemd y cada uno reabría el panel por su cuenta: la ventana aparecía
+# encima del juego sin que nadie la pidiera.
+BLOQUEO = "/tmp/abrams-vigilar.lock"
+# Si este archivo existe, el vigilante espera pero NO abre el panel. Es el interruptor
+# de Diego: `touch ~/.abrams-silencio` para que no aparezca nada.
+SILENCIO = os.path.join(os.path.expanduser("~"), ".abrams-silencio")
+# Si el panel se cae solo, no se reabre más de una vez cada 5 min (evita el bucle).
+MIN_ENTRE_REAPERTURAS_S = 300.0
 
 
 def registrar(texto):
@@ -101,6 +111,31 @@ def _es_panel(pid):
         return False
 
 
+def tomar_bloqueo(ruta=BLOQUEO):
+    """Bloqueo exclusivo del vigilante. None si ya hay otro corriendo.
+
+    Se devuelve el archivo abierto (hay que mantenerlo vivo) o None. Sin esto, dos
+    vigilantes conviven y el panel se abre dos veces.
+    """
+    try:
+        archivo = open(ruta, "w", encoding="utf-8")
+    except OSError:
+        return None
+    try:
+        fcntl.flock(archivo.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except OSError:
+        archivo.close()
+        return None
+    archivo.write(str(os.getpid()))
+    archivo.flush()
+    return archivo
+
+
+def en_silencio(ruta=SILENCIO):
+    """True si Diego pidió que no aparezca ninguna ventana."""
+    return os.path.exists(ruta)
+
+
 def panel_vivo():
     """PID del panel si sigue vivo. Sirve para no abrir dos y para reabrirlo si muere."""
     try:
@@ -165,9 +200,17 @@ def main():
     ap.add_argument("--intervalo", type=float, default=5.0)
     a = ap.parse_args()
 
+    bloqueo = tomar_bloqueo()
+    if bloqueo is None:
+        registrar("ya hay otro vigilante corriendo; este se va")
+        return 0
+    if en_silencio():
+        registrar(f"modo silencio ({SILENCIO}): no se abrirá el panel")
+
     registrar("modo espera: abre Deadlock cuando quieras")
     procesos = []
     dentro = False
+    ultima_apertura = [0.0]
     while True:
         procesos = revisar_hijos(procesos)
         abierto = juego_abierto()
@@ -186,16 +229,20 @@ def main():
                         stderr=subprocess.DEVNULL))
                 else:
                     registrar("el coach ya estaba corriendo en :8090")
-                if not a.sin_panel and panel_vivo() is None:
+                if (not a.sin_panel and not en_silencio()
+                        and panel_vivo() is None):
                     abrir_panel(a, procesos)
+                    ultima_apertura[0] = time.time()
             except (OSError, subprocess.SubprocessError) as exc:
                 registrar(f"no pude arrancar: {exc}")
         elif abierto and dentro and not a.sin_panel:
             # El panel es de solo mirar: si se cierra o se cae, se reabre solo. Sin
             # botones, sin atajos y sin que tengas que tocar nada.
-            if panel_vivo() is None:
+            if (panel_vivo() is None and not en_silencio()
+                    and time.time() - ultima_apertura[0] > MIN_ENTRE_REAPERTURAS_S):
                 registrar("el panel no está: reabriéndolo")
                 abrir_panel(a, procesos)
+                ultima_apertura[0] = time.time()
         elif not abierto and dentro:
             dentro = False
             registrar("Deadlock cerrado: cerrando y archivando")
