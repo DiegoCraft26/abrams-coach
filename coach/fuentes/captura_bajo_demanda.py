@@ -89,11 +89,14 @@ class SchedulerVision:
     """Decide qué cuadros se mandan a la cola y con qué motivo."""
 
     def __init__(self, cola, intervalo_s: float = 20.0, capturador=None,
-                 caja_fn=None):
+                 caja_fn=None, modo: str = "tira"):
         self.cola = cola
         self.intervalo_s = float(intervalo_s)
         self.capturador = capturador or _capturar
         self.caja_fn = caja_fn or caja_juego
+        # "tira": recorte de las zonas del HUD (reloj, oro, ítems) — 10 kB y correcto.
+        # "cuadro": el monitor entero a 640 px — más caro y más lento, para la tienda.
+        self.modo = modo
         self._ultimo = 0.0
         self._ultimo_tienda = 0.0
         self.enviados = 0
@@ -118,14 +121,21 @@ class SchedulerVision:
         if cuadro is None:
             self.descartes += 1
             return False
+        caja = self.caja_fn()
         try:
             from ..agente import vision as _vision
-            self.ultimo_peso_kb = round(
-                len(_vision.cuadro_a_jpeg(_vision.recorte_juego(cuadro, self.caja_fn())))
-                / 1024, 1)
+            if self.modo == "tira" and caja is not None:
+                from ..agente import vision_zonas as _zonas
+                enviado = _zonas.tira_hud(cuadro, caja)
+                caja_envio = None
+            else:
+                enviado = cuadro
+                caja_envio = caja
+            self.ultimo_peso_kb = round(len(_vision.cuadro_a_jpeg(
+                _vision.recorte_juego(enviado, caja_envio))) / 1024, 1)
         except Exception:                                 # noqa: BLE001
-            self.ultimo_peso_kb = None
-        entro = self.cola.encolar(cuadro, motivo=motivo, caja=self.caja_fn())
+            enviado, caja_envio, self.ultimo_peso_kb = cuadro, caja, None
+        entro = self.cola.encolar(enviado, motivo=motivo, caja=caja_envio)
         if entro:
             self.enviados += 1
             if motivo == "tienda":

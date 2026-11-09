@@ -67,10 +67,17 @@ def _arrancar_vision(a):
         return None, None
     # La cola se pide al módulo (singleton): así /api/vision informa de la misma que
     # trabaja y no de una copia vacía.
-    cola = vision_cola.cola(proveedor=prov).arrancar()
+    from coach.agente import vision_zonas
+    from coach.agente import vision as vision_base
+    # Lector de tira: reloj, oro, almas e ítems visibles en una imagen de 10 kB. Medido
+    # el 2026-11-09: los cuatro números correctos, 650-1 000 tokens.
+    lector = lambda jpeg: vision_zonas.leer_jpeg(jpeg, prov,
+                                                 timeout_s=vision_base.TIMEOUT_S)
+    cola = vision_cola.cola(proveedor=prov, lector=lector).arrancar()
     print(f"visión: {prov.nombre} · un cuadro cada "
           f"{getattr(a, 'vision_cada', 20.0):.0f} s")
-    return cola, cbd.SchedulerVision(cola, intervalo_s=getattr(a, "vision_cada", 20.0))
+    return cola, cbd.SchedulerVision(cola, intervalo_s=getattr(a, "vision_cada", 25.0),
+                                     modo=getattr(a, "vision_modo", "tira"))
 
 
 def _latido_vision(cola, sched, estado_hud):
@@ -97,7 +104,15 @@ def _latido_vision(cola, sched, estado_hud):
                 confianza=estado.get("confianza") or 0.0)
     if estado_hud.get("t") is not None:
         sched.quizas_encolar(cbd.motivo_por_estado(estado))
-    return inventario_propio.como_estado()
+    inventario = inventario_propio.como_estado()
+    if estado is not None:
+        # La tira trae números que el panel puede enseñar hoy: oro e ítems visibles.
+        edad = ultimo.get("edad_s")
+        if isinstance(estado.get("oro"), int):
+            estado = dict(estado, edad_s=edad)
+        if inventario is None and isinstance(estado.get("oro"), int):
+            return {"vision": estado, "items_visibles": estado.get("items_visibles")}
+    return inventario
 
 
 def bucle_vivo(a, analizar):
@@ -137,10 +152,12 @@ def bucle_vivo(a, analizar):
                 # Antes se publicaba esa pantalla y el panel parecía estar jugando.
                 # Con la partida en marcha, el reloj del HUD sí es dato de partida:
                 # se publica aunque el id todavía no se sepa.
+                latido = _latido_vision(cola_vision, sched_vision, estado_hud)
                 if (getattr(a, "pantalla", False) and publicar_pantalla(
                         estado_hud, analizar, medir_latencias(a), conoc,
-                        inventario=_latido_vision(cola_vision, sched_vision,
-                                                  estado_hud))):
+                        inventario=latido if (latido or {}).get("inventario")
+                        else None,
+                        vision=(latido or {}).get("vision"))):
                     time.sleep(max(1.0, a.intervalo))
                     continue
                 # Mientras el descubrimiento del id sigue en curso no se anuncia
@@ -185,10 +202,12 @@ def bucle_vivo(a, analizar):
             # cada pocos segundos (5 ítems del plan contra los del motor).
             sin_vivo = time.time() - st["ultimo_vivo"] > 15
             if est is None or not est.get("jugadores"):
+                latido = _latido_vision(cola_vision, sched_vision, estado_hud)
                 if (getattr(a, "pantalla", False) and sin_vivo and publicar_pantalla(
                         estado_hud, analizar, medir_latencias(a), conoc,
-                        inventario=_latido_vision(cola_vision, sched_vision,
-                                                  estado_hud))):
+                        inventario=latido if (latido or {}).get("inventario")
+                        else None,
+                        vision=(latido or {}).get("vision"))):
                     time.sleep(max(1.0, a.intervalo))
                     continue
                 if publicar_apertura(conoc):
@@ -466,8 +485,10 @@ def leer_argumentos():
                     help="sin broadcast, lee reloj y almas de tu propia pantalla")
     ap.add_argument("--sin-vision", action="store_true",
                     help="no mandar cuadros al modelo (modo pantalla con reloj y oro)")
-    ap.add_argument("--vision-cada", type=float, default=20.0,
-                    help="segundos entre cuadros enviados al modelo de visión")
+    ap.add_argument("--vision-cada", type=float, default=25.0,
+                    help="segundos entre lecturas de visión")
+    ap.add_argument("--vision-modo", default="tira", choices=["tira", "cuadro"],
+                    help="tira = recorte del HUD (barato y correcto); cuadro = pantalla")
     ap.add_argument("--sin-hud", action="store_true",
                     help="no leer reloj/almas del HUD por OCR (usa solo el broadcast)")
     ap.add_argument("--mi-heroe", default=None,

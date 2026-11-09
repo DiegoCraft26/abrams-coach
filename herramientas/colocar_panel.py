@@ -51,6 +51,11 @@ GUION = """
     for (var j = 0; j < lista.length; j++) {
         var w = lista[j];
         if ((w.resourceClass || "") === "%(clase)s") {
+            // Sin foco ni protagonismo: el panel se mira, no se usa. Con el juego en
+            // pantalla completa, una ventana que sube te saca de la partida.
+            w.keepBelow = true;
+            w.skipTaskbar = true;
+            w.skipPager = true;
             w.frameGeometry = { x: x, y: y, width: ancho, height: alto };
             print("abrams: panel en " + destino + " (" + x + "," + y + ") " + ancho + "x" + alto);
         }

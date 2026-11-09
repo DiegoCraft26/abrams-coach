@@ -34,8 +34,12 @@ class ColaVision:
     """Un hilo, una petición en vuelo y el último estado con su edad."""
 
     def __init__(self, proveedor=None, intervalo_s: float = INTERVALO_S,
-                 tope: "vision.TopePartida | None" = None, timeout_s: float | None = None):
+                 tope: "vision.TopePartida | None" = None, timeout_s: float | None = None,
+                 lector=None):
         self.proveedor = proveedor
+        # `lector(jpeg)` decide cómo se interpreta la imagen: el cuadro completo o una
+        # tira del HUD. La cola no sabe cuál es; solo encola, espera y guarda.
+        self.lector = lector
         self.intervalo_s = float(intervalo_s)
         self.tope = tope or vision.TOPE
         self.timeout_s = timeout_s or vision.TIMEOUT_S
@@ -143,9 +147,13 @@ class ColaVision:
                 self._en_curso = motivo
             self._ultimo_arranque = time.time()
             try:
-                estado = vision.interpretar(jpeg, proveedor=self.proveedor,
-                                            timeout_s=self.timeout_s,
-                                            tope=self.tope, usar_cache=False)
+                if self.lector is not None:
+                    estado = self.lector(jpeg)
+                    self.tope.gastar((estado or {}).get("_tokens"))
+                else:
+                    estado = vision.interpretar(jpeg, proveedor=self.proveedor,
+                                                timeout_s=self.timeout_s,
+                                                tope=self.tope, usar_cache=False)
             except Exception:                             # noqa: BLE001
                 estado = None
             finally:

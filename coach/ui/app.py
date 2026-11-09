@@ -463,4 +463,8 @@ class App(Gtk.Application):
 
     def do_activate(self):
         win = Panel(self, self.url, self.breakpoint, self.intervalo, self.tamano)
-        win.present()
+        # `present()` pide activación: el compositor se lleva el foco a esta ventana y,
+        # con Deadlock en pantalla completa, eso te saca de la partida (pasó el
+        # 2026-11-09 y Diego lo pidió expresamente). Se muestra sin pedir foco.
+        win.set_can_focus(False)
+        win.set_visible(True)

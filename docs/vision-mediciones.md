@@ -82,3 +82,36 @@ la tienda. El reloj ya lo da el OCR local del HUD (exacto, 200 ms) y el inventar
 **recortes de zona**: la tira del reloj, el bloque de oro y, con B abierta, el panel de la
 tienda. Eso es la siguiente medición: cuánto baja la latencia y cuánto sube la confianza
 al mandar 6–10 kB de la zona en vez de 33 kB del cuadro completo.
+
+## Tira del HUD: el formato que sí sirve (medido en partida, 2026-11-09)
+
+Se recortan dos zonas a tamaño nativo y se apilan (320 px de ancho, 10 kB): arriba el
+reloj y las almas de equipo; abajo el oro («$N SOULS») y la rejilla de ítems.
+
+| Lectura | Peso | Latencia | Tokens | Valores |
+|---|---|---|---|---|
+| Solo el reloj | 0.9 kB | 1.3 s | 314 | `reloj_s: 56` ✔ |
+| Solo el bloque de oro | 1.7 kB | 3.4 s | 601 | región mal calibrada en `regiones.json` |
+| Tira completa | 10.5 kB | 24 s | 650 | reloj 180 ✔ oro 555 ✔ ítems 1 ✔ almas 10 000 ✔ |
+| Tira completa (3 intentos) | 10.5 kB | 28–40 s | 926–1 041 | 1 de 3 aciertos; 2 sin respuesta |
+
+**Los cuatro números salieron correctos** cuando hubo respuesta: se verificaron contra la
+imagen (3:00, $555, un ítem, 10k de equipo) y contra el reloj del HUD del coach (180 s
+contra 211 s, con 31 s de diferencia real entre las dos capturas).
+
+Lo que **no** es fiable todavía es la latencia: entre 1.3 s y 40 s, con fallos por tiempo
+de espera. Por eso la visión va en cola y el panel pinta lo último con su edad; nunca se
+espera a la visión para decidir. `--vision-cada 25` es el ritmo que deja respirar a la API.
+
+## Trampa encontrada: `config/regiones.json` está descalibrado
+
+La región `almas` (`[0.36, 0.93, 0.12, 0.045]`) apunta a un trozo de HUD donde solo hay
+un «2» suelto: el modelo lo leyó como `{"almas": 2}`. Las zonas buenas para el HUD actual
+son:
+
+| Zona | Fracciones del área de juego |
+|---|---|
+| Reloj + almas de equipo | `[0.44, 0.00, 0.14, 0.08]` |
+| Oro + rejilla de ítems | `[0.00, 0.80, 0.16, 0.18]` |
+
+Están en `coach/agente/vision_zonas.py`; `regiones.json` hay que recalibrarlo aparte.

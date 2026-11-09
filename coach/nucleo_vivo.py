@@ -237,7 +237,7 @@ def _notas_pantalla(oro):
 
 
 def publicar_pantalla(estado_hud, analizar, latencias=None, conoc=None,
-                      max_edad_s=3.0, inventario=None):
+                      max_edad_s=3.0, inventario=None, vision=None):
     """Modo pantalla: sin broadcast, se lee el reloj y las almas del propio HUD.
 
     Es el camino que sirve en ranked, práctica y bots, donde Valve no retransmite
@@ -267,6 +267,18 @@ def publicar_pantalla(estado_hud, analizar, latencias=None, conoc=None,
         salida["plan"] = plan_inicial(conoc)
     salida["oro"] = oro
     salida["fuente"] = "pantalla"
+    if vision and vision.get("oro") is not None and oro is None:
+        # El oro (dinero sin gastar) sale de la tira del HUD leída por visión. Es dato
+        # de pantalla, no de broadcast: se publica con su edad y sin tocar las almas.
+        oro = vision.get("oro")
+        salida["oro"] = oro
+        notas = list(salida.get("notas") or [])
+        edad_v = vision.get("edad_s")
+        notas.append("oro leído por visión"
+                     + (f" hace {int(edad_v)} s" if isinstance(edad_v, (int, float)) else ""))
+        salida["notas"] = notas
+    if vision and vision.get("items_visibles") is not None:
+        salida["items_visibles"] = vision.get("items_visibles")
     if inventario:
         salida["inventario"] = items
         salida["slots"] = dict(inventario.get("slots") or {})
