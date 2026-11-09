@@ -97,7 +97,7 @@ def hilo_hud(estado_hud, hud_cfg):
     El reloj del juego cambia una vez por segundo: dos segundos de desfase no cambian
     ninguna decisión y el coste baja de ~7 % de un núcleo a menos del 2 %.
     """
-    from .fuentes import captura_kwin, hud_rapido, lector
+    from .fuentes import captura, captura_kwin, hud_rapido
     hz = float(hud_cfg.get("frecuencia_hz") or 0.5)
     intervalo = max(2.0, 1.0 / max(0.1, hz))
     cajas = hud_cfg.get("cajas") or None
@@ -109,7 +109,11 @@ def hilo_hud(estado_hud, hud_cfg):
         cuadro = captura_kwin.capturar_escritorio()
         if cuadro is None:
             try:
-                cuadro = lector.capturar()
+                # Respaldo: el búfer compartido que mantiene `arrancar_hud`. Antes
+                # esto era `lector.capturar()`, de un módulo que ya no existe: el hilo
+                # del HUD moría con ImportError nada más arrancar y el modo pantalla no
+                # publicaba nunca el reloj (encontrado el 2026-11-09 en ranked real).
+                cuadro = captura.global_().ultimo(max_edad_s=2.0)
             except Exception as exc:                        # noqa: BLE001
                 print(f"HUD captura: {type(exc).__name__}: {exc}", flush=True)
                 cuadro = None

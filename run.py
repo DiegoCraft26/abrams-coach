@@ -3,7 +3,7 @@
     python3 run.py --fuente simulado     # demo sin juego
     python3 run.py --fuente ocr          # lectura de pantalla real
 """
-import argparse, collections, os, sys, time
+import argparse, collections, os, sys, threading, time
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from coach import diagnostico, servidor
@@ -57,13 +57,37 @@ def bucle_vivo(a, analizar):
     st = {"match": None, "escucha": None, "ultimo_hud": 0.0,
           "tick": None, "tick_desde": time.time(), "avisado": False,
           "ultimo_vivo": 0.0}
+
+    # El descubrimiento del id va aparte. Antes se llamaba aquí dentro y, cuando la API
+    # entraba en pausa por cuota o tardaba, el bucle entero se quedaba esperando: el
+    # panel decía «sin partida» con la partida en curso y el reloj del HUD mudo
+    # (visto en ranked real el 2026-11-09).
+    def _descubrir():
+        import threading as _th
+        while True:
+            try:
+                hallado = buscar_match(a, st)
+                if hallado:
+                    st["match_descubierto"] = hallado
+            except Exception as exc:                      # noqa: BLE001
+                st["descubrimiento"] = {"via": None,
+                                        "detalle": f"descubrimiento falló: {exc}"}
+            _th.Event().wait(20.0)
+
+    threading.Thread(target=_descubrir, daemon=True).start()
     while True:
         try:
-            match = buscar_match(a, st)
+            match = a.match or st.get("match_descubierto")
             if match is None:
                 # Sin id de partida no hay reloj que publicar: la lectura del HUD en
                 # el menú o en una partida que la API no reconoce no es una partida.
                 # Antes se publicaba esa pantalla y el panel parecía estar jugando.
+                # Con la partida en marcha, el reloj del HUD sí es dato de partida:
+                # se publica aunque el id todavía no se sepa.
+                if (getattr(a, "pantalla", False) and publicar_pantalla(
+                        estado_hud, analizar, medir_latencias(a), conoc)):
+                    time.sleep(max(1.0, a.intervalo))
+                    continue
                 if publicar_apertura(conoc):
                     time.sleep(3.0)
                     continue
