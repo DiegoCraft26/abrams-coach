@@ -26,7 +26,7 @@ BUS = "org.kde.KWin"
 RUTA = "/Scripting"
 IFACE = "org.kde.kwin.Scripting"
 NOMBRE_SCRIPT = "abrams-colocar-panel"
-TITULO = "abrams coach"
+CLASE = "gg.diego.abramscoach"   # app_id real del panel; el título lo comparten otras ventanas
 
 GUION = """
 (function () {
@@ -41,14 +41,16 @@ GUION = """
         return;
     }
     var g = elegida.geometry;
-    var ancho = Math.min(%(ancho)d, g.width - 20);
-    var alto = Math.min(%(alto)d, g.height - 40);
-    var x = g.x + 10;
+    // Por defecto, la mitad derecha del monitor y a toda la altura: así no se monta
+    // sobre la ventana que ya esté abierta a la izquierda.
+    var ancho = Math.min(%(ancho)d, Math.floor(g.width / 2) - 6);
+    var alto = Math.min(%(alto)d, g.height - 20);
+    var x = g.x + Math.floor(g.width / 2) + 3;
     var y = g.y + 10;
     var lista = workspace.windowList();
     for (var j = 0; j < lista.length; j++) {
         var w = lista[j];
-        if ((w.caption || "").toLowerCase().indexOf("%(titulo)s") >= 0) {
+        if ((w.resourceClass || "") === "%(clase)s") {
             w.frameGeometry = { x: x, y: y, width: ancho, height: alto };
             print("abrams: panel en " + destino + " (" + x + "," + y + ") " + ancho + "x" + alto);
         }
@@ -123,7 +125,7 @@ def colocar(salida=None, ancho=900, alto=1020, espera=0.0):
     try:
         with open(ruta, "w", encoding="utf-8") as f:
             f.write(GUION % {"salida": salida, "ancho": ancho, "alto": alto,
-                             "titulo": TITULO})
+                             "clase": CLASE})
         _dbus("unloadScript", NOMBRE_SCRIPT)
         _dbus("loadScript", ruta, NOMBRE_SCRIPT)
         _dbus("start")
@@ -141,8 +143,8 @@ def main():
     ap = argparse.ArgumentParser(description="Coloca el panel en otro monitor")
     ap.add_argument("salida", nargs="?", default=None,
                     help="nombre de la salida (por defecto, el secundario)")
-    ap.add_argument("--ancho", type=int, default=900)
-    ap.add_argument("--alto", type=int, default=1020)
+    ap.add_argument("--ancho", type=int, default=980)
+    ap.add_argument("--alto", type=int, default=1080)
     ap.add_argument("--listar", action="store_true", help="solo enseña los monitores")
     a = ap.parse_args()
     if a.listar:

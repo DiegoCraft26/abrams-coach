@@ -13,7 +13,8 @@ from coach.nucleo_demo import aviso_vram, estado_simulado, juego_abierto, leer_c
 from coach.nucleo_vivo import (ajustar_con_hud, anotar_compras, arrancar_hud,
                                buscar_match, estado_desde_vivo, filtrar_por_oro,
                                medir_latencias, publicar_apertura, publicar_congelado,
-                               publicar_fuera_de_partida, publicar_pantalla)
+                               publicar_fuera_de_partida, publicar_pantalla,
+                               olvidar_reloj_hud)
 
 
 _CFG = {"hud": {}, "flags": {}}   # lo llena configurar(), visible desde los bucles
@@ -54,7 +55,8 @@ def bucle_vivo(a, analizar):
     conoc = leer_conocimiento()
     items_previos, heroes_cta, compras = {}, {}, []
     st = {"match": None, "escucha": None, "ultimo_hud": 0.0,
-          "tick": None, "tick_desde": time.time(), "avisado": False}
+          "tick": None, "tick_desde": time.time(), "avisado": False,
+          "ultimo_vivo": 0.0}
     while True:
         try:
             match = buscar_match(a, st)
@@ -85,12 +87,17 @@ def bucle_vivo(a, analizar):
                 print(f"partida en vivo: {match}")
                 st["escucha"] = en_vivo.Escucha(match, cuenta=a.cuenta).arrancar()
                 st["match"] = match
+                olvidar_reloj_hud()
                 st["tick"], st["tick_desde"], st["avisado"] = None, time.time(), False
             escucha = st["escucha"]
             est = escucha.estado
+            # El modo pantalla es el respaldo, no el principal: solo entra cuando el
+            # broadcast lleva 15 s sin dar nada. Si no, el panel cambiaba de aspecto
+            # cada pocos segundos (5 ítems del plan contra los del motor).
+            sin_vivo = time.time() - st["ultimo_vivo"] > 15
             if est is None or not est.get("jugadores"):
-                if getattr(a, "pantalla", False) and publicar_pantalla(
-                        estado_hud, analizar, medir_latencias(a), conoc):
+                if (getattr(a, "pantalla", False) and sin_vivo and publicar_pantalla(
+                        estado_hud, analizar, medir_latencias(a), conoc)):
                     time.sleep(max(1.0, a.intervalo))
                     continue
                 if publicar_apertura(conoc):
@@ -111,8 +118,8 @@ def bucle_vivo(a, analizar):
                 # El stream existe pero no manda nada (una partida sin broadcast). Si
                 # el modo pantalla está encendido, se sigue con lo que se ve en el HUD
                 # en vez de dejar el panel clavado en «datos congelados».
-                if getattr(a, "pantalla", False) and publicar_pantalla(
-                        estado_hud, analizar, medir_latencias(a), conoc):
+                if (getattr(a, "pantalla", False) and sin_vivo and publicar_pantalla(
+                        estado_hud, analizar, medir_latencias(a), conoc)):
                     time.sleep(max(1.0, a.intervalo))
                     continue
                 if time.time() - st["tick_desde"] > 12 and not st["avisado"]:
@@ -142,6 +149,7 @@ def bucle_vivo(a, analizar):
                 + [j.get("almas") for j in crudo["aliados"]]
                 + [j.get("almas") for j in crudo["enemigos"]])
             servidor.EST.publicar(salida)
+            st["ultimo_vivo"] = time.time()      # hubo broadcast: el respaldo no entra
         except Exception as exc:                                    # noqa: BLE001
             servidor.EST.publicar({"listo": False, "mensaje": f"error en vivo: {exc}"})
         time.sleep(max(1.0, a.intervalo))

@@ -415,6 +415,11 @@ class Escucha:
         estado = interpretar(grupo, self.cuenta, self._heroes)
         if estado is None:
             return None
+        # El SSE manda el estado por trozos: un grupo que llega sin tu fila NO significa
+        # que hayas salido de la partida. Sin esto el panel parpadeaba entre «en vivo» y
+        # «tu cuenta no está en ella» cada pocos segundos (visto el 2026-11-09 en partida).
+        if estado.get("yo") is None and (self.estado or {}).get("yo"):
+            estado["yo"] = self.estado["yo"]
         self.estado = estado
         self.estados += 1
         self.ts_estado = time.time()

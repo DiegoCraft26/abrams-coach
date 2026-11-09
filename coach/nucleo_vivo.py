@@ -26,6 +26,15 @@ ORO_PANTALLA_FIABLE = False
 # Último reloj bueno del modo pantalla (ver `_reloj_estable`).
 _RELOJ = {"t": None, "cand": None, "veces": 0}
 
+# Desfase medido entre el reloj del HUD y el del broadcast (ver `ajustar_con_hud`).
+_RELOJ_HUD = {"desfase": None, "ts": 0.0}
+
+
+def olvidar_reloj_hud():
+    """Se llama al cambiar de partida: el desfase de la anterior no vale."""
+    _RELOJ_HUD["desfase"] = None
+    _RELOJ_HUD["ts"] = 0.0
+
 
 def estado_desde_vivo(est, cuenta=None):
     """Traduce el estado del cliente en vivo al formato que come el motor."""
@@ -290,30 +299,40 @@ def publicar_fuera_de_partida(est, cuenta):
 def ajustar_con_hud(crudo, estado_hud, latencias, sin_hud):
     """Cambia reloj y oro del broadcast por los del HUD si la lectura es fresca.
 
-    El broadcast llega 20-70 s tarde; el patrimonio se reconstruye con el gasto.
+    El broadcast llega 20-80 s tarde. Cuando el OCR falla un ciclo, el reloj publicado
+    volvía al del TV y el panel daba un salto de ~80 s (medido el 2026-11-09). Por eso
+    se guarda el desfase HUD-broadcast y se sigue aplicando unos segundos aunque la
+    lectura de ese instante no llegue.
     """
-    if (sin_hud or time.time() - estado_hud["ts"] >= 8
-            or estado_hud.get("t") is None):
-        return
-    h_t = estado_hud["t"]
     api_t = crudo.get("t") or 0
-    # El reloj del HUD se acepta solo si cuadra con el del broadcast
-    # (el broadcast incluye el tiempo previo, por eso el margen amplio).
-    if abs(h_t - api_t) <= 180:
+    edad_hud = time.time() - (estado_hud.get("ts") or 0.0)
+    fresco = (not sin_hud and edad_hud < 8 and estado_hud.get("t") is not None)
+    h_t = estado_hud.get("t")
+
+    if fresco and abs(h_t - api_t) <= 180:
+        _RELOJ_HUD["desfase"] = h_t - api_t
+        _RELOJ_HUD["ts"] = time.time()
         crudo["t"] = h_t
         # Diferencia real entre lo que ve el jugador y lo que manda el TV de
         # Valve: es la latencia del broadcast, medida, no estimada.
         latencias["broadcast_s"] = round(h_t - api_t, 1)
-        latencias["edad_hud_s"] = round(time.time() - estado_hud["ts"], 2)
+        latencias["edad_hud_s"] = round(edad_hud, 2)
         latencias["lectura_ms"] = round(
             sum(x for x in (estado_hud.get("ms_reloj"),
                             estado_hud.get("ms_oro")) if x) or 0, 1)
         nota = f"HUD OCR: reloj {h_t//60}:{h_t%60:02d}"
+    elif (not sin_hud and _RELOJ_HUD["desfase"] is not None
+          and time.time() - _RELOJ_HUD["ts"] < 300):
+        # Sin lectura nueva, pero el desfase sigue valiendo: mejor un reloj estable
+        # con el desfase de hace 20 s que uno que salta 80 s atrás.
+        crudo["t"] = api_t + _RELOJ_HUD["desfase"]
+        nota = "reloj del broadcast + desfase del HUD"
     else:
         nota = "reloj del broadcast"
+
     h_oro = estado_hud.get("oro")
     api_oro = crudo["yo"].get("oro") or 0
-    if (h_oro is not None and api_oro
+    if (fresco and h_oro is not None and api_oro
             and abs(h_oro - api_oro) <= max(400, api_oro * 0.5)):
         crudo["yo"]["oro"] = h_oro
         crudo["yo"]["almas"] = max(
@@ -383,7 +402,9 @@ def filtrar_por_oro(salida, crudo):
         objetivo["alcanza"] = False
         objetivo["faltan"] = max(0, (objetivo.get("costo") or 0) - oro)
         salida["recomendaciones"] = [objetivo]
-        salida["notas"] = [f"{oro:,} almas sin gastar: faltan "
-                           f"{objetivo['faltan']:,} para "
-                           f"{objetivo.get('nombre')}"]
+        # Se agrega, no se reemplaza: antes borraba la nota del reloj y el pie del
+        # panel perdía de dónde venía la hora (visto en partida el 2026-11-09).
+        salida["notas"] = list(salida.get("notas") or []) + [
+            f"{oro:,} almas sin gastar: faltan {objetivo['faltan']:,} para "
+            f"{objetivo.get('nombre')}"]
     salida["oro"] = oro

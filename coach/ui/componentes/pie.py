@@ -50,8 +50,10 @@ class StatusBar(Gtk.Box):
         if la.get("lectura_ms"):
             piezas.append(f"lectura {la['lectura_ms']:.0f} ms")
         if la.get("broadcast_s") is not None:
-            # El signo confundía: se dice cuánto va el TV por detrás, en valor absoluto.
-            piezas.append(f"TV {abs(la['broadcast_s']):.0f} s atrás")
+            # Esto NO es la latencia del TV: es la diferencia entre el reloj del HUD y
+            # el del broadcast, y el demo del broadcast incluye la pre-partida (~1 min).
+            # Decir "TV 76 s atrás" era una cifra que no se podía sostener.
+            piezas.append(f"desfase reloj TV {la['broadcast_s']:+.0f} s")
         self.lbl_latencia.set_label(" · ".join(piezas))
         if d.get("lectura_dudosa"):
             self.lbl_aviso.set_label("lectura dudosa: mantengo la última buena")

@@ -89,7 +89,9 @@ def economia(estado: Estado):
 def estado_tactico(estado: Estado, econ, cfg=CFG_DEFECTO):
     """Devuelve FARM / PELEAR / EQUILIBRIO con un motivo en una línea."""
     if estado.t < cfg["fase_minima_s"]:
-        return {"estado": "INICIO", "motivo": "fase inicial: sin recomendación todavía", "objetivo": None}
+        # El motivo se enseña al lado de una recomendación real: decir "sin recomendación
+# todavía" ahí se contradecía con el "COMPRA AHORA" de arriba (visto en partida).
+        return {"estado": "INICIO", "motivo": "fase inicial: build de apertura", "objetivo": None}
     p = econ.get("delta_pct")
     if p is None:
         return {"estado": "EQUILIBRIO", "motivo": "no puedo leer las almas del rival", "objetivo": None}
