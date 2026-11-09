@@ -57,7 +57,20 @@ def panel_vivo():
         os.kill(pid, 0)
         return pid
     except (OSError, ValueError):
-        return None
+        pass
+    # El PID puede estar viejo si el panel se abrió a mano: se busca por proceso antes
+    # de lanzar otro. Así no se acumulan ventanas.
+    try:
+        salida = subprocess.run(["pgrep", "-f", "[p]anel_nativo.py"],
+                                capture_output=True, text=True, timeout=5).stdout
+        for linea in salida.split():
+            pid = int(linea)
+            with open("/tmp/abrams-panel.pid", "w", encoding="utf-8") as f:
+                f.write(str(pid))
+            return pid
+    except (OSError, ValueError, subprocess.SubprocessError):
+        pass
+    return None
 
 
 def abrir_panel(a, procesos):
