@@ -352,7 +352,7 @@ def main():
         problemas.append(f"verdad terreno: {p}")
         print(f"\nVERDAD TERRENO\n  {p}")
 
-    # Las capturas de calibración son de la máquina de desarrollo y no se versionan: si la
+    # Las capturas de calibración son de la máquina donde se corre la app y no se versionan: si la
     # verdad terreno apunta a archivos que no están, la suite se salta (no finge verde
     # ni se pone roja por un dato que no viaja en el repo).
     faltan_capturas = bool(errs_verdad) and all(

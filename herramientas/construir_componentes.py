@@ -1,6 +1,6 @@
 """Construye data/componentes.json: qué ítems componen a cada ítem.
 
-Por qué existe: el motor recomendaba el tier 1 de un ítem que Diego ya tenía en tier 3
+Por qué existe: el motor recomendaba el tier 1 de un ítem que el jugador ya tenía en tier 3
 (p. ej. *Sprint Boots* teniendo *Shadow Weave*), porque el catálogo no traía la cadena.
 `data/items.json` sí la trae, pero en `component_items` por **class_name** y pesa 2 MB:
 cargarlo en cada lectura rompería el presupuesto de RAM.

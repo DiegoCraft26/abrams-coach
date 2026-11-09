@@ -78,7 +78,7 @@ la máquina de desarrollo** y 429 compras.
 |---|---|
 | Regresión logística, 135 partidas | **0.588** |
 | Regresión logística, 410 partidas y 1,294 compras | **0.596** |
-| Regresión logística, **520 partidas** (490 de Diego) y 1,577 compras | **0.576** |
+| Regresión logística, **520 partidas** (490 propias) y 1,577 compras | **0.576** |
 | Reglas actuales | comparable y explicable |
 
 Los pesos aprendidos incluso contradicen el dominio (counter con signo negativo), señal de
