@@ -26,8 +26,9 @@ case "${1:-estado}" in
     exec "$PY" panel_nativo.py
     ;;
   jugar)
-    ./herramientas/partida.sh prep
-    exec "$PY" panel_nativo.py
+    # `prep` ya abre el coach y el panel, y lo coloca en el monitor secundario.
+    # Antes se ejecutaba otro panel aquí: salían dos ventanas.
+    exec ./herramientas/partida.sh prep
     ;;
   estado)
     ./herramientas/partida.sh estado
