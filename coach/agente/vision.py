@@ -271,6 +271,21 @@ def tokens(respuesta: dict) -> int | None:
 
 
 # ---------------------------------------------------------------- tope por partida
+RUTA_USO = os.path.join(RAIZ, "salida", "vision_uso.json")
+
+
+def _persistir_uso(datos: dict, ruta: str | None = None):
+    """Deja el consumo de la partida en disco: sin esto no hay «tokens por partida»."""
+    destino = ruta or RUTA_USO
+    try:
+        os.makedirs(os.path.dirname(destino), exist_ok=True)
+        with open(destino + ".tmp", "w", encoding="utf-8") as f:
+            json.dump(datos, f, ensure_ascii=False)
+        os.replace(destino + ".tmp", destino)
+    except OSError:
+        pass
+
+
 class TopePartida:
     """Cuenta los cuadros de la partida en curso y avisa al 70 %."""
 
@@ -305,7 +320,11 @@ class TopePartida:
                            and self._gastados >= self.tope * self.aviso)
             if aviso_ahora:
                 self._avisado = True
-            return {"avisar_70": aviso_ahora, "gastados": self._gastados}
+            resumen = {"cuadros": self._gastados, "tope": self.tope,
+                       "tokens": self._tokens, "fallos": self._fallos,
+                       "ts": round(time.time(), 1)}
+        _persistir_uso(resumen)
+        return {"avisar_70": aviso_ahora, "gastados": self._gastados}
 
     def estado(self) -> dict:
         with self._lock:
