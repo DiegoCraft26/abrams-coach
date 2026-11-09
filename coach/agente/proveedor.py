@@ -6,6 +6,7 @@ y `Authorization: Bearer <clave>` responde 200. Todo va por urllib (stdlib).
 """
 from __future__ import annotations
 
+import base64
 import json
 import os
 import time
@@ -46,6 +47,15 @@ class ProveedorLLM(Protocol):
 
     def chat(self, mensajes: list[dict], herramientas: list[dict] | None = None,
              timeout_s: float = 45) -> dict: ...
+
+
+def soporta_vision(prov) -> bool:
+    """¿Ese proveedor puede leer imágenes?
+
+    Va aparte del protocolo a propósito: el modelo local no ve y aun así sirve para el
+    informe de partida. Quien manda una captura tiene que preguntarlo antes.
+    """
+    return callable(getattr(prov, "chat_vision", None))
 
 
 def leer_credencial(nombre: str) -> str | None:
@@ -150,6 +160,34 @@ class ProveedorOpenAICompatible:
                 raise
             time.sleep(1.0)
             return self._intentar(mensajes, herramientas, timeout_s)
+
+
+    def chat_vision(self, imagen: bytes, texto: str, sistema: str | None = None,
+                    timeout_s: float = 8.0, tipo: str = "image/jpeg") -> dict:
+        """Una llamada con imagen (content array de OpenAI + data URL).
+
+        No hay cadena de respaldo aquí: quién la usa decide a qué modelo manda una
+        captura de la partida. El reintento es el mismo que `chat`: uno, tras 1 s.
+        """
+        if not imagen:
+            raise ErrorProveedor(f"{self.nombre}: imagen vacía")
+        datos = base64.b64encode(imagen).decode("ascii")
+        mensajes: list[dict] = []
+        if sistema:
+            mensajes.append({"role": "system", "content": sistema})
+        mensajes.append({"role": "user", "content": [
+            {"type": "text", "text": texto},
+            {"type": "image_url",
+             "image_url": {"url": f"data:{tipo};base64,{datos}"}},
+        ]})
+        # Las herramientas no aplican a una lectura de pantalla y algunos modelos
+        # las rechazan junto con una imagen.
+        self_sin_tools = self.soporta_herramientas
+        try:
+            self.soporta_herramientas = False
+            return self.chat(mensajes, None, timeout_s=timeout_s)
+        finally:
+            self.soporta_herramientas = self_sin_tools
 
 
 def cadena_por_defecto() -> list[ProveedorOpenAICompatible]:
