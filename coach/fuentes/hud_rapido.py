@@ -16,14 +16,16 @@ import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
 
-from PIL import Image, ImageOps
+from PIL import Image
 
 # Cajas por defecto para 4480×1440 con el juego en DP-2 (x=1920..4480), medidas en la
 # sesión anterior: (izquierda, arriba, derecha, abajo) en coordenadas del escritorio.
+# Recalibradas el 2026-11-09 con una ranked en curso: el contador de almas estaba 500 px
+# a la izquierda y 200 px más abajo de donde decía la caja vieja, y el OCR leía basura.
 CAJAS_DEFECTO = {
     "reloj": (3150, 8, 3265, 52),
-    "banda_oro": (1950, 1080, 2450, 1440),
-    "oro": (2050, 1190, 2210, 1260),
+    "banda_oro": (2480, 900, 2780, 1100),
+    "oro": (2540, 958, 2720, 1012),
     "match": (4050, 1330, 4480, 1440),
 }
 REFERENCIA = (4480, 1440)
@@ -36,13 +38,18 @@ def _escalar(caja, tamano):
     return (int(caja[0] * fx), int(caja[1] * fy), int(caja[2] * fx), int(caja[3] * fy))
 
 
-def _ocr(imagen, caja, escala=6, whitelist="0123456789:", psm="7"):
-    """OCR de un recorte con el preprocesado que se midió como mejor (130 ms/12 números)."""
+def _ocr(imagen, caja, escala=6, whitelist="0123456789:", psm="7", umbral=140):
+    """OCR de un recorte con el preprocesado que se midió como mejor (130 ms/12 números).
+
+    Antes era `autocontrast` + `invert`, y contra el HUD real del juego fallaba: el reloj
+    salía vacío o como «7 5» (medido el 2026-11-09 con la partida abierta). Con un umbral
+    duro sobre el brillo, el mismo recorte lee «9:15» sin error en 130, 150 y 170. El
+    texto del HUD es blanco sobre fondo oscuro, así que no hay que invertir.
+    """
     recorte = imagen.crop(caja).convert("L")   # spectacle entrega RGBA
     recorte = recorte.resize((recorte.width * escala, recorte.height * escala),
                              Image.LANCZOS)
-    recorte = ImageOps.autocontrast(recorte)
-    recorte = ImageOps.invert(recorte)
+    recorte = recorte.point(lambda p: 255 if p > umbral else 0)
     # Archivo ÚNICO por llamada: el reloj y el oro se leen en paralelo y, compartiendo
     # nombre, una hebra pisaba la imagen de la otra (leía 3,807 donde decía 9,801).
     fd, ruta = tempfile.mkstemp(prefix="abrams-hud-", suffix=".png")
@@ -119,8 +126,9 @@ def leer(cuadro, cajas=None, color_oro=None, tolerancia=40):
         if not caja:
             caja = _escalar(cajas["oro"], tamano)
         texto = _ocr(cuadro, caja, 4, "0123456789,", "7")
-        numeros = [n for n in re.findall(r"\d[\d,]*", texto)
-                   if len(n.replace(",", "")) >= 1]
+        # La caja recorta solo la línea del número grande (la de «| 1789» queda fuera),
+        # así que el último número del recorte es el bueno.
+        numeros = re.findall(r"\d[\d,]*", texto)
         valor = None
         if numeros:
             try:

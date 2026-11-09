@@ -63,9 +63,12 @@ def main():
     check("otro oro", r2["oro"] == 9801, f"oro={r2['oro']}")
 
     # El oro se mueve 40 px a la derecha: con color configurado debe encontrarlo.
+    # La banda se toma de CAJAS_DEFECTO, no escrita a mano: cuando el 2026-11-09 se
+    # recalibró el HUD contra una partida real, las coordenadas fijas de aquí dejaban
+    # el número viejo a la vista y el OCR leía los dos superpuestos (353000).
     im3 = hud_sintetico("21:40", "3,200")
     d = ImageDraw.Draw(im3)
-    d.rectangle([1950, 1080, 2450, 1440], fill=(11, 14, 25))
+    d.rectangle(list(hud_rapido.CAJAS_DEFECTO["banda_oro"]), fill=(11, 14, 25))
     d.text((hud_rapido.CAJAS_DEFECTO["oro"][0] + 40, hud_rapido.CAJAS_DEFECTO["oro"][1]),
            "$3,200", font=_fuente(30), fill=VERDE_ORO)
     r3 = hud_rapido.leer(im3, color_oro=VERDE_ORO, tolerancia=60)

@@ -89,14 +89,32 @@ def _pedir(metodo, caja, timeout_ms):
     Gio, GLib, Image = _ESTADO["Gio"], _ESTADO["GLib"], _ESTADO["Image"]
     with _LOCK:
         trozos = []
+        estado = {"hecho": False, "esperado": 0}
         rd, wr = os.pipe()
         fds = Gio.UnixFDList.new()
         h = fds.append(wr)                    # extremo de ESCRITURA, no el de lectura
 
         def drenar():
-            """Vacía el pipe mientras KWin escribe; sin esto la llamada se queda colgada."""
+            """Vacía el pipe hasta juntar los bytes que anunció KWin.
+
+            Antes salía al primer hueco de 20 ms. Con cuadros grandes KWin escribe a
+            rachas y ese hueco no significa «se acabó»: la lectura quedaba a medias y el
+            llamador pagaba el plazo de 2 s y caía a `spectacle`. Medido el 2026-11-09
+            con el juego abierto: 3 de cada 6 capturas del escritorio volvían vacías y
+            los cuadros tardaban 2.8 s. Ahora solo se rinde si la respuesta ya llegó y
+            pasan 300 ms sin un solo byte.
+            """
+            vacios = 0
             try:
-                while select.select([rd], [], [], 0.02)[0]:
+                while True:
+                    if estado["esperado"] and sum(map(len, trozos)) >= estado["esperado"]:
+                        break
+                    if not select.select([rd], [], [], 0.03)[0]:
+                        vacios += 1
+                        if estado["hecho"] and vacios >= 10:
+                            break
+                        continue
+                    vacios = 0
                     b = os.read(rd, 1 << 20)
                     if not b:
                         break
@@ -104,9 +122,13 @@ def _pedir(metodo, caja, timeout_ms):
             except OSError:
                 pass
             finally:
-                os.close(rd)
+                try:
+                    os.close(rd)
+                except OSError:
+                    pass
 
-        threading.Thread(target=drenar, daemon=True).start()
+        hilo = threading.Thread(target=drenar, daemon=True)
+        hilo.start()
         opciones = GLib.Variant("a{sv}", {"include-cursor": GLib.Variant("b", False)})
         if caja:
             args = GLib.Variant.new_tuple(
@@ -125,11 +147,11 @@ def _pedir(metodo, caja, timeout_ms):
             return None
         finally:
             os.close(wr)                      # KWin no cierra el suyo: no hay EOF
+            estado["hecho"] = True
 
         esperado = int(meta.get("stride") or 0) * int(meta.get("height") or 0)
-        limite = time.perf_counter() + 2.0
-        while sum(map(len, trozos)) < esperado and time.perf_counter() < limite:
-            time.sleep(0.0005)
+        estado["esperado"] = esperado
+        hilo.join(1.0)                # dejar terminar al drenador en vez de esperar a ciegas
         datos = b"".join(trozos)
         if meta.get("format") != 16 or len(datos) < esperado:
             _ESTADO["error"] = (f"{metodo}: format={meta.get('format')} "
