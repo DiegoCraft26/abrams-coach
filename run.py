@@ -56,7 +56,7 @@ def bucle_vivo(a, analizar):
     items_previos, heroes_cta, compras = {}, {}, []
     st = {"match": None, "escucha": None, "ultimo_hud": 0.0,
           "tick": None, "tick_desde": time.time(), "avisado": False,
-          "ultimo_vivo": 0.0}
+          "ultimo_vivo": 0.0, "arranque": time.time()}
 
     # El descubrimiento del id va aparte. Antes se llamaba aquí dentro y, cuando la API
     # entraba en pausa por cuota o tardaba, el bucle entero se quedaba esperando: el
@@ -87,6 +87,12 @@ def bucle_vivo(a, analizar):
                 if (getattr(a, "pantalla", False) and publicar_pantalla(
                         estado_hud, analizar, medir_latencias(a), conoc)):
                     time.sleep(max(1.0, a.intervalo))
+                    continue
+                # Mientras el descubrimiento del id sigue en curso no se anuncia
+                # «apertura»: parpadeaba a los 0 s y a los 3 s cambiaba a la partida
+                # real. A los 6 s sin noticias ya es una respuesta.
+                if time.time() - st["arranque"] < 6.0:
+                    time.sleep(1.0)
                     continue
                 if publicar_apertura(conoc):
                     time.sleep(3.0)
