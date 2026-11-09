@@ -1,5 +1,7 @@
 # Abrams Coach
 
+[![ci](https://github.com/DiegoCraft26/abrams-coach/actions/workflows/ci.yml/badge.svg)](https://github.com/DiegoCraft26/abrams-coach/actions/workflows/ci.yml)
+
 Panel de decisiones para Deadlock. Lee tu partida desde la pantalla (HUD y marcador) y,
 cuando hay broadcast público, desde la API de espectador. Te dice qué comprar, cuándo
 ahorrar, cuándo vender y si el oro alcanza. Vive en un segundo monitor: **no dibuja nada
@@ -173,8 +175,8 @@ python3 coach/iconos.py                                  # baja el arte (una vez
 python3 herramientas/evaluar_motor.py --partidas 60      # A/B del motor
 ```
 
-La CI corre en Ubuntu con GTK bajo Xvfb, descarga los iconos y ejecuta la suite completa,
-incluida la puerta de pintado de la UI.
+La CI corre en Ubuntu 24.04 con GTK bajo Xvfb, en Python 3.12 y 3.13: descarga los
+iconos y ejecuta la suite completa, incluida la puerta de pintado de la UI.
 
 ## Assets y licencia
 
