@@ -98,6 +98,25 @@ def descubrir(cuenta=None, forzar=False, timeout=20.0, con_hud=True):
     if con_hud:
         mid = _leer_hud()
         if mid:
+            # El id del HUD se lee de una fuente pequeña y a veces se confunde. Si hay
+            # cuenta, se contrasta con la partida que la API le asigna: un id mal leído
+            # enganchaba una partida que no existe y el panel se quedaba sin datos.
+            if cuenta is not None:
+                try:
+                    de_cuenta = en_vivo.partida_activa(cuenta, timeout=timeout)
+                except Exception as exc:                       # noqa: BLE001
+                    de_cuenta = None
+                    en_vivo.DIARIO.error(f"descubrir/hud-validar: {type(exc).__name__}: {exc}")
+                if de_cuenta and int(de_cuenta) != int(mid):
+                    en_vivo.DIARIO.error(
+                        f"HUD {int(mid)} no coincide con la cuenta {cuenta} "
+                        f"({int(de_cuenta)}); se usa la cuenta")
+                    return _guardar(de_cuenta, "cuenta",
+                                    f"el HUD decía {int(mid)}, pero la cuenta está en "
+                                    f"{int(de_cuenta)}")
+                if de_cuenta:
+                    return _guardar(mid, "hud",
+                                    f"match id del HUD verificado con la cuenta ({int(mid)})")
             return _guardar(mid, "hud", f"match id leído del HUD ({int(mid)})")
 
     if cuenta is None:

@@ -75,6 +75,28 @@ def main():
     est2 = EV.interpretar(fs, cuenta=None, heroes={1: "Infernus", 10: "Paradox"},
                           heroe="paradox")
     probar("dos Paradox: no adivina cuál eres", "yo" not in est2)
+
+    # El id del HUD puede venir mal leído: si hay cuenta, manda la partida de la cuenta.
+    from coach.fuentes import api_vivo
+    original_hud, original_activa = api_vivo._leer_hud, EV.partida_activa
+    try:
+        api_vivo._leer_hud = lambda: 134344094
+        EV.partida_activa = lambda cuenta, timeout=20, unico=False: 134294885
+        api_vivo.olvidar()
+        r = api_vivo.descubrir(cuenta=376225059, forzar=True)
+        probar("HUD mal leído: gana la partida de la cuenta",
+               int(r.get("match") or 0) == 134294885 and r.get("via") == "cuenta",
+               str(r.get("match")))
+        api_vivo._leer_hud = lambda: 134294885
+        api_vivo.olvidar()
+        r = api_vivo.descubrir(cuenta=376225059, forzar=True)
+        probar("HUD correcto: se usa y se verifica",
+               int(r.get("match") or 0) == 134294885 and "verificado" in (r.get("detalle") or ""),
+               str(r.get("detalle")))
+    finally:
+        api_vivo._leer_hud = original_hud
+        EV.partida_activa = original_activa
+        api_vivo.olvidar()
     probar("no toca la red", True)
 
     fallos = [k for k, v in HECHOS.items() if not v]
