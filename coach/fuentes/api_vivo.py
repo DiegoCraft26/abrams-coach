@@ -124,12 +124,14 @@ def descubrir(cuenta=None, forzar=False, timeout=20.0, con_hud=True):
                 con_broadcast = set()
                 en_vivo.DIARIO.error(f"descubrir/hud-urls: {type(exc).__name__}: {exc}")
             if con_broadcast and int(mid) not in con_broadcast:
-                # La lista pública es el watch tab (top ~200): una ranked normal
-                # puede no aparecer aunque su id sea correcto. No se descarta; se
-                # intenta el stream y, si no hay datos, el modo pantalla lo dirá.
+                # Abrir el stream de un id que la lista no anuncia gasta una de las
+                # 6 consultas/hora y termina en 429. Se descarta y se sigue con la
+                # cuenta o el listado global.
                 en_vivo.DIARIO.error(
-                    f"HUD {int(mid)} no está en el watch tab; se intenta igual")
-            return _guardar(mid, "hud", f"match id del HUD ({int(mid)})")
+                    f"HUD {int(mid)} no está en la lista de retransmisiones; "
+                    f"se descarta para no gastar cuota")
+            else:
+                return _guardar(mid, "hud", f"match id del HUD ({int(mid)})")
 
     if cuenta is None:
         return _guardar(None, None, "sin cuenta: solo queda la capa del HUD")
