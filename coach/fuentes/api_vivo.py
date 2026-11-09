@@ -28,6 +28,7 @@ from coach import en_vivo
 
 TTL_S = 30.0             # una búsqueda cada 30 s: la caché de la API es de 120 s
 CADA_HUD_S = 10.0        # cadencia máxima de la capa 1
+CADA_LOG_S = 5.0         # el console.log es gratis: se puede leer más a menudo
 SONDEOS_PARA_UNICO = 3   # tres vacíos seguidos (90 s) -> una consulta sin caché
 # Un match_id al que se le abrió el stream y no dio un solo estado en este tiempo se
 # da por muerto: se suelta en vez de devolverlo una y otra vez desde la caché.
@@ -35,6 +36,7 @@ SIN_SENAL_S = 90.0
 
 _cache = {"match": None, "via": None, "detalle": "sin buscar", "ts": 0.0}
 _hud_ts = 0.0
+_log_ts = 0.0
 _vacios = 0
 
 
@@ -53,10 +55,43 @@ def _por_silencio():
     return edad is None or edad > SIN_SENAL_S
 
 
-def _guardar(match, via, detalle):
+def _guardar(match, via, detalle, rechazo=False, candidato=None):
+    """Guarda el resultado del descubrimiento y lo apunta en la telemetría.
+
+    Todo pasa por aquí a propósito: es el único sitio donde se decide qué partida se
+    cree el coach, así que es el único que hay que mirar cuando algo no cuadra.
+    """
+    from coach import telemetria
+
     _cache.update({"match": int(match) if match is not None else None,
                    "via": via, "detalle": detalle, "ts": time.time()})
+    telemetria.anotar("descubrir", match=_cache["match"], via=via,
+                      candidato=int(candidato) if candidato else None,
+                      rechazo=bool(rechazo), detalle=str(detalle)[:180])
     return dict(_cache, de_cache=False)
+
+
+def _leer_log():
+    """Capa 0: el match_id que el propio juego escribe en su console.log.
+
+    Es gratis (un archivo local), no gasta cuota y no depende de la red. Medido el
+    2026-11-09: coincide exactamente con el id que se lee del HUD. Cuando los dos
+    coinciden no hace falta preguntarle nada a la API: se ahorra la llamada que más
+    cuota gastaba.
+    """
+    global _log_ts
+    ahora = time.time()
+    if ahora - _log_ts < CADA_LOG_S:
+        return None
+    _log_ts = ahora
+    try:
+        from coach.fuentes import log_juego
+        if not log_juego.disponible():
+            return None
+        mid = log_juego.match_id()
+        return int(mid) if mid else None
+    except Exception:                                     # noqa: BLE001
+        return None
 
 
 def _leer_hud():
@@ -97,6 +132,25 @@ def descubrir(cuenta=None, forzar=False, timeout=20.0, con_hud=True):
 
     if con_hud:
         mid = _leer_hud()
+        id_log = _leer_log()
+        if mid and id_log and int(mid) == int(id_log):
+            # Dos fuentes independientes que coinciden: el id es el de la partida que
+            # se está jugando. Sin llamar a la API.
+            return _guardar(mid, "hud+log",
+                            f"el HUD y el console.log coinciden en {int(mid)}")
+        if mid and id_log and int(mid) != int(id_log):
+            # El HUD se lee de una imagen y a veces devuelve otro número; el
+            # console.log lo escribe el juego. Manda el texto, y la lectura del HUD
+            # queda anotada como rechazo para poder revisarla después.
+            from coach import telemetria
+            telemetria.anotar("hud_discrepa", candidato=int(mid), via="log",
+                              rechazo=True,
+                              detalle=f"el HUD decía {int(mid)}; el console.log dice "
+                                      f"{int(id_log)}")
+            mid = id_log
+        if mid is None and id_log:
+            # El console.log lo sabe aunque el HUD no se pueda leer (menú, HUD tapado).
+            mid = id_log
         if mid:
             # El id del HUD se lee de una fuente pequeña y a veces se confunde. Si hay
             # cuenta, se contrasta con la partida que la API le asigna; si no, se
@@ -130,6 +184,11 @@ def descubrir(cuenta=None, forzar=False, timeout=20.0, con_hud=True):
                 en_vivo.DIARIO.error(
                     f"HUD {int(mid)} no está en la lista de retransmisiones; "
                     f"se descarta para no gastar cuota")
+                from coach import telemetria
+                telemetria.anotar("hud_rechazado", candidato=int(mid), via="hud",
+                                  rechazo=True,
+                                  detalle="id del HUD fuera de la lista de "
+                                          "retransmisiones")
             else:
                 return _guardar(mid, "hud", f"match id del HUD ({int(mid)})")
 

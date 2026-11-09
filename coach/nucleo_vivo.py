@@ -262,7 +262,20 @@ def publicar_pantalla(estado_hud, analizar, latencias=None, conoc=None,
         "fuente": "pantalla",
         "notas": _notas_pantalla(oro),
     }
+    # Fase real del juego según el console.log: sirve para decir «en partida» sin
+    # adivinar cuando no hay broadcast ni HUD legible.
+    try:
+        from .fuentes import log_juego
+        fase_juego = log_juego.fase()
+        if fase_juego:
+            salida_fase = {"fase_juego": fase_juego,
+                           "heroe_juego": log_juego.heroe()}
+        else:
+            salida_fase = {}
+    except Exception:                                     # noqa: BLE001
+        salida_fase = {}
     salida = analizar(crudo)
+    salida.update(salida_fase)
     if not salida.get("plan"):
         salida["plan"] = plan_inicial(conoc)
     salida["oro"] = oro

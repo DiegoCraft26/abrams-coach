@@ -134,3 +134,22 @@ Medido con la partida en curso y la tienda **cerrada**:
 Cadencia: una lectura de tira cada 25 s y una mirada a la tienda cada 4 lecturas
 (~100 s). Cuando Diego abre B, la siguiente mirada trae los ítems; si está cerrada, no se
 toca el inventario y el estado sigue diciendo «solo reloj».
+
+## Identidad: el console.log del juego como fuente de primera
+
+Medido el 2026-11-09 con una ranked en curso:
+
+| Dato | Valor |
+|---|---|
+| `console.log` → match | 134452212 |
+| HUD (lectura de imagen) → match | 134452212 |
+| Lista de retransmisiones de la API | 134452212 **no está** (59 en vivo) |
+
+Dos fuentes independientes que coinciden valen más que una llamada a la API: cuando el
+HUD y el `console.log` dan el mismo id, el coach lo da por bueno **sin gastar cuota**
+(`via: hud+log`). Si discrepan, manda el texto del `console.log` y la lectura del HUD se
+anota como rechazo en `salida/telemetria.jsonl`.
+
+`/api/identidad` enseña la decisión, la fase y el héroe del juego y el resumen de la
+telemetría (eventos, por vía, rechazos). En la sesión de hoy: 28 eventos, vías
+`hud+log` 8 · `hud` 10 · `cuenta` 5 · `log` 1, con 5 rechazos apuntados.

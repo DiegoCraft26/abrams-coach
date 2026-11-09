@@ -223,6 +223,23 @@ class Manejador(BaseHTTPRequestHandler):
                 datos["edad_s"] = round(edad, 1) if edad is not None else None
                 datos["rancio"] = bool(edad is not None and edad > UMBRAL_RANCIO_S)
             self._enviar(200, datos)
+        elif ruta == "/api/identidad":
+            # Qué partida se cree el coach, por qué vía y qué dice el console.log del
+            # juego. Es el endpoint para responder «¿por qué no enganchó mi partida?».
+            from coach import telemetria
+            from coach.fuentes import api_vivo, log_juego
+            try:
+                log = {"disponible": log_juego.disponible(), "fase": log_juego.fase(),
+                       "heroe": log_juego.heroe(), "match": log_juego.match_id(),
+                       "cuenta": log_juego.cuenta()}
+            except Exception:                              # noqa: BLE001
+                log = {"disponible": False}
+            self._enviar(200, {
+                "descubrimiento": api_vivo.estado(),
+                "console": log,
+                "telemetria": telemetria.resumen(),
+                "ultimos": telemetria.leer(10),
+            })
         elif ruta == "/api/vision":
             # Lo que la visión sabe, sin imágenes ni claves: inventario con su edad y el
             # estado de la cola (cuántos cuadros van, cuántos fallaron, si se agotó).
