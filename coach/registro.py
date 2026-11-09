@@ -29,6 +29,9 @@ def anotar(resultado, estado_dict):
         "venta": venta,
         "ms": resultado.get("ms"),
         "fuente": estado_dict.get("fuente"),
+        # Para poder reconstruir una queja como "me mandó a vender algo que no tenía".
+        "items": [str(i) for i in yo.get("items") or []],
+        "venta_id": (resultado.get("venta") or {}).get("vender"),
     }
     with open(RUTA, "a") as f:
         f.write(json.dumps(fila, ensure_ascii=False) + "\n")

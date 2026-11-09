@@ -570,7 +570,7 @@ def sugerir_venta(estado: Estado, conoc, cat, cfg=CFG_DEFECTO, filas=None):
         if f["ahorro"]:
             motivo += (f"; pagas {f['costo']:,} por lo que ya llevas "
                        f"(lista {f['costo_lista']:,})")
-        return {"vender": peor, "nombre": nombre_peor,
+        return {"vender": peor, "nombre": nombre_peor, "slot": f["slot"],
                 "comprar": f["id"], "para": f["nombre"], "costo": f["costo"],
                 "ahorro": f["ahorro"], "ganancia_pp": round(mejora_pp, 2),
                 "se_vende": f"{info_peor.get('tasa_venta',0)*100:.0f}% de las partidas",
@@ -589,8 +589,27 @@ def recomendar(estado: Estado, conoc, cat, cfg=None):
     # en vez de enseñar siempre un tier 4 que no alcanza.
     top, filas = candidatos(estado, conoc, cat, cfg, limite=10, heroe=h)
     venta = sugerir_venta(estado, conoc, cat, cfg, filas)
+    poseidos = {str(i) for i in estado.yo.items}
+    # Una venta de algo que ya no está en el inventario es basura: si el estado cambió
+    # entre la lectura y el cálculo, se descarta.
+    if venta and str(venta.get("vender")) not in poseidos:
+        venta = None
     almas = estado.yo.almas or 0
-    decision = camino_mod.decidir(estado, conoc, cat, cfg, heroe=h, venta=venta)
+    # Counter de composición: se calcula con la misma señal de datos que el ranking
+    # (matchup de 1.9 M de partidas) y la composición enemiga.
+    heroes_enemigos = [j.heroe for j in estado.enemigos if j.heroe]
+    indice = conoc.get("heroes_index", {})
+    senal_datos = {iid: _bonus_counter(iid, heroes_enemigos, conoc, cfg, indice)
+                   for iid in situacionales.SITUACIONALES}
+    ctx_puntos, ctx_razones = situacionales.bonus_contexto(
+        heroes_enemigos, senal_datos=senal_datos)
+    contra = {iid: {"puntos": puntos, "razon": ctx_razones.get(iid, "")}
+              for iid, puntos in ctx_puntos.items()}
+    decision = camino_mod.decidir(estado, conoc, cat, cfg, heroe=h, venta=venta,
+                                  contra=contra)
+    # La venta solo se enseña si es para el ítem que de verdad toca comprar.
+    if venta and decision.get("item") and str(venta.get("comprar")) != str(decision["item"]["id"]):
+        venta = None
 
     def _fila(iid):
         return next((f for f in filas if f["id"] == str(iid)), None)
@@ -709,6 +728,14 @@ def recomendar(estado: Estado, conoc, cat, cfg=None):
     contra = situacionales.sugerencias_composicion(
         heroes_enemigos, estado.yo.items, residuales=residuales,
         ganancia=gan["lift"], motivo_ajuste=motivo_ganancia(gan))
+    # Huecos por categoría: el panel puede decir "3/4 weapon" sin recalcular nada.
+    slots = {}
+    for categoria, tope in (cfg.get("slots") or {}).items():
+        usados = sum(1 for iid in poseidos
+                     if (conoc["items"].get(iid) or {}).get("slot") == categoria)
+        slots[categoria] = {"usados": usados, "total": int(tope),
+                            "libres": max(0, int(tope) - usados)}
+
     return {
         "t": estado.t,
         "estado": tactico,
@@ -720,6 +747,7 @@ def recomendar(estado: Estado, conoc, cat, cfg=None):
         "recomendaciones": top,
         "venta": venta,
         "decision": decision,
+        "slots": slots,
         "bolsillo": decision.get("bolsillo"),
         "camino": decision.get("camino") or [],
         "plan": plan,

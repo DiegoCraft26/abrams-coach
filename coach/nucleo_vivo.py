@@ -51,7 +51,9 @@ def estado_desde_vivo(est, cuenta=None):
     def limpio(lista):
         return [{"heroe": j.get("heroe"), "almas": j.get("almas"),
                  "bajas": j.get("bajas") or 0, "muertes": j.get("muertes") or 0,
-                 "asistencias": j.get("asistencias") or 0}
+                 "asistencias": j.get("asistencias") or 0,
+                 # Ítems visibles en el broadcast: base para counterear lo que compran.
+                 "items": [str(x) for x in (j.get("items") or [])]}
                 for j in lista if str(j.get("cuenta")) != cuenta_txt]
 
     return {

@@ -69,13 +69,14 @@ class Sondeo(threading.Thread):
         self.error = None
         self.firma = None
         self.parar = False
+        self._ultimo_error_log = 0.0
 
     def run(self):
         while not self.parar:
             t0 = time.perf_counter()
             try:
                 req = urllib.request.Request(self.url, headers={"Accept": "application/json"})
-                with urllib.request.urlopen(req, timeout=3) as r:
+                with urllib.request.urlopen(req, timeout=5) as r:
                     datos = json.load(r)
                 firma = hashlib.blake2b(
                     json.dumps(datos, sort_keys=True, default=str).encode(),
@@ -85,6 +86,13 @@ class Sondeo(threading.Thread):
             except Exception as exc:                       # noqa: BLE001
                 with self.lock:
                     self.error = str(exc)
+                # Deja rastro para saber si el panel perdió el hilo de verdad o solo
+                # fue una lectura lenta; el refresco no debe bloquear la UI.
+                ahora = time.time()
+                if ahora - self._ultimo_error_log > 10:
+                    self._ultimo_error_log = ahora
+                    print(f"{time.strftime('%H:%M:%S')} sin respuesta: {exc}",
+                          flush=True)
             time.sleep(max(0.1, self.intervalo - (time.perf_counter() - t0)))
 
     def ultimo(self):

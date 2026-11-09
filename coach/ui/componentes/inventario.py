@@ -25,6 +25,8 @@ class Inventory(Gtk.Box):
         self.flow.set_min_children_per_line(1)
         self.flow.set_column_spacing(4)
         self.flow.set_row_spacing(4)
+        self.lbl_slots = etiqueta("", "t11 apagado")
+        self.append(self.lbl_slots)
         self.append(self.flow)
         self._firma = None
         self._rellenar([])
@@ -38,12 +40,25 @@ class Inventory(Gtk.Box):
         self._firma = None
 
     def actualizar(self, d):
-        inv = (d or {}).get("inventario") or []
-        firma = (self.lado, tuple((x.get("id"), x.get("valor")) for x in inv))
+        d = d or {}
+        inv = d.get("inventario") or []
+        slots = d.get("slots") or {}
+        firma = (self.lado, tuple((x.get("id"), x.get("valor")) for x in inv),
+                 tuple(sorted((k, v.get("usados"), v.get("total"))
+                              for k, v in slots.items())))
         if firma == self._firma:
             return
         self._firma = firma
         self._rellenar(inv)
+        # Huecos por categoría: "arma 3/4 · vitalidad 4/4 · espíritu 2/4".
+        nombres = {"weapon": "arma", "vitality": "vitalidad", "spirit": "espíritu"}
+        partes = []
+        for clave in ("weapon", "vitality", "spirit"):
+            datos = slots.get(clave) or {}
+            if datos:
+                partes.append(f"{nombres[clave]} {datos.get('usados', 0)}/"
+                              f"{datos.get('total', 0)}")
+        self.lbl_slots.set_label(" · ".join(partes))
 
     def _rellenar(self, inv):
         vaciar(self.flow)

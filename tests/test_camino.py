@@ -10,11 +10,13 @@ from coach.estado import Estado  # noqa: E402
 from coach.motor_api import Motor  # noqa: E402
 
 
-def _estado(t, almas, items, oro=None):
+def _estado(t, almas, items, oro=None, enemigos=None):
     yo = {"heroe": "Abrams", "almas": almas, "items": items}
     if oro is not None:
         yo["oro"] = oro
-    return {"t": t, "yo": yo, "enemigos": [], "aliados": [], "fuente": "manual"}
+    return {"t": t, "yo": yo,
+            "enemigos": [{"heroe": h, "almas": almas} for h in (enemigos or [])],
+            "aliados": [], "fuente": "manual"}
 
 
 def main():
@@ -91,6 +93,18 @@ def main():
         check("el componente del objetivo se compra",
               d["accion"] == "COMPRAR" and d["modo"] == "componente",
               f'{d["item"]["nombre"]} de {p["nombre"]}')
+
+    # Rama por composición: dos móviles justifican antimovilidad; sin enemigos no.
+    r = m.analizar_dict(_estado(900, 6000, [], enemigos=["haze", "seven", "lash"]))
+    d = r["decision"]
+    check("con dos móviles la rama es antimovilidad",
+          (d.get("item") or {}).get("nombre") == "Slowing Bullets"
+          and "slow con balas" in (d.get("motivo") or ""),
+          str((d.get("item") or {}).get("nombre")))
+    check("los slots se publican con sus huecos",
+          r.get("slots", {}).get("weapon", {}).get("total") == 4
+          and "libres" in r.get("slots", {}).get("weapon", {}),
+          str(r.get("slots")))
 
     # Vender cuando el slot del objetivo está lleno: se consulta el decisor con una
     # venta disponible para no depender de que `sugerir_venta` la encuentre.

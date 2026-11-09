@@ -155,6 +155,7 @@ def bucle_vivo(a, analizar):
             servidor.EST.publicar(salida)
             st["ultimo_vivo"] = time.time()      # hubo broadcast: el respaldo no entra
         except Exception as exc:                                    # noqa: BLE001
+            print(f"error en vivo: {type(exc).__name__}: {exc}", flush=True)
             servidor.EST.publicar({"listo": False, "mensaje": f"error en vivo: {exc}"})
         time.sleep(max(1.0, a.intervalo))
 

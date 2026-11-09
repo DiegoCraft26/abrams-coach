@@ -38,6 +38,11 @@ class Ventas(Gtk.Box):
             caja.append(etiqueta(rotulo, "t11 tenue"))
         texto = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=2)
         texto.set_hexpand(True)
+        # Nombre y slot explícitos: "vende X (arma)" y no solo un icono.
+        quien = venta.get("nombre") or venta.get("vender") or "ese ítem"
+        slot = venta.get("slot")
+        texto.append(etiqueta(f"Vende {quien}" + (f" · {slot}" if slot else ""),
+                              "t12 fuerte"))
         motivo = etiqueta(venta.get("motivo") or "", "t12 tenue")
         envolver(motivo, 40)
         texto.append(motivo)

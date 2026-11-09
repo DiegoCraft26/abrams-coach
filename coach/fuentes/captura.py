@@ -9,10 +9,10 @@ Medido en la máquina de desarrollo, escritorio 4480×1440:
     KWin CaptureWorkspace ............ 34 ms en frío, 38 ms de mediana ya en el ciclo
     tesseract (recorte) .............. 94 ms
 
-Con KWin el ciclo baja de ~490 ms a ~40 ms, así que el intervalo por defecto es 0.15 s
-(5.5 Hz, 10.4 % de un núcleo medido el 2026-11-08) en vez de 0.05 s, que con la captura
-barata sería demasiado rato componiendo cuadros. Si KWin no contesta en 300 ms, se cae a
-`spectacle` como antes.
+Con KWin el ciclo baja de ~490 ms a ~40 ms. El intervalo por defecto es 0.5 s (2 Hz):
+el reloj del HUD cambia una vez por segundo y el marcador se lee del último cuadro, así
+que capturar a 5.5 Hz solo gastaba GPU en recomponer cuadros. Si KWin no contesta en
+300 ms, se cae a `spectacle` como antes.
 
 El hilo no se enciende solo: lo enciende `coach.nucleo_vivo.hilo_hud` cuando hay juego
 abierto y lo para cuando no, que es cuando no hay nada que leer.
@@ -35,7 +35,7 @@ ESPECTACLE = ["spectacle", "-b", "-n", "-f", "-o"]
 class CapturaCompartida:
     """Un hilo que captura sin parar y publica el último cuadro con su hora."""
 
-    def __init__(self, ruta=RUTA_CUADRO, intervalo=0.15, comando=None):
+    def __init__(self, ruta=RUTA_CUADRO, intervalo=0.5, comando=None):
         self.ruta = ruta
         self.intervalo = intervalo
         self.comando = comando      # None = KWin; una lista = ese comando y su archivo

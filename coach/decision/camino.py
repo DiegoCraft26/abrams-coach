@@ -169,21 +169,154 @@ def tasa_almas(conoc, heroe, t_s):
     return max(CFG_CAMINO["eta_min_tasa"], tasa)
 
 
-def _siguiente(conoc, cat, camino, poseidos, superados):
-    for p in camino:
-        if str(p["id"]) in poseidos or str(p["id"]) in superados:
+def _elegible(conoc, p, t, permitir_apertura=True):
+    """¿Tiene sentido comprar este paso a estas alturas de la partida?
+
+    Antes el camino era fijo y, si el jugador se saltaba la apertura, a los 30 minutos
+    seguía recomendando Restorative Shot. Aquí se descarta lo que ya pasó de su ventana:
+    - después de 10 min no se compran más 800 de apertura;
+    - después de 20 min no se compran piezas de 1,600 salvo que sean componente;
+    - si su `min_compra` quedó más de 10 min atrás, se saltó el momento.
+    """
+    costo = p.get("costo") or 0
+    if costo <= 800 and not permitir_apertura:
+        return False
+    if t >= 1200 and costo < 1600:
+        return False
+    mc = (conoc["items"].get(str(p["id"])) or {}).get("min_compra")
+    if mc:
+        min_s = mc / 100.0 * 2400.0
+        if t > min_s + 600:
+            return False
+    return True
+
+
+def _mejoras(conoc, cat, poseidos, superados, t):
+    """Upgrades directos de lo que ya llevas, con su popularidad en el grafo."""
+    from ..motor import mapa_componentes
+    reversa = {}
+    for item, comps in mapa_componentes().items():
+        for comp in comps:
+            reversa.setdefault(str(comp), []).append(str(item))
+    sig = (conoc.get("flujo") or {}).get("siguiente") or {}
+    salida = []
+    for propio in poseidos:
+        base = _costo(conoc, propio)
+        for up in reversa.get(propio, []):
+            if up in poseidos or up in superados:
+                continue
+            if not (cat.get(up) or {}).get("comprable", True):
+                continue
+            info = conoc["items"].get(up)
+            if not info:
+                continue
+            costo = info.get("costo") or 0
+            # Un upgrade de 6,400 sobre un 800 no es "completar el ítem", es abrir otra
+            # rama: eso lo decide el camino, no el inventario.
+            if base and costo > max(2 * base, base + 1600):
+                continue
+            if t < 600 and costo > 1600:
+                continue
+            if t < 1200 and costo > 3200:
+                continue
+            n = next((e.get("n") or 0 for e in sig.get(propio, [])
+                      if str(e.get("id")) == up), 0)
+            salida.append((n, -costo, {
+                "id": up, "nombre": info.get("nombre", up), "costo": costo,
+                "slot": info.get("slot") or cat.get(up, {}).get("slot"),
+                "etapa": _etapa(costo), "icono": f"/icono/{up}"}))
+    salida.sort(reverse=True, key=lambda x: (x[0], x[1]))
+    return salida
+
+
+def _hueco(conoc, cat, poseidos, iid):
+    """¿Cabe en su slot? (4 por categoría; los componentes se absorben)."""
+    slot = _slot(conoc, cat, iid)
+    if not slot:
+        return False
+    return sum(1 for i in poseidos if _slot(conoc, cat, i) == slot) < 4
+
+
+def _objetivo(conoc, cat, camino, poseidos, superados, t, contra=None):
+    """Siguiente compra: counter fuerte, upgrade de lo que llevas, o camino por fase."""
+    mejoras = _mejoras(conoc, cat, poseidos, superados, t)
+    # La apertura dura mientras no lleves las tres piezas y no pases del minuto 12.
+    # Así no hay un escalón exacto en el 600 que cambie la compra entre dos lecturas
+    # separadas por 5 s, y a los 30 min no vuelve a pedir un 800.
+    aperturas = sum(1 for p in camino
+                    if (p.get("costo") or 0) <= 800 and str(p["id"]) in poseidos)
+    permitir_apertura = t < 720 and aperturas < 3
+    camino_elegible = [p for p in camino
+                       if str(p["id"]) not in poseidos
+                       and str(p["id"]) not in superados
+                       and _elegible(conoc, p, t, permitir_apertura)]
+
+    # 1) Counter de composición: si hay 2-3 enemigos que lo justifican y el ítem cae
+    #    en la fase actual, entra como paso del camino. Es la rama que cambia según
+    #    contra quién juegas, no un adorno del ranking.
+    elegido_contra = None
+    # En los primeros minutos manda la apertura: no se guarda para un counter de 1,600
+    # con dos 800 sin comprar. A partir de ahí, la composición sí puede desviar la rama.
+    if len(poseidos) < 2 and t < 480:
+        contra = {}
+    for iid, datos in sorted((contra or {}).items(),
+                             key=lambda kv: -float(kv[1].get("puntos") or 0)):
+        if float(datos.get("puntos") or 0) < 2.5:
             continue
-        return p
-    return None
+        if str(iid) in poseidos or str(iid) in superados:
+            continue
+        info = conoc["items"].get(str(iid))
+        if not info or not (cat.get(str(iid)) or {}).get("comprable", True):
+            continue
+        ficha = {"id": str(iid), "nombre": info.get("nombre", iid),
+                 "costo": info.get("costo") or 0,
+                 "slot": info.get("slot") or cat.get(str(iid), {}).get("slot"),
+                 "etapa": _etapa(info.get("costo") or 0),
+                 "icono": f"/icono/{iid}"}
+        if not _elegible(conoc, ficha, t, permitir_apertura) or not _hueco(conoc, cat, poseidos, iid):
+            continue
+        if t < 600 and ficha["costo"] > 1600:
+            continue
+        if t < 1200 and ficha["costo"] > 3200:
+            continue
+        ficha["contra"] = datos.get("razon") or "counter de su composición"
+        elegido_contra = ficha
+        break
+
+    # 2) Upgrade directo de lo que ya llevas: completar lo que pagaste rinde más que
+    #    abrir otra rama (era el caso de Slowing Bullets sin subir).
+    if elegido_contra:
+        candidato = elegido_contra
+    elif mejoras:
+        candidato = mejoras[0][2]
+    elif camino_elegible:
+        candidato = camino_elegible[0]
+    else:
+        # Último recurso: algo del camino que no sea apertura tardía.
+        candidato = next((p for p in camino
+                          if str(p["id"]) not in poseidos
+                          and str(p["id"]) not in superados
+                          and (permitir_apertura or (p.get("costo") or 0) > 800)), None)
+    if candidato is None:
+        return None
+
+    # Determinista: el objetivo depende solo de este estado (reloj en bloques de
+    # 10 s, inventario, oro y enemigos). Sin memoria entre llamadas no hay rebotes
+    # raros ni decisiones que dependan de lo que se consultó antes.
+    return candidato
 
 
-def decidir(estado, conoc, cat, cfg=None, heroe=None, venta=None):
+def decidir(estado, conoc, cat, cfg=None, heroe=None, venta=None, contra=None):
     """Estado de la compra: COMPRAR / AHORRAR / VENDER, con ETA y camino."""
     cfg = {**CFG_CAMINO, **(cfg or {})}
     camino = construir(conoc, cat, heroe)
     poseidos = {str(i) for i in estado.yo.items}
     superados = _componentes(poseidos)
-    objetivo = _siguiente(conoc, cat, camino, poseidos, superados)
+    # Mismo bloque de 10 s que el resto del motor: dos lecturas del mismo momento
+    # tienen que dar exactamente la misma compra.
+    t_ef = (int(max(0.0, float(estado.t))) // 10) * 10
+    objetivo = _objetivo(conoc, cat, camino, poseidos, superados, t_ef,
+                         contra=contra)
     if objetivo is None:
         return {"accion": "COMPRAR", "modo": "completo", "item": None,
                 "objetivo": None, "faltan": 0, "eta_s": 0, "bolsillo": _bolsillo(estado, conoc),
@@ -191,6 +324,7 @@ def decidir(estado, conoc, cat, cfg=None, heroe=None, venta=None):
                 "camino": [], "alternativas": []}
 
     bolsillo = _bolsillo(estado, conoc)
+    sufijo = f" · {objetivo['contra']}" if objetivo.get("contra") else ""
     costo, ahorro, lista = _costo_efectivo(conoc, cat, objetivo["id"], poseidos)
     faltan = max(0, costo - bolsillo)
     eta = int(-(-faltan // max(1.0, tasa_almas(conoc, heroe, estado.t))))
@@ -220,8 +354,8 @@ def decidir(estado, conoc, cat, cfg=None, heroe=None, venta=None):
                                   ahorro, lista),
                 "faltan": 0, "eta_s": 0,
                 "motivo": (f"componente de {objetivo['nombre']}: se absorbe al "
-                           f"comprarlo y pagas {c_comp:,} ahora"),
-                "camino": _tiles(camino, poseidos, superados, objetivo["id"]),
+                           f"comprarlo y pagas {c_comp:,} ahora" + sufijo),
+                "camino": _tiles(camino, poseidos, superados, objetivo),
                 "alternativas": []}
 
     # 2) Slot lleno: se vende antes de comprar.
@@ -229,15 +363,15 @@ def decidir(estado, conoc, cat, cfg=None, heroe=None, venta=None):
     usados = sum(1 for i in poseidos
                  if _slot(conoc, cat, i) == slot)
     if venta and slot and usados >= 4 and costo <= bolsillo:
-        pieza = venta.get("se_vende") or venta.get("para")
+        pieza = venta.get("nombre") or venta.get("vender") or "ese ítem"
         return {"accion": "VENDER", "modo": "slot", "bolsillo": bolsillo,
                 "item": ficha(objetivo["id"], objetivo["nombre"], costo, ahorro, lista),
                 "objetivo": ficha(objetivo["id"], objetivo["nombre"], costo,
                                   ahorro, lista),
                 "faltan": faltan, "eta_s": eta,
                 "motivo": (f"slot {slot} lleno: vende {pieza} y compra "
-                           f"{objetivo['nombre']}"),
-                "camino": _tiles(camino, poseidos, superados, objetivo["id"]),
+                           f"{objetivo['nombre']}" + sufijo),
+                "camino": _tiles(camino, poseidos, superados, objetivo),
                 "alternativas": []}
 
     # 3) ¿Alcanza?
@@ -248,40 +382,51 @@ def decidir(estado, conoc, cat, cfg=None, heroe=None, venta=None):
                                   ahorro, lista),
                 "faltan": 0, "eta_s": 0,
                 "motivo": (f"siguiente paso del camino ({objetivo['etapa']})"
-                           + (f"; pagas {costo:,} con lo que ya llevas" if ahorro else "")),
-                "camino": _tiles(camino, poseidos, superados, objetivo["id"]),
+                           + (f"; pagas {costo:,} con lo que ya llevas" if ahorro else "")
+                           + sufijo),
+                "camino": _tiles(camino, poseidos, superados, objetivo),
                 "alternativas": []}
 
     # 4) Ahorrar / rush / farmear.
     if faltan <= cfg["ahorro_faltan"] and eta <= cfg["ahorro_eta_s"]:
         modo, etiqueta = "ahorro", "AHORRAR"
-        motivo = f"faltan {faltan:,} almas; a tu ritmo son {eta} s"
+        motivo = f"faltan {faltan:,} almas; a tu ritmo son {eta} s" + sufijo
     elif lista >= cfg["rush_costo"] and eta <= cfg["rush_eta_s"]:
         modo, etiqueta = "rush", "AHORRAR"
         motivo = (f"rush a {objetivo['nombre']} ({lista:,}): faltan {faltan:,} "
-                  f"y llegas en {eta} s")
+                  f"y llegas en {eta} s" + sufijo)
     else:
         modo, etiqueta = "farm", "AHORRAR"
         motivo = (f"farmea {faltan:,} almas para {objetivo['nombre']} "
-                  f"(ETA {eta} s); no gastes en un 800 suelto")
+                  f"(ETA {eta} s); no gastes en un 800 suelto" + sufijo)
     return {"accion": etiqueta, "modo": modo, "bolsillo": bolsillo,
             "item": ficha(objetivo["id"], objetivo["nombre"], costo, ahorro, lista),
             "objetivo": ficha(objetivo["id"], objetivo["nombre"], costo, ahorro, lista),
             "faltan": faltan, "eta_s": eta, "motivo": motivo,
-            "camino": _tiles(camino, poseidos, superados, objetivo["id"]),
+            "camino": _tiles(camino, poseidos, superados, objetivo),
             "alternativas": []}
 
 
-def _tiles(camino, poseidos, superados, objetivo_id):
+def _tiles(camino, poseidos, superados, objetivo):
     """Los siguientes 5 pasos, con su estado, para la tira del panel."""
+    oid = str(objetivo["id"])
+    idx = next((i for i, p in enumerate(camino) if str(p["id"]) == oid), None)
+    if idx is not None:
+        secuencia = camino[idx:idx + 5]
+    else:
+        # El objetivo es un upgrade que no está en el camino fijo (p. ej. el de
+        # Slowing Bullets): se pone delante y detrás van los siguientes pasos.
+        resto = [p for p in camino
+                 if str(p["id"]) not in poseidos
+                 and str(p["id"]) not in superados
+                 and str(p["id"]) != oid]
+        secuencia = [objetivo] + resto[:4]
     salida = []
-    for p in camino:
+    for p in secuencia:
         iid = str(p["id"])
-        if len(salida) >= 5:
-            break
         if iid in poseidos or iid in superados:
             estado = "tienes"
-        elif iid == str(objetivo_id):
+        elif iid == oid:
             estado = "ahora"
         else:
             estado = "despues"

@@ -152,7 +152,11 @@ El motor ya no puntúa ítems sueltos. Arma una secuencia con el grafo de compra
 - **COMPRAR** si lo pagas (o si pagas un componente suyo, que se absorbe al subir).
 - **AHORRAR** si no alcanza: `faltan N almas`, `ETA` en segundos, y si es un ítem caro
   el modo es `rush`; si el ETA es largo, `farm`.
-- **VENDER** si el slot está lleno y conviene vender antes de comprar.
+- **VENDER** si el slot está lleno: dice **qué ítem** y de qué slot, no un icono suelto.
+- **Rama por composición**: con dos o más móviles entra antimovilidad, con control entra
+  anticontrol, con burst spirit entra antispirit, pero solo si el matchup de 1.9 M de
+  partidas lo respalda. Si los datos no apoyan el counter, no se inventa.
+- El inventario muestra los huecos por categoría (`arma 3/4 · vitalidad 4/4 · espíritu 2/4`).
 
 Medido sobre 626 partidas reales: **1.39 ítems de 800** de media en los primeros 10
 minutos (máximo 3), 1.8 ms por decisión. Antes eran 4–5.

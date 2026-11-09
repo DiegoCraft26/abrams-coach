@@ -11,6 +11,10 @@
 - Motor con componentes, frescura de datos y filtro por oro; 4.5 ms por decisión.
 - Build como camino apertura → core → spike, con estado COMPRAR/AHORRAR/VENDER, ETA y
   componentes del objetivo. Baja de 4–5 a 1.4 ítems de 800 en los primeros 10 minutos.
+- El objetivo ya no retrocede a la apertura a los 30 minutos ni ignora los upgrades de
+  lo que llevas; la rama cambia con la composición enemiga cuando los datos la apoyan.
+- Ventas con nombre y slot; huecos de inventario por categoría.
+- Captura compartida a 2 Hz (antes 5.5) y menos trabajo de OCR por segundo.
 - Base SQLite con archivado idempotente e informe de partida.
 - Repo público: fuera datos personales, cuentas y arte de Valve; iconos en runtime.
 - CI real: GTK bajo Xvfb, suite completa, motor sobre muestra anonimizada.
