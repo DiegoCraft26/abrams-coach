@@ -15,7 +15,25 @@ from pathlib import Path
 from typing import Protocol, runtime_checkable
 
 AGENTE_USUARIO = "abrams-coach/1.0"
-RUTA_CREDENCIALES = Path.home() / ".dsh" / ".credentials.yaml"
+
+
+def _ruta_credenciales() -> Path:
+    """Dónde buscar las claves del informe opcional.
+
+    `ABRAMS_CREDENCIALES` manda. Si no, `~/.config/abrams-coach/credenciales.yaml`.
+    Se conserva la ruta vieja de la máquina de desarrollo como último recurso.
+    """
+    elegida = os.environ.get("ABRAMS_CREDENCIALES")
+    if elegida:
+        return Path(elegida).expanduser()
+    nueva = Path.home() / ".config" / "abrams-coach" / "credenciales.yaml"
+    if nueva.exists():
+        return nueva
+    vieja = Path.home() / ".dsh" / ".credentials.yaml"
+    return vieja if vieja.exists() else nueva
+
+
+RUTA_CREDENCIALES = _ruta_credenciales()
 
 
 class ErrorProveedor(Exception):
@@ -31,7 +49,7 @@ class ProveedorLLM(Protocol):
 
 
 def leer_credencial(nombre: str) -> str | None:
-    """Lee una clave de la sección `refs` de `~/.dsh/.credentials.yaml`.
+    """Lee una clave de la sección `refs` del archivo de credenciales.
 
     Parseo por líneas sin dependencias. El valor nunca se imprime ni se
     loguea: solo se devuelve. Si el archivo o la entrada no existen, None.

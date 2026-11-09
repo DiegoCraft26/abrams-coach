@@ -162,7 +162,7 @@ def veredicto(diag, timeout_s=20.0):
     if not prov.hay_clave():
         return {"texto": None, "modelo": prov.modelo, "proveedor": prov.nombre,
                 "motivo": (f"falta la clave {prov.clave_env}: no está en el entorno "
-                           "ni en ~/.dsh/.credentials.yaml")}
+                           "ni en ~/.config/abrams-coach/credenciales.yaml")}
     mensajes = [{"role": "system", "content": SISTEMA_REVISION},
                 {"role": "user", "content": json.dumps(diag, ensure_ascii=False)}]
     try:
