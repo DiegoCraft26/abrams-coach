@@ -25,6 +25,8 @@ experimentos/
 salida/archivo/
 RELEVO.md
 docs/SIGUIENTE-CHAT.md
+docs/PROCESO-REVISION.md
+docs/historia/
 
 # Datos crudos grandes (se bajan con mineria.py / descargar_partidas.py).
 data/ability-order.json

@@ -77,7 +77,7 @@ El clip de ±1.0 lo convierte en desempate y no en volantazo: el hueco top-1/top
 ## Cómo se verifica
 
 ```
-cd .
+cd abrams-coach
 /tmp/dlvenv/bin/python -m pytest -q     # 27 OK + test_ui (fallo ambiental conocido)
 /tmp/dlvenv/bin/python herramientas/evaluar_motor.py --partidas 200 --max-estados 3000 --etiqueta base
 # la misma corrida con la config nueva: --etiqueta dinamico, y comparar las dos salidas

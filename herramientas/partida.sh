@@ -60,8 +60,10 @@ estado() {
 prep() {
   # 1. Lo que roba VRAM o CPU durante el juego. Son servicios opcionales: si no
   # existen, no pasa nada. Si usas otro tapa-VRAM, agrégalo aquí.
-  for u in dsh-buffer-pantalla llama-server; do
-    systemctl --user stop "$u.service" 2>/dev/null || true
+  # Lista opcional de servicios que te roban VRAM (ABRAMS_PARAR=svc1,svc2).
+  IFS=',' read -ra PARAR <<< "${ABRAMS_PARAR:-}"
+  for u in "${PARAR[@]}"; do
+    [ -n "$u" ] && systemctl --user stop "$u.service" 2>/dev/null || true
   done
   command -v gamemoded >/dev/null && systemctl --user start gamemoded.service 2>/dev/null || true
 

@@ -72,7 +72,7 @@ transformadora.
 
 Se entrenó una regresión logística (8 rasgos, 255 combinaciones probadas, búsqueda de
 hiperparámetros hasta 255 ciclos) sobre **135 partidas: 180 en caché, 60 del perfil de
-Diego** y 429 compras.
+la máquina de desarrollo** y 429 compras.
 
 | Modelo | AUC en test |
 |---|---|

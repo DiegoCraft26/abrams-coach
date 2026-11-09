@@ -16,5 +16,5 @@ proyecto personal, sin SLA.
 ## Alcance
 
 La app lee píxeles de la pantalla y llama a APIs públicas. No hay servidor propio, no
-hay telemetría y no se guardan credenciales. `~/.dsh/.credentials.yaml` solo lo usa el
+hay telemetría y no se guardan credenciales. `~/.config/abrams-coach/credenciales.yaml` solo lo usa el
 generador de informes opcional y nunca se sube.
