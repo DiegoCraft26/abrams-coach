@@ -7,7 +7,11 @@ encima del juego, no lee memoria y no inyecta nada**.
 
 Estado: **v0.2**, solo Abrams, interfaz en español.
 
-![Panel a 1280x720](capturas/ui-1280x720.png)
+![Panel en modo demo a 1280x720](capturas/ui-1280x720.png)
+
+La captura es del modo demo (`abrams-coach demo`), con datos de ejemplo: el panel es
+el mismo que ves en partida. En partida la cabecera dice «en vivo» o «pantalla» y las
+almas de los rivales llegan del broadcast.
 
 ## Plataforma
 

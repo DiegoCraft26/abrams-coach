@@ -139,7 +139,7 @@ class RecommendationCard(Gtk.Box):
             if not nombre:
                 continue
             delta = (x.get("costo") or 0) - costo
-            signo = f"{delta:+,}" if delta else "="
+            signo = (f"{delta:+,}" if delta else "mismo coste")
             razon = (x.get("razones") or [""])[0]
             lineas.append(f"{nombre} ({signo}) · {razon}" if razon
                           else f"{nombre} ({signo})")
