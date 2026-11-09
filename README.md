@@ -116,6 +116,23 @@ ventana recuerda tamaño y posición.
 - No hay botón *dentro* del juego: sería un overlay y el proyecto no dibuja ni inyecta
   nada. El atajo y el arranque automático hacen lo mismo sin tocar Deadlock.
 
+#### Que no aparezca nada (modo silencio)
+
+```bash
+touch ~/.abrams-silencio     # el vigilante espera, pero no abre el panel
+rm ~/.abrams-silencio        # vuelve a abrirlo solo
+```
+
+El vigilante también trae dos defensas que salieron de un incidente real (2026-11-09:
+quedó uno viejo corriendo junto al servicio de systemd y cada uno abría su panel):
+
+- **un solo vigilante**: bloqueo exclusivo en `/tmp/abrams-vigilar.lock`; el segundo
+  proceso sale en vez de duplicar ventanas;
+- **freno de reapertura**: si el panel muere solo, no se reabre más de una vez cada
+  5 minutos;
+- la ventana **no pide foco** (`set_visible`, no `present`) y el script de KWin la deja
+  debajo y sin entrada en la barra de tareas.
+
 ## Qué te dice
 
 | Sección | Contenido |
