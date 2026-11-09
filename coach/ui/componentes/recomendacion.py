@@ -167,6 +167,15 @@ class RecommendationCard(Gtk.Box):
             self.lbl_razon.set_label(d.get("mensaje") or "")
             self.lbl_contexto.set_label(" ")
             return
+        if d.get("fuente") == "apertura":
+            self.lbl_accion.set_label("ESPERANDO PARTIDA")
+            clase_unica(self.lbl_accion, CLASES_ACCION, "accion-nada")
+            self.lbl_nombre.set_label("Sin partida activa")
+            self.lbl_razon.set_label(
+                "Abre Deadlock y entra a una partida. Si ya estás jugando, la app no "
+                "reconoció el id del HUD; lo verás en «Más → Revisar».")
+            self.lbl_contexto.set_label(" ")
+            return
         if d.get("solo_reloj"):
             self.lbl_accion.set_label("MODO PANTALLA")
             clase_unica(self.lbl_accion, CLASES_ACCION, "accion-nada")
