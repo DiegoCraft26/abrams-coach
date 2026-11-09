@@ -253,7 +253,7 @@ def publicar_apertura(conoc):
         d = conoc.get(iid) or {}
         if d:
             plan.append({"id": iid, "nombre": d.get("nombre", iid),
-                         "n": 0, "icono": f"/icono/{iid}"})
+                         "costo": d.get("costo"), "n": 0, "icono": f"/icono/{iid}"})
     servidor.EST.publicar({
         "t": 0, "almas": None, "oro": None,
         "estado": {"estado": "INICIO", "motivo": "partida iniciando",
