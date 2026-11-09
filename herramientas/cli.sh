@@ -22,6 +22,7 @@ case "${1:-estado}" in
   demo)
     ./arrancar.sh simulado
     sleep 1
+    ( sleep 2; "$PY" herramientas/colocar_panel.py >/dev/null 2>&1 || true ) &
     exec "$PY" panel_nativo.py
     ;;
   jugar)

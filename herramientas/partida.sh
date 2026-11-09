@@ -81,8 +81,12 @@ prep() {
     sleep 2
   fi
 
+  # El panel nace donde KWin quiere (Wayland no deja colocarse solo): se le pide al
+  # compositor que lo mueva al monitor secundario. Si no se puede, no es fatal.
+  python3 "$BASE/herramientas/colocar_panel.py" >/dev/null 2>&1 || true
+
   echo "Coach:  http://127.0.0.1:$PUERTO  (log $LOG_COACH)"
-  echo "Panel abierto: arrástralo al monitor 2 una vez; KDE lo recuerda."
+  echo "Panel abierto en el monitor secundario."
   echo
   estado
 }
