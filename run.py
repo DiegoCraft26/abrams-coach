@@ -105,11 +105,15 @@ def _latido_vision(cola, sched, estado_hud):
     if estado_hud.get("t") is not None:
         sched.quizas_encolar(cbd.motivo_por_estado(estado))
     inventario = inventario_propio.como_estado()
+    # Una lectura de hace dos minutos no vale para esta partida: el oro y el reloj
+    # cambian todo el rato. Vieja = no se publica, y el panel sigue con el reloj del HUD.
+    edad_vision = ultimo.get("edad_s")
+    if isinstance(edad_vision, (int, float)) and edad_vision > 60:
+        estado = None
     if estado is not None:
         # La tira trae números que el panel puede enseñar hoy: oro e ítems visibles.
-        edad = ultimo.get("edad_s")
         if isinstance(estado.get("oro"), int):
-            estado = dict(estado, edad_s=edad)
+            estado = dict(estado, edad_s=edad_vision)
         if inventario is None and isinstance(estado.get("oro"), int):
             return {"vision": estado, "items_visibles": estado.get("items_visibles")}
     return inventario

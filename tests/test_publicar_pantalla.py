@@ -101,3 +101,34 @@ def test_si_el_hud_da_oro_manda_el_hud(monkeypatch):
     monkeypatch.setattr(NV, "_oro_estable", lambda valor: 700)
     datos = _publicar(monkeypatch, t=200, vision=vision)
     assert datos["oro"] == 700          # el HUD manda: es más rápido y ya está probado
+
+
+def test_el_latido_descarta_lecturas_viejas(monkeypatch):
+    """Una lectura de hace 2 min no puede pintar el oro de la partida de ahora."""
+    import run as R
+
+    class Cola:
+        def ultimo(self):
+            return {"estado": {"oro": 555, "items_visibles": 5}, "edad_s": 120}
+
+    class Sched:
+        def quizas_encolar(self, motivo):
+            return False
+
+    assert R._latido_vision(Cola(), Sched(), {"t": 300}) is None
+
+
+def test_el_latido_pasa_lo_fresco(monkeypatch):
+    import run as R
+
+    class Cola:
+        def ultimo(self):
+            return {"estado": {"oro": 555, "items_visibles": 5}, "edad_s": 12}
+
+    class Sched:
+        def quizas_encolar(self, motivo):
+            return True
+
+    latido = R._latido_vision(Cola(), Sched(), {"t": 300})
+    assert latido["vision"]["oro"] == 555
+    assert latido["items_visibles"] == 5
