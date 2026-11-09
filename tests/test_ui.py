@@ -59,8 +59,9 @@ def main():
     try:
         import gi  # noqa: F401
         from coach.ui.app import ANCHO_AMPLIO, ANCHO_ANGOSTO, Panel
-        casos = [(640, "angosto"), (800, "medio"), (1099, "medio"),
-                 (1100, "amplio"), (1920, "amplio")]
+        casos = [(640, "angosto"), (800, "angosto"), (999, "angosto"),
+                 (1000, "medio"), (1359, "medio"), (1360, "amplio"),
+                 (1920, "amplio")]
         for ancho, esperado in casos:
             obtenido = Panel._modo_por_ancho(None, ancho)
             if obtenido != esperado:

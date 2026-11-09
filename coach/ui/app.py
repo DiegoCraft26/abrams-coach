@@ -3,9 +3,9 @@
 
 Responsive de verdad, por ancho disponible (no por coordenadas fijas):
 
-  < 760 px   una columna; VS y compras en una línea cada uno; plan oculto
-  760-1100   dos columnas (principal + contexto)
-  > 1100     tres columnas (principal, enemigos/plan, compras)
+  < 1000 px  una columna; tarjeta de acción y camino arriba
+  1000-1359  dos columnas (acción/camino/inventario + enemigos)
+  >= 1360    tres columnas (principal, contexto y lateral)
 
 El tamaño y la posición se recuerdan en ~/.config/abrams-coach/ui.json.
 Los datos llegan por `/api/estado` en un hilo aparte: la UI nunca bloquea el refresco.
@@ -37,8 +37,11 @@ from .componentes.revisar import Revisar
 from .componentes.tendencia import TrendChart
 from .componentes.ventas import Ventas
 
-ANCHO_ANGOSTO = 760
-ANCHO_AMPLIO = 1100
+# Umbrales por ancho real: la tarjeta mide como mucho 640 y la columna de contexto
+# pide 300. Por debajo de 1,000 no caben las dos sin pisarse; las tres columnas
+# necesitan 640 + 300 + 280 + separaciones.
+ANCHO_ANGOSTO = 1000
+ANCHO_AMPLIO = 1360
 ALTO_COMPACTO = 720      # por debajo de esto se ocultan las secciones secundarias
 
 
@@ -109,6 +112,7 @@ class Panel(Gtk.ApplicationWindow):
 
         self._modo = None
         self._firma = None
+        self._ver_secundarias = False
         self._construir()
 
         self.connect("close-request", self._al_cerrar)
@@ -119,7 +123,7 @@ class Panel(Gtk.ApplicationWindow):
     def _construir(self):
         self.raiz = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12)
         for lado in ("top", "bottom", "start", "end"):
-            getattr(self.raiz, f"set_margin_{lado}")(16)
+            getattr(self.raiz, f"set_margin_{lado}")(12)
         self.set_child(self.raiz)
 
         self.cabecera = Header()
@@ -127,6 +131,7 @@ class Panel(Gtk.ApplicationWindow):
 
         # componentes (se reparten entre columnas según el ancho)
         self.recomendacion = RecommendationCard()
+        self.recomendacion.actualizar({"listo": False, "mensaje": "conectando al coach"})
         self.inventario = Inventory()
         self.enemigos = EnemyGrid()
         self.compras = PurchaseFeed()
@@ -151,10 +156,21 @@ class Panel(Gtk.ApplicationWindow):
         self.cuerpo = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=12)
         self.cuerpo.set_vexpand(True)
         self.cuerpo.set_valign(Gtk.Align.FILL)
+        # El panel se usa en un segundo monitor: el contenido se centra en vez de
+        # quedarse pegado a la izquierda en un 1440p.
+        self.cuerpo.set_halign(Gtk.Align.CENTER)
         self.desplazable.set_child(self.cuerpo)
         self.raiz.append(self.desplazable)
 
-        self.raiz.append(self.pie)
+        self.barra_pie = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
+        self.pie.set_hexpand(True)
+        self.barra_pie.append(self.pie)
+        self.boton_mas = Gtk.ToggleButton(label="Más")
+        self.boton_mas.add_css_class("boton")
+        self.boton_mas.set_tooltip_text("Tendencia, compras, ventas, equipo y composición")
+        self.boton_mas.connect("toggled", self._al_toggle_mas)
+        self.barra_pie.append(self.boton_mas)
+        self.raiz.append(self.barra_pie)
 
         self._atajos()
         self._aplicar_modo(self.forzado or self._modo_por_ancho(
@@ -203,18 +219,22 @@ class Panel(Gtk.ApplicationWindow):
             desacoplar(comp)
 
         principal = self._columna()
+        # La columna principal no se come el ancho sobrante: la tarjeta mide 640 y el
+        # contexto va pegado a ella, no empujado al borde del monitor.
+        principal.set_hexpand(False)
         contexto = self._columna()
         lateral = self._columna()
 
         # Barra de slots: 12 en fila solo cuando hay ancho de verdad (>1100); a
         # 1280x720 la columna mide ~640 px y 12 celdas partían el inventario en filas
         # irregulares de 10+2. QA de UI, 2026-11-08.
-        ancho = modo == "ancho"
+        ancho = modo == "amplio"
         self.inventario.set_lado(36 if modo == "angosto" else 44,
                                  columnas=12 if ancho else 6)
 
-        # La tarjeta manda pero no se estira.
+        # La tarjeta manda, no se estira y no pasa de 640 px en columnas anchas.
         self.recomendacion.set_vexpand(False)
+        self.recomendacion.limitar(640 if self._ancho_actual() >= 700 else None)
         # La tendencia NO se estira: con vexpand se comía ~630 px de alto a 1920x1080
         # para dos polilíneas (medido en QA). Alto fijo y el sobrante va a un relleno.
         self.tendencia.set_vexpand(False)
@@ -222,62 +242,56 @@ class Panel(Gtk.ApplicationWindow):
 
         seccion_inv = self._seccion("INVENTARIO", self.inventario)
         seccion_enem = self._seccion("ENEMIGOS", self.enemigos)
-        seccion_plan = self._seccion("PLAN", self.plan)
+        seccion_plan = self._seccion("CAMINO", self.plan)
         seccion_comp = self._seccion("COMPRAS", self.compras)
         seccion_venta = self._seccion("VENTAS", self.ventas)
         seccion_equipo = self._seccion("TU EQUIPO", self.equipo)
         seccion_contra = self._seccion("CONTRA SU COMPOSICIÓN", self.contra)
+        seccion_tend = self._seccion("TENDENCIA DE ALMAS", self.tendencia)
         seccion_revisar = self._seccion("¿ALGO VA MAL?", self.revisar)
 
-        # Con la ventana baja, las secciones secundarias se ocultan en vez de quedar
-        # cortadas a media frase (pasaba a 800x600).
-        compacto = self._es_compacto()
-        for seccion in (seccion_venta, seccion_equipo, seccion_contra):
-            seccion.set_visible(not compacto)
+        # Las secundarias nacen plegadas: el panel enseña una acción y el camino; el
+        # resto se abre con «Más». Con la ventana baja se quedan plegadas aunque el
+        # botón esté activo, para no cortar frases a media altura.
+        self._secundarias = [seccion_tend, seccion_comp, seccion_venta,
+                             seccion_equipo, seccion_contra]
 
         if modo == "angosto":
             principal.append(self.recomendacion)
-            principal.append(self._seccion("INVENTARIO", self.inventario))
+            principal.append(seccion_plan)
+            principal.append(seccion_inv)
             principal.append(seccion_enem)
-            principal.append(seccion_comp)
-            principal.append(seccion_venta)
-            principal.append(seccion_equipo)
             principal.append(seccion_revisar)
-            self.tendencia.set_visible(False)
-            self.plan.set_visible(False)
+            for seccion in self._secundarias:
+                principal.append(seccion)
             self.cuerpo.append(principal)
         elif modo == "medio":
             principal.append(self.recomendacion)
+            principal.append(seccion_plan)
             principal.append(seccion_inv)
-            principal.append(self._seccion("TENDENCIA DE ALMAS", self.tendencia))
+            principal.append(seccion_tend)
             contexto.append(seccion_enem)
-            contexto.append(seccion_plan)
             contexto.append(seccion_comp)
-            contexto.append(self._relleno())
             contexto.append(seccion_venta)
             contexto.append(seccion_contra)
             contexto.append(seccion_equipo)
             contexto.append(seccion_revisar)
-            self.tendencia.set_visible(True)
-            self.plan.set_visible(True)
             contexto.set_size_request(300, -1)
             contexto.set_hexpand(False)
             self.cuerpo.append(principal)
             self.cuerpo.append(contexto)
         else:
             principal.append(self.recomendacion)
+            principal.append(seccion_plan)
             principal.append(seccion_inv)
-            principal.append(self._seccion("TENDENCIA DE ALMAS", self.tendencia))
+            principal.append(seccion_tend)
             contexto.append(seccion_enem)
-            contexto.append(seccion_plan)
             contexto.append(seccion_contra)
             contexto.append(seccion_equipo)
             lateral.append(seccion_comp)
             lateral.append(seccion_venta)
             lateral.append(seccion_revisar)
             lateral.append(self._relleno())
-            self.tendencia.set_visible(True)
-            self.plan.set_visible(True)
             contexto.set_size_request(300, -1)
             lateral.set_size_request(280, -1)
             contexto.set_hexpand(False)
@@ -285,7 +299,18 @@ class Panel(Gtk.ApplicationWindow):
             self.cuerpo.append(principal)
             self.cuerpo.append(contexto)
             self.cuerpo.append(lateral)
+
+        self._aplicar_visibilidad()
         self.pie.set_visible(True)
+
+    def _aplicar_visibilidad(self):
+        mostrar = self._ver_secundarias and not self._es_compacto()
+        for seccion in getattr(self, "_secundarias", []):
+            seccion.set_visible(mostrar)
+
+    def _al_toggle_mas(self, boton):
+        self._ver_secundarias = bool(boton.get_active())
+        self._aplicar_visibilidad()
 
     def _modo_por_ancho(self, ancho):
         ancho = int(ancho or 960)
@@ -349,7 +374,7 @@ class Panel(Gtk.ApplicationWindow):
             getattr(caja, f"set_margin_{lado}")(18)
         dlg.set_child(caja)
         from .componentes.base import etiqueta
-        caja.append(etiqueta("Atajos", "t18"))
+        caja.append(etiqueta("Atajos", "t20"))
         for linea in ("1 · ir a la recomendación", "2 · ir a los enemigos",
                       "3 · ir a las compras", "? · esta ayuda", "Esc · cerrar"):
             caja.append(etiqueta(linea, "t13 tenue"))
@@ -370,6 +395,11 @@ class Panel(Gtk.ApplicationWindow):
         datos, error, firma = self.sondeo.ultimo()
         if datos is None:
             self.cabecera.actualizar(None)
+            # La tarjeta nace con su estado vacío compacto; sin esto se quedaba con
+            # el alto de construcción (190 px) aunque no hubiera servidor.
+            self.recomendacion.actualizar(
+                {"listo": False, "mensaje": "sin servidor del coach: arráncalo con "
+                                            "«abrams-coach demo» o «abrams-coach jugar»"})
             self.pie.lbl_fuente.set_label(f"sin servidor ({error or 'sin datos'})"[:80])
             return True
         if firma == self._firma:

@@ -83,7 +83,10 @@ def estado_simulado(t):
                 for i, h in enumerate(["haze", "lash", "seven", "bebop", "wraith"])]
     return {
         "t": t,
-        "yo": {"heroe": "Abrams", "almas": almas, "items": inventario_simulado(t)},
+        # Oro sin gastar plausible: sin esto el demo no puede pagar nada y el panel
+        # se queda siempre en AHORRAR, que no enseña el estado normal.
+        "yo": {"heroe": "Abrams", "almas": almas, "oro": int(almas * 0.40),
+               "items": inventario_simulado(t)},
         "aliados": [{"heroe": "kelvin", "almas": int(almas * 0.9)},
                     {"heroe": "dynamo", "almas": int(almas * 0.8)}],
         "enemigos": enemigos,
