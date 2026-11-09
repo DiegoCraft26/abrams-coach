@@ -90,32 +90,38 @@ def buscar_match(a, st):
 
 
 def hilo_hud(estado_hud, hud_cfg):
-    """Lee reloj y oro del último cuadro de la captura compartida.
+    """Lee reloj y oro del HUD **bajo demanda**, no con captura constante.
 
-    Antes capturaba por su cuenta: 415 ms de `spectacle` por ciclo solo para el HUD.
-    La captura compartida se enciende solo con el juego abierto: capturar el escritorio
-    entero a 5.7 Hz cuesta ~10 % de un núcleo (medido el 2026-11-08) y sin juego no hay
-    HUD que leer. Es el mismo chequeo que ya gateaba la lectura, así que no se pierde nada.
+    Antes había un hilo capturando el escritorio a 2 Hz aunque no hubiera partida.
+    Ahora se toma un cuadro cada 2 s (KWin, ~34 ms) y se lee el HUD de ese cuadro.
+    El reloj del juego cambia una vez por segundo: dos segundos de desfase no cambian
+    ninguna decisión y el coste baja de ~7 % de un núcleo a menos del 2 %.
     """
-    from coach.fuentes import captura, hud_rapido
-    intervalo = 1.0 / max(0.5, float(hud_cfg.get("frecuencia_hz") or 2))
+    from .fuentes import captura_kwin, hud_rapido, lector
+    hz = float(hud_cfg.get("frecuencia_hz") or 0.5)
+    intervalo = max(2.0, 1.0 / max(0.1, hz))
+    cajas = hud_cfg.get("cajas") or None
+    color = hud_cfg.get("color_oro")
     while True:
         if not juego_abierto():
-            captura.parar_global()
             time.sleep(5)
             continue
-        try:
-            d = hud_rapido.leer_actual(hud_cfg.get("max_edad_s", 2.0),
-                                       hud_cfg.get("cajas") or None,
-                                       hud_cfg.get("color_oro"))
-        except Exception as exc:                        # noqa: BLE001
-            print(f"HUD error: {type(exc).__name__}: {exc}", flush=True)
-            d = None
-        if d and d.get("t") is not None:
-            estado_hud.update(d)
-            # Sin esta marca `ajustar_con_hud` salía siempre por la primera línea
-            # (`ts` quedaba en 0.0) y el reloj del HUD nunca llegaba al panel.
-            estado_hud["ts"] = time.time()
+        cuadro = captura_kwin.capturar_escritorio()
+        if cuadro is None:
+            try:
+                cuadro = lector.capturar()
+            except Exception as exc:                        # noqa: BLE001
+                print(f"HUD captura: {type(exc).__name__}: {exc}", flush=True)
+                cuadro = None
+        if cuadro is not None:
+            try:
+                d = hud_rapido.leer(cuadro, cajas, color)
+            except Exception as exc:                        # noqa: BLE001
+                print(f"HUD error: {type(exc).__name__}: {exc}", flush=True)
+                d = None
+            if d and d.get("t") is not None:
+                estado_hud.update(d)
+                estado_hud["ts"] = time.time()
         time.sleep(intervalo)
 
 
