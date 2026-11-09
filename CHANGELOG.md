@@ -15,6 +15,8 @@
   lo que llevas; la rama cambia con la composición enemiga cuando los datos la apoyan.
 - Ventas con nombre y slot; huecos de inventario por categoría.
 - Captura compartida a 2 Hz (antes 5.5) y menos trabajo de OCR por segundo.
+- Bonus de categoría de 4,800: progreso visible y empujón suave, sin volver el build
+  genérico.
 - Base SQLite con archivado idempotente e informe de partida.
 - Repo público: fuera datos personales, cuentas y arte de Valve; iconos en runtime.
 - CI real: GTK bajo Xvfb, suite completa, motor sobre muestra anonimizada.

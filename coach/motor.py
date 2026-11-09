@@ -72,6 +72,7 @@ CFG_DEFECTO = {
     "contexto_delta": 1.0,       # tope en puntos de lo que el contexto mueve un score
     "empate_margen": 0.5,        # puntos por debajo de los cuales dos ítems son un empate
     "ctx_lift_cierre": 0.10,     # cuánto baja el peso del residual en el cierre (ver ganancias)
+    "w_bonus_categoria": 0.40,   # empujón suave si el ítem cae cerca del bonus de 4,800
 }
 
 
@@ -306,6 +307,12 @@ def candidatos(estado: Estado, conoc, cat, cfg=CFG_DEFECTO, limite=3, heroe=None
     poseidos = {str(i) for i in estado.yo.items}
     ya_superados = componentes_de(poseidos)     # componentes de algo que ya tiene
     usados = _slots_usados(estado, cat)
+    gastado = {}
+    for iid in poseidos:
+        slot_i = (conoc["items"].get(iid) or {}).get("slot") or (cat.get(iid) or {}).get("slot")
+        if slot_i:
+            gastado[slot_i] = gastado.get(slot_i, 0) + (
+                (conoc["items"].get(iid) or {}).get("costo") or 0)
     cap = _cap(estado, cfg)
     heroes_enemigos = [j.heroe for j in estado.enemigos if j.heroe]
 
@@ -448,6 +455,12 @@ def candidatos(estado: Estado, conoc, cat, cfg=CFG_DEFECTO, limite=3, heroe=None
         hueco = max(0, cap.get(slot, 4) - usados.get(slot, 0))
         hueco_max = max(1, max((cap.get(s, 4) - usados.get(s, 0)) for s in cap))
         premio_balance = cfg.get("w_balance", 0.0) * (hueco / hueco_max) * 2.0
+        # Bonus de categoría (4,800): empujón pequeño y solo si falta poco. No manda
+        # sobre el camino ni convierte el build en uno genérico.
+        premio_bonus = 0.0
+        falta_bonus = 4800 - gastado.get(slot, 0)
+        if 0 < falta_bonus <= 1000:
+            premio_bonus = cfg.get("w_bonus_categoria", 0.0) * (1.0 - falta_bonus / 1000.0)
 
         # Dos ítems a menos de `empate_margen` puntos son indistinguibles para el jugador,
         # y en ese empate ganaba siempre el primero del diccionario de conocimiento.json,
@@ -474,6 +487,7 @@ def candidatos(estado: Estado, conoc, cat, cfg=CFG_DEFECTO, limite=3, heroe=None
                  - castigo_recuperacion
                  + contexto_pts
                  + premio_balance
+                 + premio_bonus
                  + premio_caja)
 
         # `min_compra` viene en porcentaje de la partida típica (0-100), no en minutos:
@@ -730,11 +744,21 @@ def recomendar(estado: Estado, conoc, cat, cfg=None):
         ganancia=gan["lift"], motivo_ajuste=motivo_ganancia(gan))
     # Huecos por categoría: el panel puede decir "3/4 weapon" sin recalcular nada.
     slots = {}
+    categorias = {}
     for categoria, tope in (cfg.get("slots") or {}).items():
         usados = sum(1 for iid in poseidos
                      if (conoc["items"].get(iid) or {}).get("slot") == categoria)
+        gastado_cat = sum((conoc["items"].get(iid) or {}).get("costo") or 0
+                          for iid in poseidos
+                          if (conoc["items"].get(iid) or {}).get("slot") == categoria)
         slots[categoria] = {"usados": usados, "total": int(tope),
                             "libres": max(0, int(tope) - usados)}
+        categorias[categoria] = {
+            "gastado": gastado_cat,
+            "umbral": 4800,
+            "falta": max(0, 4800 - gastado_cat),
+            "bonus": gastado_cat >= 4800,
+        }
 
     return {
         "t": estado.t,
@@ -748,6 +772,7 @@ def recomendar(estado: Estado, conoc, cat, cfg=None):
         "venta": venta,
         "decision": decision,
         "slots": slots,
+        "categorias": categorias,
         "bolsillo": decision.get("bolsillo"),
         "camino": decision.get("camino") or [],
         "plan": plan,

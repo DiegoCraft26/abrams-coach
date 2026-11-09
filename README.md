@@ -157,6 +157,8 @@ El motor ya no puntúa ítems sueltos. Arma una secuencia con el grafo de compra
   anticontrol, con burst spirit entra antispirit, pero solo si el matchup de 1.9 M de
   partidas lo respalda. Si los datos no apoyan el counter, no se inventa.
 - El inventario muestra los huecos por categoría (`arma 3/4 · vitalidad 4/4 · espíritu 2/4`).
+- El bonus de categoría (4,800 almas) se vigila y se avisa cuando falta poco, pero no
+  se persigue a ciegas: forzarlo convierte cualquier build en uno genérico.
 
 Medido sobre 626 partidas reales: **1.39 ítems de 800** de media en los primeros 10
 minutos (máximo 3), 1.8 ms por decisión. Antes eran 4–5.

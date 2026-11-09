@@ -58,6 +58,13 @@ class Inventory(Gtk.Box):
             if datos:
                 partes.append(f"{nombres[clave]} {datos.get('usados', 0)}/"
                               f"{datos.get('total', 0)}")
+        # Bonus de categoría (4,800): solo se avisa cuando falta poco; perseguirlo
+        # siempre convertiría el build en uno genérico.
+        for clave in ("weapon", "vitality", "spirit"):
+            datos = (d.get("categorias") or {}).get(clave) or {}
+            falta = datos.get("falta")
+            if falta and 0 < falta <= 1000:
+                partes.append(f"bonus {nombres[clave]} −{falta:,}")
         self.lbl_slots.set_label(" · ".join(partes))
 
     def _rellenar(self, inv):

@@ -101,6 +101,10 @@ def main():
           (d.get("item") or {}).get("nombre") == "Slowing Bullets"
           and "slow con balas" in (d.get("motivo") or ""),
           str((d.get("item") or {}).get("nombre")))
+    check("el bonus de categoría se publica a 4,800",
+          r.get("categorias", {}).get("weapon", {}).get("umbral") == 4800
+          and "falta" in r.get("categorias", {}).get("weapon", {}),
+          str(r.get("categorias")))
     check("los slots se publican con sus huecos",
           r.get("slots", {}).get("weapon", {}).get("total") == 4
           and "libres" in r.get("slots", {}).get("weapon", {}),

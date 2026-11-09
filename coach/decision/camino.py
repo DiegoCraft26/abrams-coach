@@ -28,6 +28,11 @@ CFG_CAMINO = {
     "rush_costo": 3200,         # un ítem caro se persigue si…
     "rush_eta_s": 150,          # …el ETA no pasa de aquí
     "eta_min_tasa": 4.0,        # almas/s mínimas para no dividir por casi cero
+    # Bonus de categoría de Deadlock: 4,800 almas invertidas en arma/vitalidad/espíritu.
+    # No se persigue a ciegas (eso vuelve el build genérico); solo se avisa cuando el
+    # paso que toca ya está cerca del umbral.
+    "bonus_categoria_s": 4800,
+    "bonus_aviso_s": 1000,
 }
 
 _CACHE = {"clave": None, "camino": []}
@@ -325,6 +330,15 @@ def decidir(estado, conoc, cat, cfg=None, heroe=None, venta=None, contra=None):
 
     bolsillo = _bolsillo(estado, conoc)
     sufijo = f" · {objetivo['contra']}" if objetivo.get("contra") else ""
+    # Aviso de bonus de categoría: informativo, no cambia el camino.
+    umbral = cfg["bonus_categoria_s"]
+    slot_obj = objetivo.get("slot")
+    if slot_obj:
+        gastado = sum(_costo(conoc, i) for i in poseidos
+                      if _slot(conoc, cat, i) == slot_obj)
+        falta_bonus = umbral - gastado
+        if 0 < falta_bonus <= cfg["bonus_aviso_s"]:
+            sufijo += f" · a {falta_bonus:,} del bonus de {slot_obj}"
     costo, ahorro, lista = _costo_efectivo(conoc, cat, objetivo["id"], poseidos)
     faltan = max(0, costo - bolsillo)
     eta = int(-(-faltan // max(1.0, tasa_almas(conoc, heroe, estado.t))))
