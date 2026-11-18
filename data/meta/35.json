@@ -1,0 +1,60 @@
+{
+ "apertura": [
+  {
+   "id": 1437614329,
+   "nombre": "Melee Lifesteal",
+   "costo": 800,
+   "rel_pct": 16.8,
+   "muestra": 368485,
+   "winrate": 0.4802,
+   "wlb": 0.4786
+  },
+  {
+   "id": 1342610602,
+   "nombre": "Close Quarters",
+   "costo": 800,
+   "rel_pct": 16.7,
+   "muestra": 243641,
+   "winrate": 0.4741,
+   "wlb": 0.4722
+  },
+  {
+   "id": 2829638276,
+   "nombre": "Extra Regen",
+   "costo": 800,
+   "rel_pct": 16.6,
+   "muestra": 168275,
+   "winrate": 0.4626,
+   "wlb": 0.4602
+  },
+  {
+   "id": 1672893796,
+   "nombre": "Grit",
+   "costo": 800,
+   "rel_pct": 26.9,
+   "muestra": 176706,
+   "winrate": 0.4623,
+   "wlb": 0.4599
+  },
+  {
+   "id": 1998374645,
+   "nombre": "Mystic Burst",
+   "costo": 800,
+   "rel_pct": 13.0,
+   "muestra": 655288,
+   "winrate": 0.4599,
+   "wlb": 0.4587
+  }
+ ],
+ "base_wr": 0.4731,
+ "muestra": 15240986,
+ "criterio": {
+  "rel_max": 27.0,
+  "costo_max": 800,
+  "min_muestra": 2000,
+  "orden": "wilson"
+ },
+ "hero_id": 35,
+ "fuente": "api.deadlock-api.com item-stats",
+ "generado": "2026-11-15T17:37:24"
+}

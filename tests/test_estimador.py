@@ -11,11 +11,19 @@ que un test tiene que poder correr siempre:
 - un ítem sin compras no aparece.
 """
 import os
+
+import pytest
 import sys
 
 import numpy as np
 
 RAIZ = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+from _datos import falta  # noqa: E402
+
+pytestmark = pytest.mark.skipif(
+    bool(falta("datos/lab.db")),
+    reason="requiere datos/lab.db (corpus local, 359 MB), no versionado")
 sys.path.insert(0, RAIZ)
 
 from herramientas.lab import estimador, sintetico     # noqa: E402

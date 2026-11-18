@@ -1,0 +1,60 @@
+{
+ "apertura": [
+  {
+   "id": 3399065363,
+   "nombre": "Sprint Boots",
+   "costo": 800,
+   "rel_pct": 24.1,
+   "muestra": 517159,
+   "winrate": 0.5607,
+   "wlb": 0.5593
+  },
+  {
+   "id": 968099481,
+   "nombre": "Extra Spirit",
+   "costo": 800,
+   "rel_pct": 18.2,
+   "muestra": 788724,
+   "winrate": 0.5538,
+   "wlb": 0.5527
+  },
+  {
+   "id": 3776945997,
+   "nombre": "Extra Charge",
+   "costo": 800,
+   "rel_pct": 14.0,
+   "muestra": 783793,
+   "winrate": 0.5538,
+   "wlb": 0.5527
+  },
+  {
+   "id": 2829638276,
+   "nombre": "Extra Regen",
+   "costo": 800,
+   "rel_pct": 13.1,
+   "muestra": 586992,
+   "winrate": 0.5439,
+   "wlb": 0.5426
+  },
+  {
+   "id": 4139877411,
+   "nombre": "Extra Stamina",
+   "costo": 800,
+   "rel_pct": 24.3,
+   "muestra": 202705,
+   "winrate": 0.5409,
+   "wlb": 0.5388
+  }
+ ],
+ "base_wr": 0.5618,
+ "muestra": 16996160,
+ "criterio": {
+  "rel_max": 27.0,
+  "costo_max": 800,
+  "min_muestra": 2000,
+  "orden": "wilson"
+ },
+ "hero_id": 12,
+ "fuente": "api.deadlock-api.com item-stats",
+ "generado": "2026-11-15T17:36:09"
+}

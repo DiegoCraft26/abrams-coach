@@ -53,7 +53,7 @@ def test_solo_captura_kwin_importa_gi_fuera_de_la_ui():
         for linea in texto.splitlines():
             s = linea.strip()
             if s.startswith("import gi") or s.startswith("from gi."):
-                culpables.append(str(p.relative_to(RAIZ)))
+                culpables.append(p.relative_to(RAIZ).as_posix())
                 break
     assert culpables == ["coach/fuentes/captura_kwin.py"], culpables
 

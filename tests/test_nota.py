@@ -19,6 +19,8 @@ pruebas tienen que poder correr con `python3 tests/test_nota.py`.
 """
 import json
 import os
+
+import pytest
 import shutil
 import sys
 import tempfile
@@ -26,6 +28,12 @@ import unittest
 from pathlib import Path
 
 RAIZ = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+from _datos import falta  # noqa: E402
+
+pytestmark = pytest.mark.skipif(
+    bool(falta("data/items.json")),
+    reason="requiere data/items.json (se regenera con herramientas/datos/mineria.py), no versionado")
 sys.path.insert(0, RAIZ)
 sys.path.insert(0, os.path.join(RAIZ, "herramientas", "demos"))
 

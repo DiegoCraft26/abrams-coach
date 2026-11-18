@@ -1,0 +1,60 @@
+{
+ "apertura": [
+  {
+   "id": 2829638276,
+   "nombre": "Extra Regen",
+   "costo": 800,
+   "rel_pct": 14.6,
+   "muestra": 184008,
+   "winrate": 0.4824,
+   "wlb": 0.4801
+  },
+  {
+   "id": 3077079169,
+   "nombre": "High-Velocity Rounds",
+   "costo": 800,
+   "rel_pct": 14.9,
+   "muestra": 721066,
+   "winrate": 0.4805,
+   "wlb": 0.4794
+  },
+  {
+   "id": 968099481,
+   "nombre": "Extra Spirit",
+   "costo": 800,
+   "rel_pct": 22.0,
+   "muestra": 961010,
+   "winrate": 0.4771,
+   "wlb": 0.4761
+  },
+  {
+   "id": 3776945997,
+   "nombre": "Extra Charge",
+   "costo": 800,
+   "rel_pct": 14.3,
+   "muestra": 1122984,
+   "winrate": 0.4767,
+   "wlb": 0.4758
+  },
+  {
+   "id": 1998374645,
+   "nombre": "Mystic Burst",
+   "costo": 800,
+   "rel_pct": 10.4,
+   "muestra": 1117067,
+   "winrate": 0.4767,
+   "wlb": 0.4758
+  }
+ ],
+ "base_wr": 0.487,
+ "muestra": 20429806,
+ "criterio": {
+  "rel_max": 27.0,
+  "costo_max": 800,
+  "min_muestra": 2000,
+  "orden": "wilson"
+ },
+ "hero_id": 17,
+ "fuente": "api.deadlock-api.com item-stats",
+ "generado": "2026-11-15T17:36:33"
+}

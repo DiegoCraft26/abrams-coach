@@ -1,0 +1,60 @@
+{
+ "apertura": [
+  {
+   "id": 1342610602,
+   "nombre": "Close Quarters",
+   "costo": 800,
+   "rel_pct": 10.3,
+   "muestra": 797074,
+   "winrate": 0.4632,
+   "wlb": 0.4621
+  },
+  {
+   "id": 668299740,
+   "nombre": "Rapid Rounds",
+   "costo": 800,
+   "rel_pct": 22.4,
+   "muestra": 764782,
+   "winrate": 0.4612,
+   "wlb": 0.4601
+  },
+  {
+   "id": 1672893796,
+   "nombre": "Grit",
+   "costo": 800,
+   "rel_pct": 20.1,
+   "muestra": 359681,
+   "winrate": 0.4612,
+   "wlb": 0.4596
+  },
+  {
+   "id": 3077079169,
+   "nombre": "High-Velocity Rounds",
+   "costo": 800,
+   "rel_pct": 26.4,
+   "muestra": 137920,
+   "winrate": 0.4601,
+   "wlb": 0.4574
+  },
+  {
+   "id": 968099481,
+   "nombre": "Extra Spirit",
+   "costo": 800,
+   "rel_pct": 15.0,
+   "muestra": 561849,
+   "winrate": 0.456,
+   "wlb": 0.4547
+  }
+ ],
+ "base_wr": 0.4753,
+ "muestra": 14976971,
+ "criterio": {
+  "rel_max": 27.0,
+  "costo_max": 800,
+  "min_muestra": 2000,
+  "orden": "wilson"
+ },
+ "hero_id": 58,
+ "fuente": "api.deadlock-api.com item-stats",
+ "generado": "2026-11-15T17:37:35"
+}

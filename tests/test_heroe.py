@@ -5,10 +5,18 @@ sin tocar el motor. Esto comprueba que el respaldo funciona y que un archivo rot
 la app.
 """
 import os
+
+import pytest
 import sys
 import tempfile
 
 RAIZ = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+from _datos import falta  # noqa: E402
+
+pytestmark = pytest.mark.skipif(
+    bool(falta("data/items.json")),
+    reason="requiere data/items.json (se regenera con herramientas/datos/mineria.py), no versionado")
 sys.path.insert(0, RAIZ)
 
 from coach.decision import heroe  # noqa: E402

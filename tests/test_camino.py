@@ -1,8 +1,16 @@
 """Camino de build: apertura → core → spike y estados COMPRAR/AHORRAR/VENDER."""
 import os
+
+import pytest
 import sys
 
 RAIZ = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+from _datos import falta  # noqa: E402
+
+pytestmark = pytest.mark.skipif(
+    bool(falta("data/items.json")),
+    reason="requiere data/items.json (se regenera con herramientas/datos/mineria.py), no versionado")
 sys.path.insert(0, RAIZ)
 
 from coach.decision import camino, heroe as heroes  # noqa: E402

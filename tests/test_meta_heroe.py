@@ -9,9 +9,17 @@ la apertura real). Lo que discrimina es cuándo se compra. Con el agregado real 
 import json
 import os
 
+import pytest
+
 from coach import meta_heroe as M
 
 RAIZ = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+from _datos import falta  # noqa: E402
+
+pytestmark = pytest.mark.skipif(
+    bool(falta("data/items.json")),
+    reason="requiere data/items.json (se regenera con herramientas/datos/mineria.py), no versionado")
 CATALOGO = os.path.join(RAIZ, "data", "catalogo.json")
 AGREGADO_REAL = os.path.join(RAIZ, "tests", "datos", "item-stats-abrams.json")
 

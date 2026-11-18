@@ -1,0 +1,60 @@
+{
+ "apertura": [
+  {
+   "id": 968099481,
+   "nombre": "Extra Spirit",
+   "costo": 800,
+   "rel_pct": 9.4,
+   "muestra": 1792084,
+   "winrate": 0.5475,
+   "wlb": 0.5468
+  },
+  {
+   "id": 1439347412,
+   "nombre": "Mystic Regeneration",
+   "costo": 800,
+   "rel_pct": 24.8,
+   "muestra": 712289,
+   "winrate": 0.5469,
+   "wlb": 0.5458
+  },
+  {
+   "id": 1437614329,
+   "nombre": "Melee Lifesteal",
+   "costo": 800,
+   "rel_pct": 22.6,
+   "muestra": 116465,
+   "winrate": 0.5469,
+   "wlb": 0.544
+  },
+  {
+   "id": 2829638276,
+   "nombre": "Extra Regen",
+   "costo": 800,
+   "rel_pct": 10.3,
+   "muestra": 1641739,
+   "winrate": 0.5423,
+   "wlb": 0.5416
+  },
+  {
+   "id": 2462046703,
+   "nombre": "Golden Goose Egg",
+   "costo": 800,
+   "rel_pct": 12.0,
+   "muestra": 116816,
+   "winrate": 0.5342,
+   "wlb": 0.5313
+  }
+ ],
+ "base_wr": 0.5597,
+ "muestra": 36144909,
+ "criterio": {
+  "rel_max": 27.0,
+  "costo_max": 800,
+  "min_muestra": 2000,
+  "orden": "wilson"
+ },
+ "hero_id": 66,
+ "fuente": "api.deadlock-api.com item-stats",
+ "generado": "2026-11-15T17:38:04"
+}

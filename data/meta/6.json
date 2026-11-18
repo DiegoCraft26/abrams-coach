@@ -1,0 +1,60 @@
+{
+ "apertura": [
+  {
+   "id": 465043967,
+   "nombre": "Spirit Strike",
+   "costo": 800,
+   "rel_pct": 26.9,
+   "muestra": 955091,
+   "winrate": 0.5235,
+   "wlb": 0.5225
+  },
+  {
+   "id": 1437614329,
+   "nombre": "Melee Lifesteal",
+   "costo": 800,
+   "rel_pct": 15.1,
+   "muestra": 1770263,
+   "winrate": 0.5223,
+   "wlb": 0.5216
+  },
+  {
+   "id": 1342610602,
+   "nombre": "Close Quarters",
+   "costo": 800,
+   "rel_pct": 13.7,
+   "muestra": 1731015,
+   "winrate": 0.521,
+   "wlb": 0.5203
+  },
+  {
+   "id": 3862866912,
+   "nombre": "Restorative Shot",
+   "costo": 800,
+   "rel_pct": 7.4,
+   "muestra": 1085469,
+   "winrate": 0.5211,
+   "wlb": 0.5202
+  },
+  {
+   "id": 2829638276,
+   "nombre": "Extra Regen",
+   "costo": 800,
+   "rel_pct": 12.9,
+   "muestra": 1027018,
+   "winrate": 0.5116,
+   "wlb": 0.5106
+  }
+ ],
+ "base_wr": 0.5338,
+ "muestra": 32472592,
+ "criterio": {
+  "rel_max": 27.0,
+  "costo_max": 800,
+  "min_muestra": 2000,
+  "orden": "wilson"
+ },
+ "hero_id": 6,
+ "fuente": "api.deadlock-api.com item-stats",
+ "generado": "2026-11-15T17:35:40"
+}

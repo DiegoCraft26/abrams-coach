@@ -1,0 +1,60 @@
+{
+ "apertura": [
+  {
+   "id": 754480263,
+   "nombre": "Mystic Expansion",
+   "costo": 800,
+   "rel_pct": 25.5,
+   "muestra": 1925289,
+   "winrate": 0.4526,
+   "wlb": 0.4519
+  },
+  {
+   "id": 1998374645,
+   "nombre": "Mystic Burst",
+   "costo": 800,
+   "rel_pct": 11.7,
+   "muestra": 2368842,
+   "winrate": 0.4499,
+   "wlb": 0.4492
+  },
+  {
+   "id": 968099481,
+   "nombre": "Extra Spirit",
+   "costo": 800,
+   "rel_pct": 7.3,
+   "muestra": 2449851,
+   "winrate": 0.4485,
+   "wlb": 0.4479
+  },
+  {
+   "id": 2829638276,
+   "nombre": "Extra Regen",
+   "costo": 800,
+   "rel_pct": 19.9,
+   "muestra": 116200,
+   "winrate": 0.4321,
+   "wlb": 0.4293
+  },
+  {
+   "id": 1710079648,
+   "nombre": "Healing Rite",
+   "costo": 800,
+   "rel_pct": 23.8,
+   "muestra": 52661,
+   "winrate": 0.4257,
+   "wlb": 0.4215
+  }
+ ],
+ "base_wr": 0.4607,
+ "muestra": 43318018,
+ "criterio": {
+  "rel_max": 27.0,
+  "costo_max": 800,
+  "min_muestra": 2000,
+  "orden": "wilson"
+ },
+ "hero_id": 63,
+ "fuente": "api.deadlock-api.com item-stats",
+ "generado": "2026-11-15T17:37:47"
+}

@@ -1,0 +1,17 @@
+{
+ "id": 76,
+ "nombre": "Graves",
+ "clave": "graves",
+ "apertura": {
+  "items": [
+   "3862866912",
+   "968099481",
+   "4139877411",
+   "7409189",
+   "395867183"
+  ],
+  "fuente": "datos/lab.db: 10951 compras en los primeros 10 min, 4334 partidas",
+  "fecha": "2026-11-18"
+ },
+ "notas": "Apertura medida en la base. Hitos de almas y fases no se derivan: usan el respaldo de Abrams hasta que haya una fuente medida por héroe."
+}

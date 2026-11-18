@@ -1,0 +1,60 @@
+{
+ "apertura": [
+  {
+   "id": 3399065363,
+   "nombre": "Sprint Boots",
+   "costo": 800,
+   "rel_pct": 20.8,
+   "muestra": 817312,
+   "winrate": 0.498,
+   "wlb": 0.4969
+  },
+  {
+   "id": 754480263,
+   "nombre": "Mystic Expansion",
+   "costo": 800,
+   "rel_pct": 18.3,
+   "muestra": 499809,
+   "winrate": 0.498,
+   "wlb": 0.4966
+  },
+  {
+   "id": 1998374645,
+   "nombre": "Mystic Burst",
+   "costo": 800,
+   "rel_pct": 8.0,
+   "muestra": 1107508,
+   "winrate": 0.4956,
+   "wlb": 0.4947
+  },
+  {
+   "id": 2829638276,
+   "nombre": "Extra Regen",
+   "costo": 800,
+   "rel_pct": 15.5,
+   "muestra": 224117,
+   "winrate": 0.4638,
+   "wlb": 0.4617
+  },
+  {
+   "id": 1710079648,
+   "nombre": "Healing Rite",
+   "costo": 800,
+   "rel_pct": 19.0,
+   "muestra": 18718,
+   "winrate": 0.4613,
+   "wlb": 0.4541
+  }
+ ],
+ "base_wr": 0.5077,
+ "muestra": 19561372,
+ "criterio": {
+  "rel_max": 27.0,
+  "costo_max": 800,
+  "min_muestra": 2000,
+  "orden": "wilson"
+ },
+ "hero_id": 18,
+ "fuente": "api.deadlock-api.com item-stats",
+ "generado": "2026-11-15T17:36:39"
+}

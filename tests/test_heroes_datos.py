@@ -7,7 +7,15 @@ JSON lo dice. Un héroe sin archivo también cae a Abrams: la app nunca se queda
 import pathlib
 import sys
 
+import pytest
+
 RAIZ = pathlib.Path(__file__).resolve().parent.parent
+
+from _datos import falta  # noqa: E402
+
+pytestmark = pytest.mark.skipif(
+    bool(falta("datos/lab.db")),
+    reason="requiere datos/lab.db (corpus local, 359 MB), no versionado")
 sys.path.insert(0, str(RAIZ))
 
 from coach.decision import heroe  # noqa: E402

@@ -1,0 +1,286 @@
+{
+ "generado": "2026-11-10T21:23:58",
+ "fuente": "data/replay_cache.json",
+ "partidas": 626,
+ "apertura": [
+  "465043967",
+  "1342610602",
+  "2829638276",
+  "4139877411",
+  "1009965641"
+ ],
+ "apertura_detalle": [
+  {
+   "id": "465043967",
+   "nombre": "Spirit Strike",
+   "costo": 800,
+   "progresa": true
+  },
+  {
+   "id": "1342610602",
+   "nombre": "Close Quarters",
+   "costo": 800,
+   "progresa": true
+  },
+  {
+   "id": "2829638276",
+   "nombre": "Extra Regen",
+   "costo": 800,
+   "progresa": false
+  },
+  {
+   "id": "4139877411",
+   "nombre": "Extra Stamina",
+   "costo": 800,
+   "progresa": true
+  },
+  {
+   "id": "1009965641",
+   "nombre": "Monster Rounds",
+   "costo": 800,
+   "progresa": true
+  }
+ ],
+ "primera_compra": [
+  {
+   "id": "2462046703",
+   "nombre": "Golden Goose Egg",
+   "partidas": 284
+  },
+  {
+   "id": "2829638276",
+   "nombre": "Extra Regen",
+   "partidas": 170
+  },
+  {
+   "id": "3862866912",
+   "nombre": "Restorative Shot",
+   "partidas": 106
+  },
+  {
+   "id": "1342610602",
+   "nombre": "Close Quarters",
+   "partidas": 20
+  },
+  {
+   "id": "1437614329",
+   "nombre": "Melee Lifesteal",
+   "partidas": 14
+  },
+  {
+   "id": "1009965641",
+   "nombre": "Monster Rounds",
+   "partidas": 8
+  }
+ ],
+ "tramos": {
+  "0-10": [
+   {
+    "id": "2829638276",
+    "nombre": "Extra Regen",
+    "n": 489
+   },
+   {
+    "id": "465043967",
+    "nombre": "Spirit Strike",
+    "n": 294
+   },
+   {
+    "id": "1342610602",
+    "nombre": "Close Quarters",
+    "n": 284
+   },
+   {
+    "id": "4139877411",
+    "nombre": "Extra Stamina",
+    "n": 284
+   },
+   {
+    "id": "2462046703",
+    "nombre": "Golden Goose Egg",
+    "n": 272
+   },
+   {
+    "id": "1150006784",
+    "nombre": "Arcane Surge",
+    "n": 266
+   },
+   {
+    "id": "1009965641",
+    "nombre": "Monster Rounds",
+    "n": 219
+   },
+   {
+    "id": "1437614329",
+    "nombre": "Melee Lifesteal",
+    "n": 199
+   },
+   {
+    "id": "26002154",
+    "nombre": "Melee Charge",
+    "n": 197
+   },
+   {
+    "id": "3862866912",
+    "nombre": "Restorative Shot",
+    "n": 193
+   }
+  ],
+  "10-20": [
+   {
+    "id": "3190916303",
+    "nombre": "Spirit Snatch",
+    "n": 261
+   },
+   {
+    "id": "2951612397",
+    "nombre": "Duration Extender",
+    "n": 253
+   },
+   {
+    "id": "2566692615",
+    "nombre": "Healing Booster",
+    "n": 252
+   },
+   {
+    "id": "3970837787",
+    "nombre": "Enchanter's Emblem",
+    "n": 229
+   },
+   {
+    "id": "2971868509",
+    "nombre": "Bullet Resist Shredder",
+    "n": 186
+   },
+   {
+    "id": "2717651715",
+    "nombre": "Superior Duration",
+    "n": 171
+   },
+   {
+    "id": "2603935618",
+    "nombre": "Healbane",
+    "n": 143
+   },
+   {
+    "id": "2481177645",
+    "nombre": "Hunter's Aura",
+    "n": 127
+   },
+   {
+    "id": "380806748",
+    "nombre": "Compress Cooldown",
+    "n": 126
+   },
+   {
+    "id": "754480263",
+    "nombre": "Mystic Expansion",
+    "n": 114
+   }
+  ],
+  "20-30": [
+   {
+    "id": "2717651715",
+    "nombre": "Superior Duration",
+    "n": 260
+   },
+   {
+    "id": "3261353684",
+    "nombre": "Superior Cooldown",
+    "n": 166
+   },
+   {
+    "id": "2417568017",
+    "nombre": "Scourge",
+    "n": 140
+   },
+   {
+    "id": "1193964439",
+    "nombre": "Greater Expansion",
+    "n": 135
+   },
+   {
+    "id": "2163598980",
+    "nombre": "Spirit Resilience",
+    "n": 120
+   },
+   {
+    "id": "800008313",
+    "nombre": "Crushing Fists",
+    "n": 103
+   },
+   {
+    "id": "3190916303",
+    "nombre": "Spirit Snatch",
+    "n": 101
+   },
+   {
+    "id": "2081037738",
+    "nombre": "Mystic Vulnerability",
+    "n": 96
+   },
+   {
+    "id": "2095565695",
+    "nombre": "Point Blank",
+    "n": 90
+   },
+   {
+    "id": "380806748",
+    "nombre": "Compress Cooldown",
+    "n": 86
+   }
+  ],
+  "30+": [
+   {
+    "id": "3028234315",
+    "nombre": "Witchmail",
+    "n": 140
+   },
+   {
+    "id": "2417568017",
+    "nombre": "Scourge",
+    "n": 121
+   },
+   {
+    "id": "915014646",
+    "nombre": "Transcendent Cooldown",
+    "n": 116
+   },
+   {
+    "id": "3005970438",
+    "nombre": "Escalating Exposure",
+    "n": 115
+   },
+   {
+    "id": "3491236900",
+    "nombre": "Plated Armor",
+    "n": 102
+   },
+   {
+    "id": "2163598980",
+    "nombre": "Spirit Resilience",
+    "n": 97
+   },
+   {
+    "id": "1955841979",
+    "nombre": "Spellbreaker",
+    "n": 90
+   },
+   {
+    "id": "1250307611",
+    "nombre": "Juggernaut",
+    "n": 88
+   },
+   {
+    "id": "2407781327",
+    "nombre": "Colossus",
+    "n": 84
+   },
+   {
+    "id": "800008313",
+    "nombre": "Crushing Fists",
+    "n": 82
+   }
+  ]
+ }
+}
