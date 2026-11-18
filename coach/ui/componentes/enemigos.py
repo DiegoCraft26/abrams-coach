@@ -20,7 +20,8 @@ class EnemyGrid(Gtk.Box):
     def actualizar(self, d):
         enemigos = (d or {}).get("enemigos") or []
         firma = tuple((e.get("heroe"), e.get("almas"), e.get("bajas"),
-                       e.get("muertes"), e.get("asistencias")) for e in enemigos)
+                       e.get("muertes"), e.get("asistencias"),
+                       e.get("nivel"), e.get("evitar_solo")) for e in enemigos)
         if firma == self._firma:
             return
         self._firma = firma
@@ -36,6 +37,12 @@ class EnemyGrid(Gtk.Box):
         nombre = nombre_heroe(e.get("heroe"))
         caja = fila(8)
         caja.add_css_class("fila-enemigo")
+        # El que va por encima se tiñe y se marca: la lista deja de ser plana.
+        nivel = e.get("nivel")
+        if nivel in ("critico", "alto"):
+            caja.add_css_class("fila-enemigo-" + nivel)
+        if e.get("motivo"):
+            caja.set_tooltip_text(e.get("motivo"))
 
         pb = pixbuf(_clave(e.get("heroe")), "heroes", 26)
         icono = Gtk.Image.new_from_pixbuf(pb) if pb else Gtk.Image.new_from_icon_name("avatar-default")
@@ -51,7 +58,9 @@ class EnemyGrid(Gtk.Box):
         elipse(nom, 10)
         caja.append(nom)
 
-        almas = etiqueta(fmt_num(e.get("almas")), "almas num")
+        clase_almas = ("almas num almas-peligrosa" if nivel == "critico"
+                       else "almas num")
+        almas = etiqueta(fmt_num(e.get("almas")), clase_almas)
         almas.set_size_request(56, -1)
         almas.set_xalign(1)
         caja.append(almas)
@@ -60,6 +69,11 @@ class EnemyGrid(Gtk.Box):
         txt = (f"{kda}/{e.get('muertes', 0)}/{e.get('asistencias', 0)}"
                if kda is not None else "")
         caja.append(etiqueta(txt, "kda"))
+
+        if e.get("evitar_solo"):
+            marca = etiqueta("EVITAR", "etiqueta-evitar")
+            marca.set_valign(Gtk.Align.CENTER)
+            caja.append(marca)
 
         # Barra relativa al que más almas tiene: mide la amenaza, no el valor absoluto.
         # Se dibuja con cajas y no con Gtk.LevelBar porque su "slider" interno reporta

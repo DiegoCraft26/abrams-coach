@@ -7,6 +7,13 @@ from coach import deteccion
 
 random.seed(7)
 ids, M = deteccion.matrices("items")
+if not ids:
+    # El arte de Deadlock no se versiona (son ~47 MB de Valve): se baja con
+    # `python3 coach/iconos.py`. Sin él estas pruebas no tienen con qué trabajar y lo
+    # correcto es saltarlas, no fallar la colección entera en un clon limpio.
+    import pytest
+    pytest.skip("sin data/iconos: corre 'python3 coach/iconos.py' primero",
+                allow_module_level=True)
 print(f"plantillas: {len(ids)}")
 
 def prueba(relleno=1.0, ruido=8, n=40, fondo=(14,18,24)):

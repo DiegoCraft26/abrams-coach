@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Minería de patrones de Abrams sobre deadlock-api. Sin dependencias externas."""
-import json, os, sys, time, math, urllib.request, urllib.parse
+import json, os, sys, time, urllib.request, urllib.parse
 
 # Este script vive en herramientas/datos/: la raíz del repo está 3
 # niveles arriba, no en el directorio del archivo.

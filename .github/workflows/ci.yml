@@ -64,6 +64,14 @@ jobs:
           python herramientas/validar_camino.py \
             --cache data/replay_muestra.json --partidas 60
 
+      - name: El camino en vivo (motor → servidor → panel) sin juego
+        run: python herramientas/humo_vivo.py
+
+      - name: El paquete que se comparte arranca
+        run: |
+          rm -rf dist
+          herramientas/empaquetar.sh
+
       - name: Archivado idempotente
         run: |
           python herramientas/archivar.py --db /tmp/ci.db | tee /tmp/archivo-1.txt
@@ -82,3 +90,23 @@ jobs:
           assert not faltan, f"faltan tablas: {faltan}"
           print("archivado idempotente: ok")
           PY
+
+  # El día que exista la versión Windows, el motor tiene que poder importarse allí.
+  # Esta tarea no prueba captura ni UI: prueba la invariante que las hace posibles,
+  # que es lo único que se puede verificar sin una máquina Windows de verdad.
+  plataforma:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: "Dependencias mínimas (sin GTK: en Windows no existe)"
+        run: python -m pip install --upgrade pip pytest numpy pyyaml pillow
+
+      - name: El motor se importa sin gi y lo puro de la captura/overlay se sostiene
+        run: >
+          python -m pytest -q tests/test_plataforma.py tests/test_captura_backend.py
+          tests/test_overlay_windows.py

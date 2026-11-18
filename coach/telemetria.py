@@ -15,7 +15,11 @@ import threading
 import time
 
 RAIZ = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-RUTA = os.path.join(RAIZ, "salida", "telemetria.jsonl")
+# La ruta se puede desviar con ABRAMS_TELEMETRIA: las pruebas la apuntan a un
+# directorio temporal. Sin eso, correr la batería metía líneas falsas («match 111»,
+# «k_eNotInGame») en el registro real y estropeaba cualquier medición posterior.
+RUTA = os.environ.get("ABRAMS_TELEMETRIA") or os.path.join(
+    RAIZ, "salida", "telemetria.jsonl")
 MAX_LINEAS = 4000          # al pasarse, se deja la mitad más reciente
 _LOCK = threading.Lock()
 

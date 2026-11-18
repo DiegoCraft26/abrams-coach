@@ -16,7 +16,6 @@ KWin y se cachea: preguntarlo en cada cuadro costaba más que leerlo.
 """
 from __future__ import annotations
 
-import os
 import re
 import subprocess
 import time
@@ -31,12 +30,11 @@ def _parsear_salidas(texto: str) -> list[tuple]:
     salidas = []
     nombre = None
     prioridad = 0
-    geometria = None
     for linea in ANSI.sub("", texto).splitlines():
         linea = linea.strip()
         encontrado = re.match(r"Output:\s*\d+\s+(\S+)", linea)
         if encontrado:
-            nombre, prioridad, geometria = encontrado.group(1), 0, None
+            nombre, prioridad = encontrado.group(1), 0
             continue
         if linea.startswith("priority"):
             try:
@@ -51,7 +49,6 @@ def _parsear_salidas(texto: str) -> list[tuple]:
                 ancho, alto = (int(v) for v in tamano.split("x"))
             except (IndexError, ValueError):
                 continue
-            geometria = (x, y, ancho, alto)
             salidas.append((nombre, x, y, ancho, alto, prioridad))
     return salidas
 
@@ -93,7 +90,9 @@ class SchedulerVision:
         self.cola = cola
         self.intervalo_s = float(intervalo_s)
         self.capturador = capturador or _capturar
-        self.caja_fn = caja_fn or caja_juego
+        # La caja tiene que ser la del cuadro que devolvió el capturador, no la del
+        # escritorio: `_capturar` pide solo el monitor del juego.
+        self.caja_fn = caja_fn or (lambda: caja_cuadro() or caja_juego())
         # "tira": recorte de las zonas del HUD (reloj, oro, ítems) — 10 kB y correcto.
         # "cuadro": el monitor entero a 640 px — más caro y más lento, para la tienda.
         self.modo = modo
@@ -174,11 +173,34 @@ class SchedulerVision:
 
 
 
+_CAJA_CUADRO = {"caja": None}
+
+
+def caja_cuadro():
+    """Caja del juego dentro del último cuadro capturado por `_capturar()`.
+
+    `_capturar()` ya no trae los dos monitores: pide solo el del juego, así que la caja
+    dentro de esa imagen es la imagen entera. Se guarda aquí para que el planificador no
+    tenga que adivinarlo (y para no pagar una segunda consulta a kscreen-doctor).
+    """
+    return _CAJA_CUADRO["caja"]
+
+
 def _capturar():
-    """Un cuadro del escritorio (RGBX) o None. Nunca lanza: el bucle no puede caerse."""
+    """Un cuadro del MONITOR DEL JUEGO (o None). Nunca lanza: el bucle no puede caerse.
+
+    Antes pedía el escritorio completo (4480x1440, ~64 ms): durante una pelea eso es un
+    tirón visible y no aportaba nada, porque el panel y el otro monitor se recortaban
+    después. Ahora se pide el monitor del juego (~34 ms) y la caja relativa es su tamaño.
+    """
     try:
         from . import captura_kwin
-        return captura_kwin.capturar_escritorio()
+        caja = caja_juego()
+        im = captura_kwin.capturar(*caja) if caja else captura_kwin.capturar_escritorio()
+        if im is None:
+            return None
+        _CAJA_CUADRO["caja"] = (0, 0, im.width, im.height)
+        return im
     except Exception:                                     # noqa: BLE001
         return None
 

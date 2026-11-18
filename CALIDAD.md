@@ -110,3 +110,63 @@ git checkout baseline-9h -- coach/ run.py panel_nativo.py
 
 Banderas en `config/coach.yaml`: `patrones_nuevos`, `copiloto`, `hud_ocr`,
 `archivado_auto`, `interfaz_responsive`.
+
+## Motor v2: el valor medido de una compra (2026-11-18)
+
+El efecto de cada compra se estima con AIPW y bootstrap agrupado por partida sobre
+313 324 compras de Abrams. Antes de usar cualquier número, estas puertas:
+
+```bash
+python3 herramientas/lab/corpus.py                       # congela corpus + hash
+python3 herramientas/lab/estimador.py --bootstrap 200    # datos/modelo_v2.json
+python3 herramientas/lab/validar.py --repeticiones 20    # G1, G2, G3 sobre sintético
+python3 -m pytest -q tests/test_estimador.py tests/test_valor.py
+```
+
+| Puerta | Qué mide | Criterio |
+|---|---|---|
+| G1 | Sesgo absoluto medio con efecto conocido | < 0.5 pp |
+| G2 | Cobertura del IC90 | 88 – 96 % |
+| G3 | Falsos positivos con efecto nulo | ≤ 8 % |
+| G10 | Ninguna evidencia sin IC90, sin n o sin etiqueta | 0 violaciones (test de contrato) |
+
+Regla nueva, no negociable: **si `datos/modelo_v2.json` no coincide con el corpus
+congelado, el motor no usa ningún efecto medido** (`coach/valor.py:modo() == "CIEGO"`).
+Es preferible quedarse sin el dato a enseñar el de otra muestra.
+
+## Confiabilidad: la app nunca se queda sin servir
+
+| Comprobación | Criterio | Dónde |
+|---|---|---|
+| Cupo local de espectador | el balde persistido no deja pasar más de 6/hora ni con reinicios | `tests/test_cuota.py` |
+| Sin broadcast | el panel sigue con el HUD (reloj, almas, inventario) y lo dice | `run.py` + `publicar_pantalla` |
+| Modos | `NORMAL` / `SOLO_LOCAL` / `CIEGO` se distinguen en pantalla | `tests/test_panel_web.py` |
+| Caché corrupta | ningún archivo roto impide arrancar | `tests/test_cuota.py`, `test_estado_guardado` |
+
+## Revisión adversarial (2026-11-18)
+
+Un revisor independiente audita el cambio **antes** de fusionar, con una regla: los
+hallazgos valen por su reproducción, no por su tono. En la pasada de la v0.8 encontró 15
+defectos que la suite no veía (322 pruebas en verde) porque las pruebas comprobaban
+substrings y no lo que el usuario ve.
+
+| # | Defecto | Dónde | Estado |
+|---|---|---|---|
+| 1 | El panel decía «en vivo» con el coach muerto | `coach/ui/app.py` | `marcar_rancio()` + test |
+| 2 | TENDENCIA no se pintaba nunca (clave `historial`) | `app.py` | corregido + test |
+| 3 | En el ancho por defecto se perdían 5 secciones | `app.py` | corregido |
+| 4 | El «faltan ~N» del panel web no salía (`bolsillo.oro`) | `web.py` | corregido + test |
+| 5 | El guard sha256 del artefacto era circular | `estimador.py` | hash de la base, no del corpus |
+| 6 | El cupo devolvía la ficha aunque el stream abriera | `en_vivo.py` | corregido |
+| 7 | El menú se pintaba como «en vivo» | `nucleo_vivo.py` | `listo: false` + test |
+| 8 | `"t11 aviso"` como una sola clase CSS | `recomendacion.py` | corregido + test |
+| 9 | CONTRA visible siempre, vacía | `app.py` | claves correctas |
+| 10 | `cuota` fallaba abierto y en silencio | `cuota.py` | clamp + error visible |
+| 11 | El cupo no frenaba `live/url` (código muerto) | `live_api.py` | ficha alrededor de la llamada |
+| 12 | `valor.cargar()` sí lanzaba con JSON raro | `valor.py` | isinstance + error guardado |
+| 13 | Firma de repintado de CONTRA incompleta | `contra.py` | campos añadidos |
+| 14 | `"accion accion-espera"` como una sola clase | `recomendacion.py` | base + variante |
+| 15 | Las pruebas no veían 8 ni 14 | `tests/` | clases CSS reales + veredicto negativo |
+
+Regla que queda: un hallazgo se cierra con una prueba que **habría fallado** antes del
+arreglo. Las 11 de `tests/test_revision_adversarial.py` son eso.

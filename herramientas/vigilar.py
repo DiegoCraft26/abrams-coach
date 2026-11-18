@@ -23,6 +23,7 @@ sys.path.insert(0, RAIZ)
 
 LOG = "/tmp/abrams-vigilar.log"
 PANEL_LOG = "/tmp/abrams-panel.log"
+OVERLAY_LOG = "/tmp/abrams-overlay.log"
 PUERTO = 8090
 # Un solo vigilante por máquina. El 2026-11-09 quedó uno viejo corriendo 4 h junto al
 # servicio de systemd y cada uno reabría el panel por su cuenta: la ventana aparecía
@@ -33,6 +34,10 @@ BLOQUEO = "/tmp/abrams-vigilar.lock"
 SILENCIO = os.path.join(os.path.expanduser("~"), ".abrams-silencio")
 # Si el panel se cae solo, no se reabre más de una vez cada 5 min (evita el bucle).
 MIN_ENTRE_REAPERTURAS_S = 300.0
+# Un panel que vive menos que esto no arrancó: lo normal es que GDK no vea pantalla.
+PANEL_ROTO_S = 10.0
+# Tras tres intentos así, se deja de reabrir hasta la siguiente partida.
+MAX_PANEL_ROTOS = 3
 
 
 def registrar(texto):
@@ -63,17 +68,25 @@ def describir_fin(codigo):
     return f"código {codigo}"
 
 
-def revisar_hijos(procesos):
-    """Anota los hijos que ya terminaron y devuelve los que siguen vivos."""
-    vivos = []
+def revisar_hijos(procesos, inicios=None):
+    """Anota los hijos que ya terminaron.
+
+    Devuelve `(vivos, muertes)`. Cada muerte lleva cuántos segundos vivió el proceso:
+    un panel que muere a los 0–10 s no es "se cerró", es "no arrancó" (GTK sin
+    pantalla, por ejemplo), y reabrirlo cada 5 min solo molesta.
+    """
+    vivos, muertes = [], []
     for p in procesos:
         codigo = p.poll()
         if codigo is None:
             vivos.append(p)
         else:
-            registrar(f"{os.path.basename(p.args[1] if len(p.args) > 1 else p.args[0])} "
-                      f"(pid {p.pid}) terminó: {describir_fin(codigo)}")
-    return vivos
+            nombre = os.path.basename(p.args[1] if len(p.args) > 1 else p.args[0])
+            registrar(f"{nombre} (pid {p.pid}) terminó: {describir_fin(codigo)}")
+            inicio = (inicios or {}).get(p.pid)
+            muertes.append((nombre, p.pid, codigo,
+                            time.time() - inicio if inicio else None))
+    return vivos, muertes
 
 
 def puerto_libre(puerto=PUERTO):
@@ -164,7 +177,60 @@ def panel_vivo():
     return None
 
 
-def abrir_panel(a, procesos):
+def _es_overlay(pid):
+    """True si ese pid es el overlay y sigue vivo (misma trampa de zombis que el panel)."""
+    try:
+        with open(f"/proc/{pid}/stat", encoding="utf-8", errors="replace") as f:
+            estado = f.read().rsplit(")", 1)[-1].split()[0]
+        if estado == "Z":
+            return False
+        with open(f"/proc/{pid}/cmdline", "rb") as f:
+            return b"overlay.py" in f.read()
+    except (OSError, IndexError):
+        return False
+
+
+def overlay_vivo():
+    """PID del overlay si sigue vivo. Uno solo: dos tarjetas encima del HUD es un error."""
+    try:
+        with open("/tmp/abrams-overlay.pid", encoding="utf-8") as f:
+            pid = int(f.read().strip())
+        if _es_overlay(pid):
+            return pid
+    except (OSError, ValueError):
+        pass
+    try:
+        salida = subprocess.run(["pgrep", "-f", "[o]verlay.py"],
+                                capture_output=True, text=True, timeout=5).stdout
+        for linea in salida.split():
+            pid = int(linea)
+            if not _es_overlay(pid):
+                continue
+            with open("/tmp/abrams-overlay.pid", "w", encoding="utf-8") as f:
+                f.write(str(pid))
+            return pid
+    except (OSError, ValueError, subprocess.SubprocessError):
+        pass
+    return None
+
+
+def abrir_overlay(procesos, inicios=None):
+    """Abre la tarjeta encima del HUD. Vive mientras viva la partida."""
+    try:
+        salida = open(OVERLAY_LOG, "a", encoding="utf-8")
+    except OSError:
+        salida = subprocess.DEVNULL
+    procesos.append(subprocess.Popen(
+        [sys.executable, os.path.join(RAIZ, "herramientas", "overlay.py"),
+         "--url", f"http://127.0.0.1:{PUERTO}"],
+        cwd=RAIZ, stdout=salida, stderr=subprocess.STDOUT))
+    with open("/tmp/abrams-overlay.pid", "w", encoding="utf-8") as f:
+        f.write(str(procesos[-1].pid))
+    if inicios is not None:
+        inicios[procesos[-1].pid] = time.time()
+
+
+def abrir_panel(a, procesos, inicios=None):
     # La salida del panel NO va a /dev/null: era la razón de que su muerte no dejara
     # rastro. El mismo archivo que revisa Diego en /tmp/abrams-panel.log.
     try:
@@ -177,11 +243,35 @@ def abrir_panel(a, procesos):
         cwd=RAIZ, stdout=salida, stderr=subprocess.STDOUT))
     with open("/tmp/abrams-panel.pid", "w", encoding="utf-8") as f:
         f.write(str(procesos[-1].pid))
+    if inicios is not None:
+        inicios[procesos[-1].pid] = time.time()
     time.sleep(2)
     subprocess.run(
         [sys.executable, os.path.join(RAIZ, "herramientas", "colocar_panel.py")],
         cwd=RAIZ, stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL, timeout=20)
+
+
+def lanzar_nota():
+    """Nota de la última partida en segundo plano.
+
+    Se lanza aparte a propósito: la consulta de la demo tarda 30 s o más y el vigilante
+    no puede quedarse esperando con el juego cerrado. La nota queda en
+    `salida/ultima_nota.txt` y, si hay `notify-send`, sale como aviso del escritorio.
+    """
+    script = (
+        f"cd {RAIZ!r} && {sys.executable!r} herramientas/demos/nota.py --ultima "
+        "--rondas-demo 3 --espera-demo 300 --guardar --salida salida/ultima_nota.txt "
+        ">/tmp/abrams-nota.log 2>&1; "
+        "if command -v notify-send >/dev/null 2>&1 && [ -s salida/ultima_nota.txt ]; then "
+        "notify-send -a 'Abrams Coach' -i input-gaming \"$(head -4 salida/ultima_nota.txt)\" "
+        "|| true; fi"
+    )
+    try:
+        subprocess.Popen(["bash", "-c", script], cwd=RAIZ, start_new_session=True,
+                         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    except (OSError, subprocess.SubprocessError):
+        pass
 
 
 def juego_abierto():
@@ -197,6 +287,8 @@ def juego_abierto():
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--sin-panel", action="store_true")
+    ap.add_argument("--sin-overlay", action="store_true",
+                    help="no abre la tarjeta encima del HUD")
     ap.add_argument("--intervalo", type=float, default=5.0)
     a = ap.parse_args()
 
@@ -209,10 +301,26 @@ def main():
 
     registrar("modo espera: abre Deadlock cuando quieras")
     procesos = []
+    inicios = {}
     dentro = False
     ultima_apertura = [0.0]
+    fallos_panel = [0]
+    reabrir = [True]
     while True:
-        procesos = revisar_hijos(procesos)
+        procesos, muertes = revisar_hijos(procesos, inicios)
+        for nombre, pid, codigo, vivio_s in muertes:
+            if "panel_nativo" not in (nombre or "") or vivio_s is None:
+                continue
+            if vivio_s < PANEL_ROTO_S:
+                fallos_panel[0] += 1
+                if fallos_panel[0] >= MAX_PANEL_ROTOS:
+                    reabrir[0] = False
+                    registrar(f"el panel murió {fallos_panel[0]} veces al arrancar "
+                              f"(la última a los {vivio_s:.1f} s): no lo reabro más. "
+                              "Mira /tmp/abrams-panel-crash.log; "
+                              "`touch ~/.abrams-silencio` lo apaga del todo")
+            else:
+                fallos_panel[0] = 0
         abierto = juego_abierto()
         if abierto and not dentro:
             dentro = True
@@ -224,25 +332,39 @@ def main():
                     cuenta = cuenta_guardada()
                     if cuenta:
                         orden += ["--cuenta", cuenta]
+                    # Sin esto el marcador se leía pero el coach no sabía cuál de las
+                    # 12 almas eras tú y el panel decía «no sé cuál eres tú» toda la
+                    # partida. Se puede cambiar con ABRAMS_HEROE=otro.
+                    heroe = os.environ.get("ABRAMS_HEROE", "abrams").strip()
+                    if heroe:
+                        orden += ["--mi-heroe", heroe]
                     procesos.append(subprocess.Popen(
                         orden, cwd=RAIZ, stdout=subprocess.DEVNULL,
                         stderr=subprocess.DEVNULL))
                 else:
                     registrar("el coach ya estaba corriendo en :8090")
-                if (not a.sin_panel and not en_silencio()
+                if (not a.sin_panel and not en_silencio() and reabrir[0]
                         and panel_vivo() is None):
-                    abrir_panel(a, procesos)
+                    abrir_panel(a, procesos, inicios)
                     ultima_apertura[0] = time.time()
+                if (not a.sin_overlay and not en_silencio()
+                        and overlay_vivo() is None):
+                    abrir_overlay(procesos, inicios)
             except (OSError, subprocess.SubprocessError) as exc:
                 registrar(f"no pude arrancar: {exc}")
         elif abierto and dentro and not a.sin_panel:
-            # El panel es de solo mirar: si se cierra o se cae, se reabre solo. Sin
-            # botones, sin atajos y sin que tengas que tocar nada.
-            if (panel_vivo() is None and not en_silencio()
+            # El panel es de solo mirar: si se cierra o se cae, se reabre solo. Pero si
+            # muere al arrancar una y otra vez no es "se cayó": está roto, y reabrirlo
+            # cada 5 min es justo lo que molesta.
+            if (panel_vivo() is None and not en_silencio() and reabrir[0]
                     and time.time() - ultima_apertura[0] > MIN_ENTRE_REAPERTURAS_S):
                 registrar("el panel no está: reabriéndolo")
-                abrir_panel(a, procesos)
+                abrir_panel(a, procesos, inicios)
                 ultima_apertura[0] = time.time()
+            if (not a.sin_overlay and not en_silencio()
+                    and overlay_vivo() is None):
+                registrar("el overlay no está: reabriéndolo")
+                abrir_overlay(procesos, inicios)
         elif not abierto and dentro:
             dentro = False
             registrar("Deadlock cerrado: cerrando y archivando")
@@ -261,6 +383,7 @@ def main():
                     registrar("  " + linea)
             except (OSError, subprocess.SubprocessError) as exc:
                 registrar(f"  el archivado falló: {exc}")
+            lanzar_nota()
         time.sleep(max(2.0, a.intervalo))
 
 

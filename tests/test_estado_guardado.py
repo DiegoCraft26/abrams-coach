@@ -73,7 +73,6 @@ def test_el_intervalo_evita_escribir_en_cada_vuelta(tmp_path):
 def test_el_servidor_sirve_el_respaldo_si_el_coach_no_publico(tmp_path, monkeypatch):
     """Con el coach recién arrancado y sin publicar, /api/estado dice de dónde viene."""
     import json as _json
-    import threading
     import urllib.request
 
     from coach import servidor as S

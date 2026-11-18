@@ -31,6 +31,22 @@ sys.path.insert(0, RAIZ)
 from coach.motor_api import Motor  # noqa: E402
 
 CACHE = os.path.join(RAIZ, "data", "replay_cache.json")
+DW = os.path.join(RAIZ, "data", "dw_items.json")
+
+
+def dw_por_item():
+    """ΔW por ítem medido en 20 500 partidas (`data/dw_items.json`).
+
+    Sirve para puntuar la recomendación contra lo que el jugador compró de verdad, en
+    la misma escala. Es la métrica primaria: el residual premia 6.400 tempranos que el
+    banco marca como imposibles.
+    """
+    try:
+        with open(DW, encoding="utf-8") as f:
+            return {k: v.get("dw", 0.0) for k, v in
+                    ((json.load(f) or {}).get("items") or {}).items()}
+    except (OSError, ValueError):
+        return {}
 
 
 def cargar_cache(limite, ruta=CACHE):
@@ -63,7 +79,12 @@ def estado_en(partida, t, heroes_por_id):
         if j["slot"] == yo["slot"]:
             continue
         nombre = heroes_por_id.get(str(j["hero"]), str(j["hero"]))
-        (enemigos if j["team"] != yo["team"] else aliados).append({"heroe": nombre})
+        ficha = {"heroe": nombre}
+        if j.get("stats"):
+            # Sin esto el motor nunca ve la economía rival y los perfiles
+            # "atras"/"arriba" no se activan en la evaluación.
+            ficha["almas"] = almas_en(j["stats"], t)
+        (enemigos if j["team"] != yo["team"] else aliados).append(ficha)
     return {"t": t, "yo": {"heroe": "Abrams", "almas": almas_en(yo["stats"], t),
                            "items": propios},
             "enemigos": enemigos, "aliados": aliados, "confianza": 1.0, "fuente": "replay"}
@@ -71,6 +92,7 @@ def estado_en(partida, t, heroes_por_id):
 
 def evaluar(motor, partidas, heroes_por_id, desde_min=10, max_estados=4000):
     filas = []
+    dw = dw_por_item()
     for partida in partidas:
         compras = [i for i in partida["yo"]["items"]
                    if i["t"] >= desde_min * 60 and i["id"] in motor.conoc["items"]]
@@ -97,6 +119,10 @@ def evaluar(motor, partidas, heroes_por_id, desde_min=10, max_estados=4000):
                 "almas": estado["yo"]["almas"],
                 "alcanzable": (top.get("costo") or 0) <= (estado["yo"]["almas"] or 0),
                 "acierto": top["id"] == compra["id"],
+                # Ventaja de valor esperado: ΔW de lo recomendado menos ΔW de lo que
+                # el jugador compró. Positivo = el motor proponía algo mejor.
+                "ventaja_dw": ((dw.get(top["id"], 0.0) - dw.get(compra["id"], 0.0))
+                               * 100 if dt_dw(dw, top["id"], compra["id"]) else None),
                 "en_top3": compra["id"] in [x["id"] for x in recos],
                 "razones": len(top.get("razones") or []),
                 "ms": ms,
@@ -104,12 +130,15 @@ def evaluar(motor, partidas, heroes_por_id, desde_min=10, max_estados=4000):
     return filas
 
 
+def dt_dw(dw, a, b):
+    return a in dw and b in dw
+
+
 def resumir(filas):
     if not filas:
         return {}
     tops = [f["top1"] for f in filas]
     distintos = len(set(tops))
-    estables = sum(1 for a, b in zip(tops, tops[1:]) if a == b)
     por_orden = {}
     for f in filas:
         por_orden.setdefault(f["match"], []).append(f["top1"])
@@ -127,6 +156,9 @@ def resumir(filas):
         "estabilidad_pct": round(100 * estabilidad, 1),
         "acierto_pct": round(100 * sum(f["acierto"] for f in filas) / len(filas), 1),
         "en_top3_pct": round(100 * sum(f["en_top3"] for f in filas) / len(filas), 1),
+        "ventaja_dw_pp": (round(statistics.fmean(
+            [f["ventaja_dw"] for f in filas if f["ventaja_dw"] is not None]), 2)
+            if any(f["ventaja_dw"] is not None for f in filas) else None),
         "razones_por_reco": round(statistics.fmean([f["razones"] for f in filas]), 2),
         "ms_medio": round(statistics.fmean([f["ms"] for f in filas]), 2),
         "ms_max": round(max(f["ms"] for f in filas), 2),
@@ -157,6 +189,8 @@ def main():
     print(f"== {a.etiqueta} ==")
     print(f"partidas {len(partidas)} · estados {resumen['estados']}")
     print(f"residual medio top1 ....... {resumen['residual_medio']:+.4f} pp")
+    if resumen.get("ventaja_dw_pp") is not None:
+        print(f"ventaja ΔW (rec − compra) . {resumen['ventaja_dw_pp']:+.2f} pp")
     print(f"alcanzable ................ {resumen['alcanzable_pct']}%")
     print(f"diversidad (top1 únicos) .. {resumen['diversidad']}")
     print(f"estabilidad ............... {resumen['estabilidad_pct']}%")

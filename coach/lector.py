@@ -48,12 +48,45 @@ def cargar_cfg():
 BUFER_IMG = os.path.expanduser(os.environ.get("ABRAMS_BUFER", "~/.dsh/state/ultima.png"))
 
 
-def capturar(destino=None, fuente="auto", edad_max=5.0, recortar=True):
-    """Foto del escritorio.
+def _caja_monitor():
+    """Caja del monitor del juego, o None. Se cachea en `captura_bajo_demanda`."""
+    try:
+        from .fuentes import captura_bajo_demanda as cbd
+        return cbd.caja_juego()
+    except Exception:                                          # noqa: BLE001
+        return None
+
+
+def _capturar_kwin():
+    """PIL del monitor del juego por KWin (~34 ms), o None si no se puede.
+
+    El escritorio completo son dos monitores (4480x1440): capturarlo todo para leer un
+    marcador de 2560x1440 es pagar de más y es lo que se nota como tirón. Si n/sabemos
+    en qué monitor está el juego, se pide el escritorio entero y `_area_juego` recorta.
+    """
+    try:
+        from .fuentes import captura_kwin
+        caja = _caja_monitor()
+        if caja:
+            im = captura_kwin.capturar(*caja)
+            if im is not None:
+                return im.convert("RGB")
+        im = captura_kwin.capturar_escritorio()
+        return im.convert("RGB") if im is not None else None
+    except Exception:                                          # noqa: BLE001
+        return None
+
+
+def capturar(destino=None, fuente="auto", edad_max=5.0, recortar=True,
+             devolver_imagen=False):
+    """Foto del área de juego.
 
     fuente="bufer": reutiliza un PNG reciente de ABRAMS_BUFER, si existe.
-    fuente="spectacle": captura propia.
-    fuente="auto": lo que esté más fresco.
+    fuente="kwin" / "auto": KWin por región (milisegundos, sin PNG en disco).
+    fuente="spectacle": el método viejo (~415 ms y 450 KB en disco); último recurso.
+
+    `devolver_imagen=True` devuelve la imagen PIL en vez de una ruta: el bucle de
+    lectura no tiene por qué pagar un PNG en disco por cuadro.
     """
     destino = destino or os.path.join(tempfile.gettempdir(), "dl_frame.png")
     if fuente in ("auto", "bufer") and os.path.exists(BUFER_IMG):
@@ -72,9 +105,20 @@ def capturar(destino=None, fuente="auto", edad_max=5.0, recortar=True):
                     return destino
             return destino
         if fuente == "bufer":
-            fuente = "spectacle"
+            fuente = "auto"
+    if fuente in ("auto", "kwin"):
+        im = _capturar_kwin()
+        if im is not None:
+            if devolver_imagen:
+                return im
+            im.save(destino, "PNG")
+            return destino
     subprocess.run(["spectacle", "-b", "-n", "-f", "-o", destino],
                    check=True, capture_output=True, timeout=15)
+    if devolver_imagen and os.path.exists(destino):
+        from PIL import Image
+        with Image.open(destino) as im:
+            return im.convert("RGB")
     if recortar:
         from . import ventana
         juego = destino.replace(".png", "_juego.png")

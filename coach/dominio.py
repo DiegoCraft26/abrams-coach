@@ -275,6 +275,9 @@ class EstadoPartida:
     confianza: float = 1.0
     notas: list = field(default_factory=list)
     slots: dict = field(default_factory=lambda: {"weapon": 4, "vitality": 4, "spirit": 4})
+    # Últimas muestras {t, a} del bucle: el motor mide con ellas las almas/s reales
+    # para el ETA. No entra en `a_dict()` (es diagnóstico, no estado de partida).
+    historial: list = field(default_factory=list)
 
     @classmethod
     def desde_dict(cls, d):
@@ -298,6 +301,7 @@ class EstadoPartida:
             confianza=confianza if confianza is not None else 1.0,
             notas=[str(x) for x in _lista(d.get("notas"))],
             slots=slots_val,
+            historial=[x for x in _lista(d.get("historial")) if isinstance(x, dict)],
         )
 
     def a_dict(self):

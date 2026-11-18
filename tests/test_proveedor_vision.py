@@ -4,7 +4,6 @@ Medido el 2026-11-09: huggingface contesta un cuadro de 33 kB en ~23 s y command
 cae por tiempo de espera con ese mismo cuadro. De ahí el orden y el respaldo.
 """
 import base64
-import json
 import sys
 from pathlib import Path
 
@@ -39,7 +38,8 @@ class Falso(P.ProveedorOpenAICompatible):
 
 
 def test_el_orden_de_vision_es_el_medido():
-    assert [p.nombre for p in P.cadena_vision()] == ["huggingface", "commandcode"]
+    """Solo commandcode: huggingface devuelve 402 (sin créditos) desde el 2026-11-15."""
+    assert [p.nombre for p in P.cadena_vision()] == ["commandcode"]
 
 
 def test_el_local_no_entra_en_la_cadena_de_vision():

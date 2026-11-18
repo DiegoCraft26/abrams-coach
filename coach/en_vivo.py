@@ -23,12 +23,15 @@ Esto NO lee memoria del proceso del juego, no inyecta y no hookea: es la misma v
 la que se ve una partida en el cliente de espectador.
 """
 import json
+import os
 import threading
 import time
 import urllib.error
 import urllib.parse
 import urllib.request
 from collections import deque
+
+from . import cuota
 
 BASE = "https://api.deadlock-api.com"
 TICKS_POR_SEGUNDO = 64.0          # nominal del broadcast; medido 63.05 en 40 s
@@ -44,6 +47,10 @@ INTERVALO_MIN_GOLPE_S = 3.0
 # primer reintento de la escalera lo recupera y el contador vuelve a cero.
 ESPERAS_RECONEXION_S = (5.0, 15.0, 45.0)
 ESPERA_SIN_DATOS_S = 300.0
+# Sin URL del TV, `demo/live/query` se abre por `match_id` y entonces **especta**: cada
+# apertura gasta 1 de las 6/hora por IP (openapi, medido el 2026-11-18). En ese modo no
+# hay escalera: cinco reintentos en 65 s agotaron la hora entera. Un intento y 5 min.
+ESPERA_SIN_URL_S = 300.0
 
 # La API está detrás de un CDN que devuelve 403 al User-Agent de urllib. Con un
 # User-Agent propio responde 200 (verificado: urllib 403 -> 200 con esta cabecera).
@@ -71,7 +78,13 @@ SQL = ("SELECT tick," + ",".join(f'"{c}"' for c in COLUMNAS.values())
 
 
 class ErrorCuota(Exception):
-    """La API pidió esperar antes de volver a llamarla (HTTP 429)."""
+    """La API pidió esperar antes de volver a llamarla (HTTP 429).
+
+    `consumida` distingue los dos casos que hoy comparten mensaje: un 429 llegó al
+    servidor y por tanto la petición ya contó contra la cuota (`True`); una pausa
+    local abortó antes de enviar nada (`False`, la ficha se puede devolver).
+    """
+    consumida = False
 
 
 class Diario:
@@ -120,11 +133,47 @@ DIARIO = Diario()
 _PUERTA = threading.Lock()
 _ULTIMO_GOLPE = 0.0
 _PAUSA_HASTA = 0.0          # instante hasta el que la API pidió no llamar
+# La pausa también vive en disco. Sin esto, reiniciar el coach durante un 429 olvidaba
+# la espera y gastaba otra petición en el arranque: la ventana de 6/hora nunca drenaba
+# porque cada reinicio metía una más (medido el 2026-11-18: 6 -> 9 -> 12).
+RUTA_PAUSA = os.path.expanduser(os.environ.get(
+    "ABRAMS_CUOTA_PAUSA", "~/.cache/abrams-coach/cuota_pausa.json"))
+
+
+def _cargar_pausa(archivo=None):
+    """Recupera la pausa guardada. Nunca lanza: una caché rota no rompe el arranque."""
+    global _PAUSA_HASTA
+    ruta = archivo or RUTA_PAUSA
+    try:
+        with open(ruta, encoding="utf-8") as f:
+            hasta = float(json.load(f).get("hasta") or 0.0)
+    except (OSError, ValueError, TypeError, AttributeError):
+        return
+    if hasta > time.time():
+        _PAUSA_HASTA = max(_PAUSA_HASTA, hasta)
+
+
+def _guardar_pausa(archivo=None):
+    """Apunta en disco hasta cuándo no se llama. Si falla, la app sigue igual."""
+    ruta = archivo or RUTA_PAUSA
+    try:
+        if _PAUSA_HASTA <= time.time():
+            return
+        os.makedirs(os.path.dirname(ruta), exist_ok=True)
+        temporal = f"{ruta}.tmp"
+        with open(temporal, "w", encoding="utf-8") as f:
+            json.dump({"hasta": _PAUSA_HASTA}, f)
+        os.replace(temporal, ruta)
+    except (OSError, TypeError, ValueError):
+        pass
 
 
 def pausa_restante_s():
     """Segundos que faltan para poder volver a llamar a la API (0 = vía libre)."""
     return max(0.0, _PAUSA_HASTA - time.time())
+
+
+_cargar_pausa()
 
 
 def _anotar_pausa(segundos):
@@ -135,6 +184,17 @@ def _anotar_pausa(segundos):
         segundos = 60.0
     if segundos > 0:
         _PAUSA_HASTA = max(_PAUSA_HASTA, time.time() + segundos)
+        _guardar_pausa()
+
+
+def anotar_pausa(segundos):
+    """Marca hasta cuándo no se debe llamar a la API. Público: lo usan las fuentes.
+
+    Cada 429 que se reintenta cuenta otra vez contra la ventana, así que insistir cada
+    minuto mantiene la cuota agotada para siempre. Quien reciba el 429 tiene que apuntar
+    aquí el `next_request_in` y dejar de llamar hasta entonces.
+    """
+    _anotar_pausa(segundos)
 
 
 def _esperar_turno():
@@ -150,6 +210,34 @@ def _esperar_turno():
         _ULTIMO_GOLPE = time.time()
 
 
+def _cuerpo_429(exc):
+    """El JSON del 429, leído UNA sola vez (el cuerpo de un HTTPError no se relee)."""
+    guardado = getattr(exc, "_abrams_cuerpo", None)
+    if isinstance(guardado, dict):
+        return guardado
+    crudo = ""
+    try:
+        crudo = exc.read().decode("utf-8", "replace")
+        cuerpo = json.loads(crudo)
+    except Exception:                                          # noqa: BLE001
+        cuerpo = {}
+    if not isinstance(cuerpo, dict):
+        cuerpo = {}
+    # La API anida los datos dentro de `error`: {"status":429,"error":{"type":"IP",
+    # "quota":{...}}}. Se aplana aquí para que quien lo lea no tenga que saberlo.
+    anidado = cuerpo.get("error")
+    if isinstance(anidado, dict):
+        plano = dict(cuerpo)
+        plano.update(anidado)
+        cuerpo = plano
+    cuerpo.setdefault("_crudo", crudo[:600])
+    try:
+        exc._abrams_cuerpo = cuerpo
+    except Exception:                                          # noqa: BLE001
+        pass
+    return cuerpo
+
+
 def _segundos_para_reintentar(exc):
     """Lo que pide esperar un 429: `retry-after` o el `next_request_in` del cuerpo."""
     try:
@@ -158,10 +246,7 @@ def _segundos_para_reintentar(exc):
             return float(cabecera)
     except (AttributeError, TypeError, ValueError):
         pass
-    try:
-        cuerpo = json.loads(exc.read().decode("utf-8"))
-    except Exception:                                          # noqa: BLE001
-        return 60.0
+    cuerpo = _cuerpo_429(exc)
     if isinstance(cuerpo, dict):
         for clave in ("next_request_in", "retry_after"):
             if cuerpo.get(clave) is not None:
@@ -178,6 +263,27 @@ def _segundos_para_reintentar(exc):
     return 60.0
 
 
+def _anotar_429(url, espera, cuerpo):
+    """Deja en la telemetría quién se comió la cuota, no solo que se acabó.
+
+    Sin `type` y `requests` un 429 es indistinguible de una caída de la API y no se
+    puede auditar el gasto (pasó el 2026-11-18: seis espectaciones y ninguna línea).
+    """
+    cuota = cuerpo.get("quota") if isinstance(cuerpo, dict) else None
+    cuota = cuota if isinstance(cuota, dict) else {}
+    try:
+        from coach import telemetria
+        telemetria.anotar(
+            "api_429",
+            ruta=url.split("?")[0].replace(BASE, ""),
+            cuota_tipo=cuerpo.get("type") if isinstance(cuerpo, dict) else None,
+            limite=cuota.get("limit"), periodo_s=cuota.get("period"),
+            usadas=cuota.get("requests"), espera_s=round(float(espera), 1))
+    except Exception:                                          # noqa: BLE001
+        pass
+    return cuota
+
+
 def _abrir(url, timeout, extra=None):
     """Abre una petición con el ritmo controlado y el 429 convertido en ErrorCuota."""
     _esperar_turno()
@@ -190,9 +296,16 @@ def _abrir(url, timeout, extra=None):
     except urllib.error.HTTPError as exc:
         if exc.code == 429:
             espera = _segundos_para_reintentar(exc)
+            cuota = _anotar_429(url, espera, _cuerpo_429(exc))
             _anotar_pausa(espera)
-            DIARIO.error(f"429 de la API: cuota agotada, {int(espera)} s de espera")
-            raise ErrorCuota(f"la API pidió esperar {int(espera)} s") from exc
+            DIARIO.error(
+                f"429 de la API ({_cuerpo_429(exc).get('type') or 'sin tipo'}): "
+                f"cuota {cuota.get('limit')}/{cuota.get('period')} s, usadas "
+                f"{cuota.get('requests')}, esperar {int(espera)} s · "
+                f"{url.split('?')[0]}")
+            fallo = ErrorCuota(f"la API pidió esperar {int(espera)} s")
+            fallo.consumida = True
+            raise fallo from exc
         DIARIO.error(f"HTTP {exc.code} en {url.split('?')[0]}")
         raise
 
@@ -393,6 +506,7 @@ class Escucha:
 
     Uso:
         e = Escucha(match_id=123, cuenta=TU_STEAMID64)   # cuenta opcional
+        e = Escucha(123, url_tv="http://dist1-ord1.steamcontent.com/tv/123_456")
         e = Escucha(match_id=123, heroe="abrams")        # sin cuenta, por héroe
         e.arrancar()
         ... e.estado          # dict o None
@@ -401,9 +515,16 @@ class Escucha:
     """
 
     def __init__(self, match_id, cuenta=None, sql=SQL, max_segundos=None,
-                 heroe=None):
+                 heroe=None, url_tv=None):
         self.match_id = int(match_id)
         self.cuenta = cuenta
+        # URL del TV ya resuelta (`live_api.url_broadcast`). Con ella la consulta NO
+        # especta: gasta solo el límite de consultas (20/min) en vez de uno de los 6
+        # espectáculos por hora, y evita el paso que más cuota quemaba al reconectar.
+        self.url_tv = url_tv
+        # Si no hay URL, cada apertura ESPECTA (openapi: 6/h por IP). Queda dicho aquí
+        # para que la telemetría y el diagnóstico no tengan que adivinarlo.
+        self.especta = not bool(url_tv)
         self.heroe = heroe
         self.sql = sql
         self.max_segundos = max_segundos
@@ -420,13 +541,32 @@ class Escucha:
 
     # ------------------------------------------------------------------ interno
     def _url(self):
-        return (f"{BASE}/v1/matches/demo/live/query?"
-                + urllib.parse.urlencode({"query": self.sql, "match_id": self.match_id}))
+        parametros = {"query": self.sql}
+        if self.url_tv:
+            parametros["broadcast_url"] = self.url_tv
+        else:
+            parametros["match_id"] = self.match_id
+        return f"{BASE}/v1/matches/demo/live/query?" + urllib.parse.urlencode(parametros)
 
     def _espera(self, intento):
+        # Sin URL del TV no hay escalera que valga: cada intento cuesta uno de los 6
+        # espectáculos/hora. Un 504 de la API dejaba `url_tv=None` y la escalera abrió
+        # cinco veces en 65 s: cuota agotada y panel muerto una hora (2026-11-18).
+        if self.especta:
+            return ESPERA_SIN_URL_S
         if intento < len(ESPERAS_RECONEXION_S):
             return ESPERAS_RECONEXION_S[intento]
         return ESPERA_SIN_DATOS_S
+
+    def _anotar_apertura(self):
+        """Una línea por apertura del stream: así el gasto de cuota es auditable."""
+        try:
+            from coach import telemetria
+            telemetria.anotar("api_sse", match=self.match_id,
+                              especta=bool(self.especta),
+                              intento=int(self.reintentos))
+        except Exception:                                      # noqa: BLE001
+            pass
 
     def _publicar(self, grupo):
         estado = interpretar(grupo, self.cuenta, self._heroes, self.heroe)
@@ -450,9 +590,26 @@ class Escucha:
             if self.max_segundos and time.time() - arranque > self.max_segundos:
                 break
             estados_antes = self.estados
+            # Freno local ANTES de abrir: si no hay ficha de espectador, no se llama.
+            # El 429 llega después de gastar; esta ficha se pide antes y por eso la
+            # ventana de 6/hora ya no se puede agotar por una racha de reintentos.
+            gasto_ficha = False
+            if self.especta:
+                if not cuota.tomar("espectador"):
+                    espera = cuota.faltan_s("espectador")
+                    self.error = (f"cupo local de espectador agotado: "
+                                  f"{int(espera)} s")
+                    DIARIO.error(f"stream {self.match_id}: cupo local, "
+                                 f"{int(espera)} s")
+                    self._parar.wait(min(300.0, max(5.0, espera)))
+                    continue
+                gasto_ficha = True
+            self._anotar_apertura()
+            abierta = False
             try:
                 with _abrir(self._url(), timeout=60,
                             extra={"Accept": "text/event-stream"}) as respuesta:
+                    abierta = True
                     self.conectado = True
                     self.error = None
                     DIARIO.conexion(self.match_id)
@@ -493,6 +650,9 @@ class Escucha:
                         # los ticks viejos se ignoran: al conectar el stream repite
                         # historial y no debe pisar el estado actual
             except ErrorCuota as exc:
+                # La pausa local abortó antes de enviar: la ficha no se gastó.
+                if gasto_ficha and not getattr(exc, "consumida", False):
+                    cuota.devolver("espectador")
                 self.error = str(exc)
                 DIARIO.error(f"stream {self.match_id}: {exc}")
                 # La cuota manda: ni un reintento antes del instante que dijo la API.
@@ -504,6 +664,11 @@ class Escucha:
             except (urllib.error.URLError, OSError, ValueError) as exc:
                 self.error = f"{type(exc).__name__}: {exc}"
                 DIARIO.error(f"stream {self.match_id}: {self.error}")
+                # Solo se devuelve la ficha si la conexión NO llegó a abrirse. Si el
+                # stream abrió y publicó ticks, el servidor ya la contó: devolverla
+                # permitía pasar de las 6/hora (verificado con un corte tras 2 ticks).
+                if gasto_ficha and not abierta:
+                    cuota.devolver("espectador")
             finally:
                 self.conectado = False
             if self._parar.is_set():

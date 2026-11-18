@@ -11,7 +11,6 @@ Uso:
     python3 herramientas/informe_partida.py --ultimas 3 --sin-modelo
 """
 import argparse
-import datetime
 import json
 import os
 import statistics
@@ -53,7 +52,6 @@ def digest(con, match_id):
             items[r["item"]] = items.get(r["item"], 0) + 1
 
     # Métricas derivadas: sin esto el informe repite cifras y no dice nada.
-    oro = [f["oro"] for f in filas if f["oro"] is not None]
     minutos = ((max(tiempos) - min(tiempos)) / 60.0) if tiempos and len(tiempos) > 1 else 0
     almas_por_min = None
     if minutos > 1 and almas and len(almas) > 1:

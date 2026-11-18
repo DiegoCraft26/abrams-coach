@@ -3,7 +3,6 @@
 Con broadcast, el inventario llega en cada tick; lo que se prueba aquí es que el estado
 publicado cambia cuando cambian los ítems del jugador y que los huecos no se inventan.
 """
-import json
 import sys
 from pathlib import Path
 

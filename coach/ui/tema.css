@@ -103,6 +103,12 @@ window.coach {
 .chip-pelear     { color: #5FD08A; background-color: rgba(95, 208, 138, 0.14); }
 .chip-equilibrio { color: #7FB6F2; background-color: rgba(127, 182, 242, 0.14); }
 .chip-inicio     { color: #B7C0CE; background-color: rgba(183, 192, 206, 0.14); }
+/* Amenaza: rojo, no ámbar. Es la única marca del panel que pide no pelear. */
+.chip-evitar {
+  color: #EF6B6B;
+  background-color: rgba(239, 107, 107, 0.16);
+  border: 1px solid rgba(239, 107, 107, 0.45);
+}
 
 /* ---------- tarjeta de acción (≤ 640 px) ---------- */
 .accion-card { }
@@ -183,11 +189,23 @@ window.coach {
 .slot-mal  { border-color: rgba(239, 107, 107, 0.45); }
 .slot-vacio { border-style: dashed; border-color: #2B3342; }
 .slot-valor { font-size: 11px; font-weight: 700; }
+/* Prioridad de venta: rojo = sale primero, ámbar = candidato. El borde va por
+   encima del de residual para que se lea en un vistazo en plena pelea. */
+.slot-vender-ahora { border-color: #EF6B6B; border-width: 2px; }
+.slot-vender-luego { border-color: #E4B363; border-width: 2px; }
 
 /* ---------- enemigos ---------- */
 .fila-enemigo { padding: 4px 0; }
+/* El que va por encima se tiñe: no es "uno más de la lista". */
+.fila-enemigo-critico { background-color: rgba(239, 107, 107, 0.10); border-radius: 6px; }
+.fila-enemigo-alto    { background-color: rgba(242, 181, 68, 0.08); border-radius: 6px; }
+.etiqueta-evitar { color: #EF6B6B; font-size: 10px; font-weight: 800; }
 .almas { font-feature-settings: "tnum"; color: #E8ECF3; font-size: 12px; }
+.almas-peligrosa { color: #EF6B6B; font-weight: 700; }
 .kda { font-feature-settings: "tnum"; color: #8B95A5; font-size: 11px; }
+.perfil-camino { color: #7FB6F2; font-size: 11px; font-weight: 700; }
+.perfil-camino-atras  { color: #F2B544; }
+.perfil-camino-contra { color: #EF6B6B; }
 
 /* ---------- estados vacíos y foco ---------- */
 .vacio {

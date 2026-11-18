@@ -15,7 +15,6 @@ import json
 import threading
 import time
 import urllib.request
-from urllib.parse import urlparse
 
 import gi
 
@@ -33,7 +32,6 @@ from .componentes.inventario import Inventory
 from .componentes.pie import StatusBar
 from .componentes.plan import BuildPlan
 from .componentes.recomendacion import RecommendationCard
-from .componentes.revisar import Revisar
 from .componentes.tendencia import TrendChart
 from .componentes.ventas import Ventas
 
@@ -53,6 +51,24 @@ def _leer_css():
         return f.read()
 
 
+def marcar_rancio(datos, error, edad, intervalo=1.0):
+    """Marca el dato como viejo cuando el servidor dejó de responder.
+
+    Aislado para poder probarlo sin GTK: es la regla que impedía que el panel dijera
+    «en vivo» con las cifras congeladas. Devuelve (datos, firma_extra); si no aplica,
+    devuelve los datos tal cual y None.
+    """
+    if not isinstance(datos, dict) or not error or edad is None:
+        return datos, None
+    if edad <= max(3.0, 2.0 * float(intervalo or 1.0)):
+        return datos, None
+    copia = dict(datos)
+    copia["rancio"] = True
+    copia["edad_s"] = round(float(edad), 1)
+    copia["mensaje"] = f"sin respuesta del coach hace {int(edad)} s"
+    return copia, f"sin-respuesta-{int(edad // 5)}"
+
+
 class Sondeo(threading.Thread):
     """Pide /api/estado cada segundo sin bloquear GTK.
 
@@ -68,6 +84,7 @@ class Sondeo(threading.Thread):
         self.datos = None
         self.error = None
         self.firma = None
+        self.ts_ok = None          # instante de la última respuesta buena
         self.parar = False
         self._ultimo_error_log = 0.0
 
@@ -83,6 +100,7 @@ class Sondeo(threading.Thread):
                     digest_size=8).hexdigest()
                 with self.lock:
                     self.datos, self.error, self.firma = datos, None, firma
+                    self.ts_ok = time.time()
             except Exception as exc:                       # noqa: BLE001
                 with self.lock:
                     self.error = str(exc)
@@ -110,6 +128,11 @@ class Sondeo(threading.Thread):
         with self.lock:
             return self.datos, self.error, self.firma
 
+    def edad_ok_s(self):
+        """Segundos desde la última respuesta buena del servidor (None si nunca hubo)."""
+        with self.lock:
+            return None if self.ts_ok is None else (time.time() - self.ts_ok)
+
 
 class Panel(Gtk.ApplicationWindow):
     def __init__(self, app, url="http://127.0.0.1:8090", breakpoint="auto", intervalo=1.0,
@@ -131,7 +154,6 @@ class Panel(Gtk.ApplicationWindow):
 
         self._modo = None
         self._firma = None
-        self._ver_secundarias = False
         self._construir()
 
         self.connect("close-request", self._al_cerrar)
@@ -159,13 +181,6 @@ class Panel(Gtk.ApplicationWindow):
         self.ventas = Ventas()
         self.equipo = Equipo()
         self.contra = ContraComposicion()
-        # Botón de diagnóstico: pregunta a /api/revisar y pinta lo que devuelva el
-        # servidor, sin inventar nada. El puerto sale de la URL del panel.
-        try:
-            puerto = int(urlparse(self.url).port or 8090)
-        except Exception:                                  # noqa: BLE001
-            puerto = 8090
-        self.revisar = Revisar(puerto=puerto)
         self.pie = StatusBar()
 
         # el cuerpo va en un scrolled: si el monitor es 800×600 no se pierde nada
@@ -184,11 +199,6 @@ class Panel(Gtk.ApplicationWindow):
         self.barra_pie = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
         self.pie.set_hexpand(True)
         self.barra_pie.append(self.pie)
-        self.boton_mas = Gtk.ToggleButton(label="Más")
-        self.boton_mas.add_css_class("boton")
-        self.boton_mas.set_tooltip_text("Tendencia, compras, ventas, equipo y composición")
-        self.boton_mas.connect("toggled", self._al_toggle_mas)
-        self.barra_pie.append(self.boton_mas)
         self.raiz.append(self.barra_pie)
 
         self._atajos()
@@ -234,7 +244,7 @@ class Panel(Gtk.ApplicationWindow):
         vaciar(self.cuerpo)
         for comp in (self.recomendacion, self.inventario, self.enemigos,
                      self.compras, self.plan, self.tendencia, self.ventas,
-                     self.equipo, self.contra, self.revisar):
+                     self.equipo, self.contra):
             desacoplar(comp)
 
         principal = self._columna()
@@ -259,29 +269,46 @@ class Panel(Gtk.ApplicationWindow):
         self.tendencia.set_vexpand(False)
         self.tendencia.set_size_request(-1, 170)
 
-        seccion_inv = self._seccion("INVENTARIO", self.inventario)
-        seccion_enem = self._seccion("ENEMIGOS", self.enemigos)
-        seccion_plan = self._seccion("CAMINO", self.plan)
-        seccion_comp = self._seccion("COMPRAS", self.compras)
-        seccion_venta = self._seccion("VENTAS", self.ventas)
-        seccion_equipo = self._seccion("TU EQUIPO", self.equipo)
-        seccion_contra = self._seccion("CONTRA SU COMPOSICIÓN", self.contra)
-        seccion_tend = self._seccion("TENDENCIA DE ALMAS", self.tendencia)
-        seccion_revisar = self._seccion("¿ALGO VA MAL?", self.revisar)
-
-        # Las secundarias nacen plegadas: el panel enseña una acción y el camino; el
-        # resto se abre con «Más». Con la ventana baja se quedan plegadas aunque el
-        # botón esté activo, para no cortar frases a media altura.
-        self._secundarias = [seccion_tend, seccion_comp, seccion_venta,
-                             seccion_equipo, seccion_contra, seccion_revisar]
+        # Cada sección declara QUÉ dato la justifica: si ese dato no existe, la caja
+        # no se pinta. Antes el panel enseñaba ocho cajas vacías («sin camino»,
+        # «sin compras nuevas»...) que ocupaban la pantalla sin decir nada.
+        self._secciones = {
+            "plan": (self._seccion("CAMINO", self.plan), ("plan", "camino")),
+            "inventario": (self._seccion("INVENTARIO", self.inventario), ("inventario",)),
+            "enemigos": (self._seccion("ENEMIGOS", self.enemigos), ("enemigos",)),
+            "compras": (self._seccion("COMPRAS", self.compras), ("compras",)),
+            "ventas": (self._seccion("VENTAS", self.ventas), ("ventas", "venta")),
+            "equipo": (self._seccion("TU EQUIPO", self.equipo), ("aliados",)),
+            # Las claves son las que de verdad publica el motor: `contra_composicion`
+            # (no «contra») e `historial` (no «serie»/«tendencia»). Antes las dos cajas
+            # salían vacías siempre o no salían nunca.
+            "contra": (self._seccion("CONTRA SU COMPOSICIÓN", self.contra),
+                       ("sugerencia_items", "contra_composicion", "visto")),
+            "tendencia": (self._seccion("TENDENCIA DE ALMAS", self.tendencia),
+                          ("historial",)),
+        }
+        seccion_inv = self._secciones["inventario"][0]
+        seccion_enem = self._secciones["enemigos"][0]
+        seccion_plan = self._secciones["plan"][0]
+        seccion_comp = self._secciones["compras"][0]
+        seccion_venta = self._secciones["ventas"][0]
+        seccion_equipo = self._secciones["equipo"][0]
+        seccion_contra = self._secciones["contra"][0]
+        seccion_tend = self._secciones["tendencia"][0]
 
         if modo == "angosto":
             principal.append(self.recomendacion)
             principal.append(seccion_plan)
             principal.append(seccion_inv)
             principal.append(seccion_enem)
-            for seccion in self._secundarias:
-                principal.append(seccion)
+            # Sin el toggle «Más» estas cinco secciones no tenían contenedor y eran
+            # inalcanzables en el ancho por defecto. Se apilan; las que no tengan dato
+            # se ocultan solas en `_secciones_con_dato`.
+            principal.append(seccion_contra)
+            principal.append(seccion_equipo)
+            principal.append(seccion_venta)
+            principal.append(seccion_comp)
+            principal.append(seccion_tend)
             self.cuerpo.append(principal)
         elif modo == "medio":
             principal.append(self.recomendacion)
@@ -293,7 +320,6 @@ class Panel(Gtk.ApplicationWindow):
             contexto.append(seccion_venta)
             contexto.append(seccion_contra)
             contexto.append(seccion_equipo)
-            contexto.append(seccion_revisar)
             contexto.set_size_request(300, -1)
             contexto.set_hexpand(False)
             self.cuerpo.append(principal)
@@ -308,7 +334,6 @@ class Panel(Gtk.ApplicationWindow):
             contexto.append(seccion_equipo)
             lateral.append(seccion_comp)
             lateral.append(seccion_venta)
-            lateral.append(seccion_revisar)
             lateral.append(self._relleno())
             contexto.set_size_request(300, -1)
             lateral.set_size_request(280, -1)
@@ -318,17 +343,17 @@ class Panel(Gtk.ApplicationWindow):
             self.cuerpo.append(contexto)
             self.cuerpo.append(lateral)
 
-        self._aplicar_visibilidad()
         self.pie.set_visible(True)
 
-    def _aplicar_visibilidad(self):
-        mostrar = self._ver_secundarias and not self._es_compacto()
-        for seccion in getattr(self, "_secundarias", []):
-            seccion.set_visible(mostrar)
-
-    def _al_toggle_mas(self, boton):
-        self._ver_secundarias = bool(boton.get_active())
-        self._aplicar_visibilidad()
+    def _secciones_con_dato(self, datos):
+        """Muestra solo las secciones cuyo dato existe. Sin datos, una caja es ruido."""
+        sin_servidor = not isinstance(datos, dict) or datos.get("listo") is False
+        for seccion, claves in getattr(self, "_secciones", {}).values():
+            if sin_servidor:
+                seccion.set_visible(False)
+                continue
+            visible = any(datos.get(k) for k in claves)
+            seccion.set_visible(bool(visible))
 
     def _modo_por_ancho(self, ancho):
         ancho = int(ancho or 960)
@@ -411,6 +436,15 @@ class Panel(Gtk.ApplicationWindow):
                 self._compacto = self._es_compacto()
                 self._aplicar_modo(None)
         datos, error, firma = self.sondeo.ultimo()
+        # Con el coach caído, `datos` conserva la última respuesta buena y la firma no
+        # cambia: el panel se quedaba en «● en vivo» con cifras congeladas para
+        # siempre. Si hay error y el último dato bueno ya es viejo, se marca rancio y
+        # se repinta con la edad, que es lo único honesto que se puede decir.
+        datos, extra = marcar_rancio(datos, error, self.sondeo.edad_ok_s(),
+                                     getattr(self.sondeo, "intervalo", 1.0))
+        if extra:
+            firma = f"{firma or ''}|{extra}"
+        self._secciones_con_dato(datos)
         if datos is None:
             self.cabecera.actualizar(None)
             # La tarjeta nace con su estado vacío compacto; sin esto se quedaba con

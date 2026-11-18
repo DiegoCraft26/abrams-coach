@@ -19,6 +19,7 @@ abierto y lo para cuando no, que es cuando no hay nada que leer.
 """
 import os
 import statistics
+import sys
 import subprocess
 import tempfile
 import threading
@@ -26,7 +27,13 @@ import time
 
 from PIL import Image
 
-from . import captura_kwin
+# El backend de KWin importa `gi` y solo existe en Linux con KDE. Se carga aparte para
+# que este módulo se pueda importar en Windows (donde la captura la hará otro backend) y
+# para que un KWin roto no tumbe el proceso al arrancar.
+try:                                        # pragma: no cover - depende de la plataforma
+    from . import captura_kwin
+except Exception:                           # noqa: BLE001
+    captura_kwin = None
 
 RUTA_CUADRO = os.path.join(tempfile.gettempdir(), "abrams-cuadro.png")
 ESPECTACLE = ["spectacle", "-b", "-n", "-f", "-o"]
@@ -35,10 +42,17 @@ ESPECTACLE = ["spectacle", "-b", "-n", "-f", "-o"]
 class CapturaCompartida:
     """Un hilo que captura sin parar y publica el último cuadro con su hora."""
 
-    def __init__(self, ruta=RUTA_CUADRO, intervalo=0.5, comando=None):
+    def __init__(self, ruta=RUTA_CUADRO, intervalo=0.5, comando=None, backend=None):
         self.ruta = ruta
         self.intervalo = intervalo
         self.comando = comando      # None = KWin; una lista = ese comando y su archivo
+        # `backend` es una función sin argumentos que devuelve PIL o None. En Windows
+        # no hay KWin: se pide el backend de DXGI/mss aquí y, si no está, esta línea
+        # lanza con el motivo (mejor al arrancar que un cuadro vacío durante la partida).
+        if backend is None and sys.platform.startswith("win"):
+            from . import captura_windows
+            backend = captura_windows.backend()
+        self.backend = backend
         self.lock = threading.Lock()
         self.cuadro = None          # PIL.Image del último cuadro válido
         self.ts = 0.0               # cuándo se terminó de capturar
@@ -61,8 +75,11 @@ class CapturaCompartida:
         self._parar.set()
 
     def _cuadro(self):
-        """Un cuadro del escritorio: por KWin (~35 ms) o con el comando de siempre."""
-        if self.comando is None:
+        """Un cuadro del escritorio: backend inyectado, KWin (~35 ms) o el comando."""
+        if self.backend is not None:
+            im = self.backend()
+            return im.convert("RGB") if im is not None else None
+        if self.comando is None and captura_kwin is not None:
             im = captura_kwin.capturar_escritorio()
             if im is not None:
                 return im.convert("RGB")
@@ -77,6 +94,9 @@ class CapturaCompartida:
             t0 = time.perf_counter()
             try:
                 cuadro = self._cuadro()
+                if cuadro is None:          # backend sin cuadro nuevo: no se publica
+                    time.sleep(self.intervalo)
+                    continue
                 dur = (time.perf_counter() - t0) * 1000
                 with self.lock:
                     self.cuadro = cuadro

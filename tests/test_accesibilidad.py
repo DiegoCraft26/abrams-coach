@@ -92,8 +92,6 @@ def main():
     if not os.path.exists(TEMA):
         print(f"no existe {TEMA}")
         return 1
-    presentes = _colores_del_tema()
-
     print("contraste de los pares usados (colores leídos del CSS)")
     with open(TEMA, encoding="utf-8") as f:
         bloques = _bloques(f.read())

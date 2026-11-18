@@ -5,7 +5,7 @@ Verde = el ítem rinde más de lo esperado para su minuto de compra; rojo = meno
 from gi.repository import Gtk
 
 from ..iconos import pixbuf
-from .base import etiqueta, fila, vaciar
+from .base import etiqueta, vaciar
 
 SLOTS = 12
 
@@ -87,8 +87,15 @@ class Inventory(Gtk.Box):
         else:
             caja.add_css_class("slot-bien" if valor >= 0 else "slot-mal")
         caja.set_size_request(self.lado, self.lado)
+        # Color de venta: lo que sale primero se pinta distinto. Sin esto, en late el
+        # jugador veía 12 slots llenos y ninguna pista de cuál soltar (Diego, 2026-11-16).
+        vende = x.get("vende")
+        if vende:
+            caja.add_css_class(f"slot-vender-{vende}")
         caja.set_tooltip_text(f"{x.get('nombre', '')}"
-                              + (f" · {valor:+.1f} pp" if valor is not None else ""))
+                              + (f" · {valor:+.1f} pp" if valor is not None else "")
+                              + (f" · {x.get('vende_motivo')}" if x.get("vende_motivo")
+                                 else ""))
         pb = pixbuf(x.get("id"), "items", self.lado - 6)
         icono = Gtk.Image.new_from_pixbuf(pb) if pb else Gtk.Image.new_from_icon_name("image-missing")
         if not pb:

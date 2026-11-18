@@ -12,7 +12,9 @@ from coach.nucleo_demo import juego_abierto
 # Apertura real de Abrams: los tres ítems de 800 que más se compran (1.9 M de partidas).
 # Aquí había un "800" en lugar de un id: es un costo, no un ítem, así que el panel
 # enseñaba dos compras donde van tres (visto el 2026-11-09 en la ranked).
-APERTURA = ["1437614329", "1342610602", "2829638276"]
+# La apertura ya no vive aquí: `coach/apertura.py` resuelve por héroe (banco de 626
+# partidas para Abrams, pozo del API para el resto). Se dejó de escribir a mano porque
+# contradecía al banco.
 
 # Estado del filtro de almas del modo pantalla (ver `_oro_estable`).
 _PANTALLA = {"oro": None, "cand": None, "veces": 0}
@@ -66,8 +68,8 @@ def estado_desde_vivo(est, cuenta=None):
         "enemigos": limpio(est.get("enemigos") or []),
         "confianza": 0.95,
         "fuente": "en_vivo",
-        "notas": ["almas, héroes y KDA desde el broadcast de espectador "
-                  "(latencia ~20-25 s del TV de Valve)"],
+        "notas": ["almas, héroes, ítems y KDA leídos del broadcast por HTTP "
+                  "(consulta de ~1.3 s; el retardo del TV de Valve no se mide aquí)"],
     }
 
 
@@ -90,14 +92,17 @@ def buscar_match(a, st):
 
 
 def hilo_hud(estado_hud, hud_cfg):
-    """Lee reloj y oro del HUD **bajo demanda**, no con captura constante.
+    """Lee reloj y oro del HUD **bajo demanda**, y calla cuando el broadcast ya informa.
 
-    Antes había un hilo capturando el escritorio a 2 Hz aunque no hubiera partida.
-    Ahora se toma un cuadro cada 2 s (KWin, ~34 ms) y se lee el HUD de ese cuadro.
-    El reloj del juego cambia una vez por segundo: dos segundos de desfase no cambian
-    ninguna decisión y el coste baja de ~7 % de un núcleo a menos del 2 %.
+    Antes había un hilo capturando el escritorio entero a 2 Hz aunque no hubiera partida;
+    después, un cuadro completo cada 2 s (64 ms de readback medidos).
+
+    Medido el 2026-11-15 con el juego abierto: cada petición de captura cuesta ~29 ms
+    porque KWin espera al siguiente cuadro del compositor (con el juego cerrado eran
+    0.9 ms). Por eso, cuando el broadcast trae el reloj —partida en vivo—, este hilo **no
+    captura nada**: el dato ya viene por HTTP y el readback solo sirve para molestar.
     """
-    from .fuentes import captura, captura_kwin, hud_rapido
+    from .fuentes import hud_rapido
     hz = float(hud_cfg.get("frecuencia_hz") or 0.5)
     intervalo = max(2.0, 1.0 / max(0.1, hz))
     cajas = hud_cfg.get("cajas") or None
@@ -106,17 +111,16 @@ def hilo_hud(estado_hud, hud_cfg):
         if not juego_abierto():
             time.sleep(5)
             continue
-        cuadro = captura_kwin.capturar_escritorio()
-        if cuadro is None:
-            try:
-                # Respaldo: el búfer compartido que mantiene `arrancar_hud`. Antes
-                # esto era `lector.capturar()`, de un módulo que ya no existe: el hilo
-                # del HUD moría con ImportError nada más arrancar y el modo pantalla no
-                # publicaba nunca el reloj (encontrado el 2026-11-09 en ranked real).
-                cuadro = captura.global_().ultimo(max_edad_s=2.0)
-            except Exception as exc:                        # noqa: BLE001
-                print(f"HUD captura: {type(exc).__name__}: {exc}", flush=True)
-                cuadro = None
+        # Con broadcast fresco el reloj ya está resuelto: ni una captura. Diez segundos
+        # de margen para que un corte del stream no deje el panel sin reloj.
+        if time.time() - float(estado_hud.get("broadcast_ts") or 0) < 10:
+            estado_hud["hud_pausado"] = True
+            time.sleep(intervalo)
+            continue
+        estado_hud["hud_pausado"] = False
+        # Una sola captura del monitor por ciclo (33 ms medidos con el juego abierto) en
+        # vez de una por caja (3 × 29 ms = 87 ms): ver MarcoPerezoso.
+        cuadro = hud_rapido.MarcoPerezoso(tamano=_tamano_escritorio())
         if cuadro is not None:
             try:
                 d = hud_rapido.leer(cuadro, cajas, color)
@@ -127,6 +131,30 @@ def hilo_hud(estado_hud, hud_cfg):
                 estado_hud.update(d)
                 estado_hud["ts"] = time.time()
         time.sleep(intervalo)
+
+
+_TAMANO = {"ts": 0.0, "v": (4480, 1440)}
+
+
+def _tamano_escritorio(vida_s=300.0):
+    """Tamaño total del escritorio (todos los monitores). Cacheado hasta 5 min.
+
+    Las cajas del HUD están en coordenadas absolutas del escritorio y se escalan por
+    este tamaño: si cambia la resolución, se recalculan solas.
+    """
+    ahora = time.time()
+    if ahora - _TAMANO["ts"] < vida_s:
+        return _TAMANO["v"]
+    try:
+        from .fuentes import captura_bajo_demanda as cbd
+        lista = cbd.salidas()
+        if lista:
+            ancho = max(s[1] + s[3] for s in lista)
+            alto = max(s[2] + s[4] for s in lista)
+            _TAMANO.update({"ts": ahora, "v": (ancho, alto)})
+    except Exception:                                         # noqa: BLE001
+        pass
+    return _TAMANO["v"]
 
 
 def arrancar_hud(a, hud_cfg, flags):
@@ -198,7 +226,7 @@ def _reloj_estable(t):
     return _RELOJ["t"]
 
 
-def plan_inicial(conoc, cuantos=5):
+def plan_inicial(conoc, cuantos=5, heroe=None):
     """Las compras del arranque, con su costo, para cuando no hay broadcast.
 
     Primero la apertura fija (los tres 800 que más se compran) y después las siguientes
@@ -211,7 +239,11 @@ def plan_inicial(conoc, cuantos=5):
     items = conoc.get("items") if isinstance(conoc.get("items"), dict) else conoc
     items = {str(k): v for k, v in (items or {}).items() if isinstance(v, dict)}
 
-    orden = [iid for iid in APERTURA if iid in items]
+    from . import apertura
+    # La apertura sale del banco (Abrams) o del pozo del API (otros héroes). Antes era
+    # una constante escrita a mano que contradecía al banco: el panel decía Melee
+    # Lifesteal y las 626 partidas dicen Spirit Strike.
+    orden = [iid for iid in apertura.ids(heroe, cuantos) if iid in items]
     resto = [(d.get("n", 0), iid) for iid, d in items.items()
              if iid not in orden and d.get("tier") == 1 and (d.get("costo") or 9999) <= 800]
     resto.sort(reverse=True)
@@ -237,7 +269,7 @@ def _notas_pantalla(oro):
 
 
 def publicar_pantalla(estado_hud, analizar, latencias=None, conoc=None,
-                      max_edad_s=3.0, inventario=None, vision=None):
+                      max_edad_s=3.0, inventario=None, vision=None, nota=None):
     """Modo pantalla: sin broadcast, se lee el reloj y las almas del propio HUD.
 
     Es el camino que sirve en ranked, práctica y bots, donde Valve no retransmite
@@ -277,7 +309,7 @@ def publicar_pantalla(estado_hud, analizar, latencias=None, conoc=None,
     salida = analizar(crudo)
     salida.update(salida_fase)
     if not salida.get("plan"):
-        salida["plan"] = plan_inicial(conoc)
+        salida["plan"] = plan_inicial(conoc, heroe=None)
     salida["oro"] = oro
     salida["fuente"] = "pantalla"
     if vision and vision.get("oro") is not None and oro is None:
@@ -318,29 +350,63 @@ def publicar_pantalla(estado_hud, analizar, latencias=None, conoc=None,
     # `listo` viene del motor y con medio estado sale False; aquí sí hay datos
     # frescos de la pantalla, así que la cabecera no debe decir «sin partida».
     salida["listo"] = True
+    # `modo` es lo que el panel necesita para no mentir: en SOLO_LOCAL hay datos
+    # frescos de la pantalla pero ninguna afirmación sobre el meta del parche.
+    salida["modo"] = "SOLO_LOCAL"
+    if nota:
+        salida["notas"] = list(salida.get("notas") or []) + [str(nota)[:200]]
     if latencias:
         salida["latencia"] = latencias
     servidor.EST.publicar(salida)
     return True
 
 
-def publicar_apertura(conoc):
+def publicar_apertura(conoc, heroe=None):
     """Build de apertura: los tres primeros ítems, sin inventar almas ni enemigos."""
     if not conoc:
         return False
     plan = []
-    for iid in APERTURA:
+    from . import apertura
+    ids_apertura = apertura.ids(heroe, 5)
+    fuente_apertura = apertura.fuente(heroe)
+    for iid in ids_apertura:
         d = conoc.get(iid) or {}
         if d:
             plan.append({"id": iid, "nombre": d.get("nombre", iid),
                          "costo": d.get("costo"), "n": 0, "icono": f"/icono/{iid}"})
+    # En el menú no se está iniciando ninguna partida: decirlo cambia el panel de
+    # «partida iniciando» (que suena a avería) a «en el menú, esperando partida».
+    fase, frescura_s, cerrado = None, None, False
+    try:
+        from .fuentes import log_juego
+        fase, frescura_s = log_juego.estado_ui()
+        cerrado = log_juego.cerrado()
+    except Exception:                                        # noqa: BLE001
+        pass
+    en_menu = fase == "menu"
+    sin_juego = cerrado or fase is None
     servidor.EST.publicar({
         "t": 0, "almas": None, "oro": None,
-        "estado": {"estado": "INICIO", "motivo": "partida iniciando",
+        # Sin `listo: False` la cabecera caía en el caso por defecto y decía «en vivo»
+        # mientras la tarjeta decía «esperando partida»: el mismo payload, dos
+        # historias distintas.
+        "listo": False,
+        "modo": "APERTURA",
+        "mensaje": ("en el menú del juego" if en_menu else
+                    "esperando al juego" if sin_juego else "partida iniciando"),
+        "estado": {"estado": "INICIO",
+                   "motivo": ("esperando al juego" if sin_juego
+                              else "en el menú del juego" if en_menu
+                              else "partida iniciando"),
                    "objetivo": "build de apertura"},
         "economia": {"mias": None, "media_enemiga": None, "delta_pct": None},
         "recomendaciones": [], "plan": plan, "fuente": "apertura",
-        "notas": ["Build de apertura mientras llega el broadcast"],
+        "fase_juego": fase or "desconocida",
+        "fuente_apertura": fuente_apertura,
+        "frescura_juego_s": round(frescura_s, 1) if frescura_s is not None else None,
+        "notas": ["En el menú del juego: build de apertura lista para cuando entres"
+                  if en_menu else
+                  "Build de apertura mientras llega el broadcast"],
     })
     return True
 

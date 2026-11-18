@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Bucle de mejora: busca pesos que maximicen el acierto contra partidas reales."""
-import itertools, json, random, sys, time
+import json, random, sys, time
 sys.path.insert(0, ".")
 from coach import evaluador
 from coach.motor_api import Motor

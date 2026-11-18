@@ -4,7 +4,6 @@ El objetivo del cambio del 2026-11-07 era sacar Abrams del código para poder a�
 sin tocar el motor. Esto comprueba que el respaldo funciona y que un archivo roto no rompe
 la app.
 """
-import json
 import os
 import sys
 import tempfile
@@ -35,9 +34,17 @@ def main():
     check("trae apertura", len(h.apertura) >= 3, str(len(h.apertura)))
 
     print("respaldo")
-    raro = heroe.cargar("haze")
+    # `haze` ya tiene archivo desde el 2026-11-18 (apertura medida en lab.db): el
+    # respaldo se prueba con una clave que no existe, no con un héroe que sí tiene datos.
+    raro = heroe.cargar("heroe-sin-archivo")
     check("héroe sin datos cae a Abrams", raro.nombre == "Abrams", raro.nombre)
     check("no lanza con None", heroe.cargar(None).nombre == "Abrams")
+
+    print("héroes con datos medidos")
+    for clave, nombre in (("haze", "Haze"), ("ratking", "Rat King"), ("graves", "Graves")):
+        hx = heroe.cargar(clave)
+        check(f"carga {clave}", hx.nombre == nombre, hx.nombre)
+        check(f"{clave} trae apertura", len(hx.apertura) == 5, str(len(hx.apertura)))
 
     print("datos del motor")
     m = Motor()
@@ -51,7 +58,8 @@ def main():
 
     # un héroe sin archivo propio debe decidir igual, con los datos de Abrams
     estado2 = dict(estado)
-    estado2["yo"] = {"heroe": "Haze", "almas": 14000, "items": []}
+    # Un héroe que NO tiene archivo: Haze ya tiene datos medidos desde el 2026-11-18.
+    estado2["yo"] = {"heroe": "HeroeInexistente", "almas": 14000, "items": []}
     r2 = m.analizar_dict(estado2)
     check("héroe desconocido no rompe", bool(r2.get("recomendaciones")))
     check("y usa los datos de Abrams", r2.get("heroe_datos") == "abrams",

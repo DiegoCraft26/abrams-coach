@@ -6,7 +6,6 @@ motor los usa de dos maneras:
      pasar el filtro de residual (antes quedaba descartado siempre y nunca aparecía);
   2. la razón que se muestra al jugador dice para qué sirve y contra qué.
 """
-from datetime import date
 
 FECHA = "2026-11-07"
 
@@ -82,6 +81,18 @@ HEROES_CON = {
 }
 
 
+# Cuánto pesa un enemigo que va por encima cuando el ítem frena justo su amenaza.
+# No es una probabilidad: es un multiplicador de prioridad para que el counter del rival
+# que está ganando la partida pase por delante del counter genérico de la composición.
+PESO_AMENAZA = {"critico": 1.6, "alto": 1.25}
+
+# tag de ítem -> señal de composición (las claves de HEROES_CON). Estaba repetido en
+# cuatro sitios con los nombres cruzados y hacía que `tags_de_heroe` no casara con
+# `tag`: el counter del crítico salía siempre vacío.
+SEÑAL_DE_TAG = {"antiheal": "heal", "antispirit": "spirit", "anticc": "cc",
+                "antimovilidad": "movilidad"}
+
+
 def tag_de(item_id):
     info = SITUACIONALES.get(str(item_id))
     return info["tag"] if info else None
@@ -89,6 +100,33 @@ def tag_de(item_id):
 
 def info(item_id):
     return SITUACIONALES.get(str(item_id))
+
+
+def _clave_heroe(heroe):
+    return str(heroe or "").lower().replace(" ", "_").replace("-", "_")
+
+
+def tags_de_heroe(heroe):
+    """Qué amenazas tiene el kit de este héroe (inverso de HEROES_CON)."""
+    clave = _clave_heroe(heroe)
+    return [senal for senal, nombres in HEROES_CON.items() if clave in nombres]
+
+
+def pesos_amenaza(amenazas):
+    """{señal: multiplicador} con el rival más peligroso de cada amenaza.
+
+    `amenazas` es la lista de `amenazas.evaluar()["lista"]`. Un crítico que además es
+    móvil sube el counter antimovilidad por encima de lo que diga solo la composición.
+    """
+    peso = {}
+    for a in amenazas or ():
+        multiplicador = PESO_AMENAZA.get(a.get("nivel"))
+        if not multiplicador:
+            continue
+        for senal in tags_de_heroe(a.get("heroe")):
+            if multiplicador > peso.get(senal, 1.0):
+                peso[senal] = multiplicador
+    return peso
 
 
 def señales_composicion(heroes_enemigos):
@@ -102,33 +140,52 @@ def señales_composicion(heroes_enemigos):
     return cuenta
 
 
-def bonus_contexto(heroes_enemigos, factor=1.0, senal_datos=None):
+def bonus_contexto(heroes_enemigos, factor=1.0, senal_datos=None, amenazas=None):
     """Devuelve (por item_id -> puntos de score, razones por item_id).
 
     Peso deliberadamente pequeño frente al lift residual: esto desempata y desbloquea
     situacionales, no reescribe el ranking por sí solo.
+
+    `amenazas` sube ese peso cuando el enemigo que justifica la señal **va por encima**:
+    el counter del rival que está ganando la partida vale más que el de la composición
+    genérica, y el motivo lo dice con nombre y almas.
     """
     señales = señales_composicion(heroes_enemigos)
     senal_datos = senal_datos or {}
+    pesos = pesos_amenaza(amenazas)
+    # El peor rival por señal, para poder nombrarlo en el motivo.
+    quien = {}
+    for a in amenazas or ():
+        if not PESO_AMENAZA.get(a.get("nivel")):
+            continue
+        for senal in tags_de_heroe(a.get("heroe")):
+            if senal not in quien or (a.get("delta") or 0) > (quien[senal].get("delta") or 0):
+                quien[senal] = a
     puntos, razones = {}, {}
     for iid, datos in SITUACIONALES.items():
         tag = datos["tag"]
-        señal = {"antiheal": "heal", "antispirit": "spirit", "anticc": "cc",
-                 "antimovilidad": "movilidad"}.get(tag)
+        señal = SEÑAL_DE_TAG.get(tag)
         if señal and señales.get(señal):
             peso = min(3, señales[señal]) / 3.0
+            multiplo = pesos.get(señal, 1.0)
+            peor = quien.get(señal)
+            cola = ""
+            if peor is not None:
+                cola = (f"; {peor.get('heroe')} va "
+                        f"{int((peor.get('delta_pct') or 0) * 100):+d}% en almas sobre "
+                        f"tu equipo y es a quien hay que frenar")
             if senal_datos.get(iid, 0) > 0.005:
                 # Doble respaldo: los datos de 1.9 M de partidas y la composición.
-                puntos[iid] = round(4.0 * peso * factor, 3)
+                puntos[iid] = round(4.0 * peso * multiplo * factor, 3)
                 razones[iid] = (f"{datos['para']}: {señales[señal]} enemigo(s) lo justifican "
                                 f"y los datos del matchup lo apoyan "
-                                f"(fuente: {datos['fuente']}, {FECHA})")
+                                f"(fuente: {datos['fuente']}, {FECHA}){cola}")
             elif señales[señal] >= 2:
                 # Solo composición: menos peso y se dice de dónde viene, para que el
                 # jugador sepa que es criterio documentado y no estadística propia.
-                puntos[iid] = round(2.0 * peso * factor, 3)
+                puntos[iid] = round(2.0 * peso * multiplo * factor, 3)
                 razones[iid] = (f"{datos['para']}: {señales[señal]} enemigo(s) lo justifican "
-                                f"(investigación, fuente: {datos['fuente']}, {FECHA})")
+                                f"(investigación, fuente: {datos['fuente']}, {FECHA}){cola}")
         elif tag == "recuperacion":
             puntos[iid] = round(0.5 * factor, 3)
             razones[iid] = f"{datos['para']} cuando vas atrás"
@@ -136,7 +193,7 @@ def bonus_contexto(heroes_enemigos, factor=1.0, senal_datos=None):
 
 
 def sugerencias_composicion(heroes_enemigos, poseidos=(), maximo=2, residuales=None,
-                            ganancia=1.0, motivo_ajuste=None):
+                            ganancia=1.0, motivo_ajuste=None, amenazas=None):
     """Ítems que la composición enemiga justifica, **fuera del ranking**.
 
     No entran en la recomendación porque sus datos de residual son negativos (los compra
@@ -151,20 +208,29 @@ def sugerencias_composicion(heroes_enemigos, poseidos=(), maximo=2, residuales=N
     ranking puntúa el ítem. Así "contra su composición" deja de ser una constante por
     ítem y responde a la fase y a las almas; `coef_global` queda al lado para poder
     comparar con la tabla de 1.9 M de partidas.
+
+    `amenazas` marca el consejo que frena al rival que va por encima (`urgente`) y dice a
+    quién: "contra Haze" no es lo mismo que "contra su composición".
     """
     residuales = residuales or {}
     señales = señales_composicion(heroes_enemigos)
     poseidos = {str(x) for x in (poseidos or ())}
+    pesos = pesos_amenaza(amenazas)
     candidatos = []
     for iid, datos in SITUACIONALES.items():
-        señal = {"antiheal": "heal", "antispirit": "spirit", "anticc": "cc",
-                 "antimovilidad": "movilidad"}.get(datos["tag"])
+        señal = SEÑAL_DE_TAG.get(datos["tag"])
         if not señal or not señales.get(señal):
             continue
         if iid in poseidos or señales[señal] < 2:
             continue
         coef = residuales.get(iid)
         ajustado = None if coef is None else coef * 100 * ganancia
+        # Quién de los enemigos justifica esta señal y si alguno va por encima.
+        quien = [a.get("heroe") for a in (amenazas or ())
+                 if señal in tags_de_heroe(a.get("heroe")) and a.get("heroe")]
+        critico = next((a for a in (amenazas or ())
+                        if señal in tags_de_heroe(a.get("heroe"))
+                        and a.get("nivel") == "critico"), None)
         candidatos.append({
             "id": iid,
             "nombre": datos["nombre"],
@@ -172,6 +238,8 @@ def sugerencias_composicion(heroes_enemigos, poseidos=(), maximo=2, residuales=N
             "para": datos["para"],
             "cuando": datos["cuando"],
             "enemigos_que_lo_justifican": señales[señal],
+            "contra_quien": quien,
+            "urgente": critico is not None,
             "fuente": datos["fuente"],
             "fecha_fuente": FECHA,
             # Coeficiente CONTEXTUAL en puntos porcentuales: el lift residual de 1.9 M de
@@ -180,9 +248,12 @@ def sugerencias_composicion(heroes_enemigos, poseidos=(), maximo=2, residuales=N
             "coef": None if ajustado is None else round(ajustado, 2),
             "coef_global": None if coef is None else round(coef * 100, 2),
             "peso_contexto": round(ganancia, 2),
+            "peso_amenaza": round(pesos.get(señal, 1.0), 2),
             "motivo_ajuste": motivo_ajuste if abs(ganancia - 1.0) >= 0.02 else None,
         })
-    # Orden por coeficiente contextual: el consejo se reordena al cambiar el estado, no
-    # por precio, que era lo que dejaba siempre los mismos dos arriba (y en ese orden).
-    candidatos.sort(key=lambda x: (x["coef"] is None, -(x["coef"] or 0.0), x["costo"]))
+    # Urgente primero (frena a quien va ganando la partida), luego coeficiente
+    # contextual: el consejo se reordena al cambiar el estado, no por precio, que era lo
+    # que dejaba siempre los mismos dos arriba (y en ese orden).
+    candidatos.sort(key=lambda x: (not x["urgente"], x["coef"] is None,
+                                  -(x["coef"] or 0.0), x["costo"]))
     return candidatos[:maximo]

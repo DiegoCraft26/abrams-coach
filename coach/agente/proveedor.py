@@ -193,10 +193,16 @@ class ProveedorOpenAICompatible:
             self.soporta_herramientas = self_sin_tools
 
 
-# Orden medido el 2026-11-09 con cuadros de partida reales: huggingface contesta en
-# ~23 s con 33 kB; commandcode se cae por tiempo de espera con ese mismo cuadro (solo
-# respondió con imágenes de menos de 1 kB). El Qwen local no ve y queda fuera.
-ORDEN_VISION = ("huggingface", "commandcode")
+# Orden de visión, medido con cuadros reales:
+#   2026-11-09 — huggingface ~23 s con una imagen de 33 kB; commandcode se caía por
+#                tiempo de espera con ese peso (solo respondía a <1 kB).
+#   2026-11-15 — huggingface devuelve **HTTP 402** (sin créditos, falla en 0.3 s) y
+#                commandcode lee la tira del HUD (320 px, 4 kB) en 10.4 s y devuelve
+#                JSON válido. La tira es el formato que manda la cola, no el cuadro de
+#                33 kB, así que el límite viejo ya no aplica.
+# Queda solo commandcode. Si algún día vuelven los créditos, basta con reordenar esta
+# tupla: `cadena_vision()` filtra por disponibilidad y no hay nada más que tocar.
+ORDEN_VISION = ("commandcode",)
 
 
 def cadena_vision() -> list[ProveedorOpenAICompatible]:

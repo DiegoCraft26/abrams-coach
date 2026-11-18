@@ -49,11 +49,8 @@ def refinar(ruta_imagen, auto, plantillas="items"):
     """Devuelve (x0, y0, paso, puntuación) refinados en píxeles de análisis."""
     ids, M = deteccion.matrices(plantillas)
     im = Image.open(ruta_imagen).convert("RGB")
-    W, H = im.size
     ancho_a = auto["ancho_analisis"]
     alto_a = auto["alto_analisis"]
-    escala_x = W/ancho_a
-    escala_y = H/alto_a
     im_a = im.resize((ancho_a, alto_a))
 
     paso0 = auto["paso"][0]

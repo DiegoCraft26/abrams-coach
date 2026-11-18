@@ -6,7 +6,7 @@ Uso:  python3 verificar_ui.py [url]
 Playwright no está en el python del sistema sino en el pylib de DSH; el script agrega
 esa ruta solo, así que ya no hace falta exportar PYTHONPATH a mano.
 """
-import os, sys, json
+import os, sys
 
 # Este script vive en herramientas/calibracion/: la raíz del repo está 2
 # niveles arriba, no en el directorio del archivo.

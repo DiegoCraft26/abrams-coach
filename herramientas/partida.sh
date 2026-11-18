@@ -58,6 +58,9 @@ estado() {
 }
 
 prep() {
+  # `prep pegado` = modo app: la ventana del panel es el proceso que manda y al
+  # cerrarla se apaga el coach. Sin `pegado` (terminal) todo queda en segundo plano.
+  local pegado="${1:-}" nace_coach=0 nace_panel=0
   # 1. Lo que roba VRAM o CPU durante el juego. Son servicios opcionales: si no
   # existen, no pasa nada. Si usas otro tapa-VRAM, agrégalo aquí.
   # Lista opcional de servicios que te roban VRAM (ABRAMS_PARAR=svc1,svc2).
@@ -76,15 +79,29 @@ prep() {
 
   # 3. Coach en vivo (API, sin OCR y sin VRAM) + panel nativo.
   if ! vivo "$PID_COACH"; then
+    # --mi-heroe: sin esto, en partida sin broadcast el marcador se lee pero el coach
+    # no sabe cuál de las 12 almas eres tú. Se cambia con ABRAMS_HEROE.
+    # --pantalla: sin broadcast (cuota agotada, 504 del CDN o partida sin TV) el
+    # coach sigue leyendo reloj, almas e inventario de la pantalla. Sin esto, el
+    # panel se quedaba vacío una hora aunque la partida estuviera en curso.
     ( cd "$BASE" && exec nohup python3 run.py --fuente vivo --puerto "$PUERTO" \
-        >"$LOG_COACH" 2>&1 ) &
+        --mi-heroe "${ABRAMS_HEROE:-abrams}" --pantalla >"$LOG_COACH" 2>&1 ) &
     echo $! >"$PID_COACH"
+    nace_coach=1
     sleep 2
   fi
   if ! vivo "$PID_PANEL"; then
-    ( cd "$BASE" && exec nohup python3 panel_nativo.py --url "http://127.0.0.1:$PUERTO" \
-        >/tmp/abrams-panel.log 2>&1 ) &
+    if [ "$pegado" = "pegado" ]; then
+      # Sin nohup y como hijo directo del shell: así `wait` lo ve y el cierre de
+      # la ventana (o el fin de la unidad systemd) apaga la sesión entera.
+      ( cd "$BASE" && exec python3 panel_nativo.py --url "http://127.0.0.1:$PUERTO" \
+          >/tmp/abrams-panel.log 2>&1 ) &
+    else
+      ( cd "$BASE" && exec nohup python3 panel_nativo.py --url "http://127.0.0.1:$PUERTO" \
+          >/tmp/abrams-panel.log 2>&1 ) &
+    fi
     echo $! >"$PID_PANEL"
+    nace_panel=1
     sleep 2
   fi
 
@@ -96,6 +113,26 @@ prep() {
   echo "Panel abierto en el monitor secundario."
   echo
   estado
+
+  if [ "$pegado" = "pegado" ] && [ "$nace_panel" = 1 ]; then
+    # La ventana es el proceso principal de la unidad: mientras viva, la app vive;
+    # cuando se cierra, se apaga sólo lo que arrancó esta sesión.
+    trap 'apagar_pegado "$nace_coach"' EXIT INT TERM HUP
+    wait "$(cat "$PID_PANEL" 2>/dev/null)" 2>/dev/null || true
+    apagar_pegado "$nace_coach"
+  fi
+}
+
+# Cierra lo que la app abrió, sin tocar un coach que ya estaba corriendo de antes.
+apagar_pegado() {
+  local mi_coach="${1:-0}"
+  trap - EXIT INT TERM HUP
+  if [ "$mi_coach" = 1 ] && vivo "$PID_COACH"; then
+    kill "$(cat "$PID_COACH")" 2>/dev/null || true
+    rm -f "$PID_COACH"
+  fi
+  rm -f "$PID_PANEL"
+  echo "Ventana cerrada: coach apagado."
 }
 
 grabar() {
@@ -206,7 +243,7 @@ PY
 }
 
 case "${1:-estado}" in
-  prep)     prep ;;
+  prep)     prep "${2:-}" ;;
   grabar)   grabar ;;
   cortar)   cortar ;;
   estado)   estado ;;

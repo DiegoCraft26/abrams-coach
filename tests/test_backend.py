@@ -4,7 +4,6 @@ import os
 import sys
 import tempfile
 import threading
-import time
 
 RAIZ = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, RAIZ)
@@ -68,9 +67,9 @@ def main():
     # ---------------- tolerancia a basura ----------------
     for cls in (Jugador, Item, Recomendacion, Evento, Partida, EstadoPartida):
         try:
-            obj = cls.desde_dict(None)
-            obj2 = cls.desde_dict("no es dict")
-            obj3 = cls.desde_dict([])
+            cls.desde_dict(None)
+            cls.desde_dict("no es dict")
+            cls.desde_dict([])
             check(f"{cls.__name__} tolera basura", True)
         except Exception as e:
             check(f"{cls.__name__} tolera basura", False, repr(e))
@@ -100,7 +99,7 @@ def main():
         raise RuntimeError("boom")
 
     des_a = bus.suscribir(sa)
-    des_b = bus.suscribir(sb)
+    bus.suscribir(sb)
     bus.suscribir(sfallo)
 
     estado_in = {"x": 1}

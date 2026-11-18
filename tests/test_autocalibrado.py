@@ -1,17 +1,24 @@
 """La calibración automática debe encontrar una rejilla sintética sin ayuda."""
 import os, sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from PIL import Image, ImageDraw
+from PIL import Image
 import random
 from coach.autocalibrado import detectar_rejilla
 from coach import refinar as refino, deteccion
 
 ICONOS = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "data", "iconos", "items")
+if not os.path.isdir(ICONOS):
+    import pytest
+    pytest.skip("sin data/iconos: corre 'python3 coach/iconos.py' primero",
+                allow_module_level=True)
 ids = [f for f in os.listdir(ICONOS) if f.endswith("_n.png")]
+if not ids:
+    import pytest
+    pytest.skip("data/iconos vacío: corre 'python3 coach/iconos.py' primero",
+                allow_module_level=True)
 
 def fabricar(filas=10, cols=8, lado=54, margen=40, W=2560, H=1440):
     im = Image.new("RGB", (W, H), (11, 14, 19))
-    d = ImageDraw.Draw(im)
     x0 = (W - (cols*lado + (cols-1)*6))//2
     y0 = (H - (filas*lado + (filas-1)*6))//2
     for f in range(filas):

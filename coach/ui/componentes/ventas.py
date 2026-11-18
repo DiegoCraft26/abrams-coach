@@ -7,7 +7,7 @@ ninguna, el componente se queda callado en vez de sugerir ventas a la ligera.
 from gi.repository import Gtk
 
 from ..iconos import pixbuf
-from .base import envolver, etiqueta, fila, fmt_num, vaciar
+from .base import envolver, etiqueta, fila, vaciar
 
 
 class Ventas(Gtk.Box):
@@ -19,13 +19,24 @@ class Ventas(Gtk.Box):
 
     def actualizar(self, d):
         venta = (d or {}).get("venta")
-        firma = (venta or {}).get("comprar"), (venta or {}).get("vender")
+        prioridad = [v for v in ((d or {}).get("ventas") or [])
+                     if v.get("nivel") == "ahora"]
+        firma = ((venta or {}).get("comprar"), (venta or {}).get("vender"),
+                 tuple(v.get("id") for v in prioridad))
         if firma == self._firma:
             return
         self._firma = firma
         vaciar(self)
         if not venta:
-            self.append(self.lbl_vacio)
+            # Sin compra pendiente pero con slot lleno: al menos decir qué sale primero.
+            # Antes esta tarjeta se quedaba en «nada que vender» con el build completo.
+            if prioridad:
+                self.append(etiqueta("salida prioritaria", "t11 tenue"))
+                for v in prioridad:
+                    self.append(etiqueta(f"{v.get('nombre')} ({v.get('slot_nombre')})"
+                                         f" · {v.get('pp'):+.1f}pp", "t12"))
+            else:
+                self.append(self.lbl_vacio)
             return
         caja = fila(8)
         for ident, rotulo in ((venta.get("vender"), "vende"), (venta.get("comprar"), "entra")):

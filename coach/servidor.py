@@ -10,14 +10,102 @@ AQUI = os.path.dirname(os.path.abspath(__file__))
 
 # El panel web se retiró el 2026-11-07: hay una sola interfaz, la nativa (GTK4). El
 # servidor queda como API local para el panel y para scripts.
-AVISO_RAIZ = ("Abrams Coach: la interfaz es la app nativa.\n"
-              "Abre el panel con: abrams-coach demo   (o  abrams-coach jugar)\n"
-              "Estado en JSON: /api/estado   ·   Diagnóstico: /api/revisar\n")
+AVISO_RAIZ = ("Abrams Coach: el panel web está en /panel (cualquier navegador).\n"
+              "Tarjeta mínima 420x160: /tarjeta   ·   Estado: /api/estado   ·   "
+              "Diagnóstico: /api/revisar\n")
 
 # Cuántos segundos sin publicar antes de avisar que los datos están viejos.
 # run.py lo sube según --intervalo: con intervalo 10 s, 8 s fijos marcaban
 # "congelado" en cada ciclo aunque todo funcionara.
 UMBRAL_RANCIO_S = 8.0
+
+
+def estado_publico(datos, edad):
+    """Lo que sirve `/api/estado`: la foto con su edad real y la marca de rancio.
+
+    El perfil de riesgo se apaga cuando la foto ya no es de ahora: el motor lo calcula
+    para la partida que se está jugando, y un corte histórico de hace medio minuto
+    repetido como si fuera vivo es justo lo que el panel no puede hacer. Se apaga aquí
+    además de en el panel para que el payload no tenga dos verdades.
+    """
+    if not isinstance(datos, dict):
+        return datos
+    datos = dict(datos)
+    datos["edad_s"] = round(edad, 1) if edad is not None else None
+    rancio = bool(edad is not None and edad > UMBRAL_RANCIO_S)
+    datos["rancio"] = rancio
+    if rancio:
+        datos["riesgo"] = None
+    # Sin partida, lo más útil es cómo fue la última: la nota que deja el vigilante al
+    # cerrar Deadlock. Se lee aquí y no en el panel para que el navegador no toque disco.
+    if datos.get("listo") is False:
+        nota, edad_nota = ultima_nota()
+        if nota:
+            datos["ultima_nota"] = nota
+            datos["ultima_nota_edad_s"] = edad_nota
+        objetivo = objetivo_sesion()
+        if objetivo:
+            datos["objetivo"] = objetivo
+    return datos
+
+
+def objetivo_sesion(ruta=None):
+    """El objetivo de la sesión (lo escribe `plan.py`), sin red y sin calcular progreso.
+
+    El progreso necesita el historial; aquí solo se publica qué se está persiguiendo para
+    que el panel y el overlay lo enseñen antes de la partida. Si el archivo no está, None.
+    """
+    ruta = ruta or os.path.join(os.path.dirname(AQUI), "salida", "plan_actual.json")
+    try:
+        with open(ruta, encoding="utf-8") as f:
+            doc = json.load(f)
+    except (OSError, ValueError):
+        return None
+    regla = doc.get("regla")
+    # El 3 200 dejó de ser meta el 2026-11-18 (a escala no separa nada). Un objetivo
+    # viejo con esa regla no se publica: sería pedirle al jugador que mueva una aguja
+    # que no mueve nada.
+    if regla not in ("muertes", "participacion"):
+        return None
+    etiqueta = {"muertes": f"≤{doc.get('meta', 6)} muertes",
+                "participacion": f"≥{doc.get('meta')} k+a/min",
+                "min3200": f"3 200 antes del min {doc.get('meta')}"}.get(regla, regla)
+    return {"regla": regla, "texto": f"{doc.get('necesarias', 3)} de {doc.get('partidas', 5)} con {etiqueta}",
+            "desde": doc.get("desde")}
+
+
+def ultima_nota(ruta=None, limite_s=86400):
+    """Texto de la última nota post-partida, si existe y no es de hace más de un día."""
+    import time
+    ruta = ruta or os.path.join(os.path.dirname(AQUI), "salida", "ultima_nota.txt")
+    try:
+        edad = time.time() - os.path.getmtime(ruta)
+        if edad > limite_s:
+            return None, None
+        with open(ruta, encoding="utf-8") as f:
+            texto = f.read().strip()
+        return (texto[:600] if texto else None), round(edad)
+    except OSError:
+        return None, None
+
+
+def _json_default(o):
+    """Convierte lo que json no sabe, sin romper el endpoint.
+
+    Un numpy.int64, un set o un deque en el estado hacían fallar `json.dumps` y el
+    panel se quedaba en «sin coach»: una pieza de datos rara apagaba la app entera.
+    Los escalares numéricos se convierten a su valor (no a texto) para que el JS los
+    siga tratando como números.
+    """
+    item = getattr(o, "item", None)
+    if callable(item):
+        try:
+            return item()
+        except Exception:                                  # noqa: BLE001
+            pass
+    if isinstance(o, (set, frozenset, tuple)):
+        return list(o)
+    return str(o)
 
 class Estado:
     def __init__(self):
@@ -86,6 +174,8 @@ EST = Estado()
 # --- diagnóstico del botón "Revisar" -------------------------------------------
 # Solo un diagnóstico a la vez: cada uno hace dos golpes a la API (con la puerta de
 # 3 s de coach.en_vivo) y puede pedir una respuesta al modelo.
+# Los iconos se nombran por id: nunca cambia su contenido, así que se cachean de verdad.
+CACHE_ICONO = "public, max-age=604800, immutable"
 _LOCK_REVISION = threading.Lock()
 
 SISTEMA_REVISION = (
@@ -193,15 +283,24 @@ class Manejador(BaseHTTPRequestHandler):
     def log_message(self, *a):
         pass
 
-    def _enviar(self, codigo, cuerpo, tipo="application/json; charset=utf-8"):
+    def _enviar(self, codigo, cuerpo, tipo="application/json; charset=utf-8",
+                cache="no-store"):
+        """`cache` sólo se relaja para lo que no cambia nunca (los iconos por id)."""
         if isinstance(cuerpo, (dict, list)):
-            cuerpo = json.dumps(cuerpo, ensure_ascii=False).encode()
+            try:
+                texto = json.dumps(cuerpo, ensure_ascii=False, default=_json_default)
+            except (TypeError, ValueError):
+                # Último recurso: nunca dejar al panel sin respuesta por un dato raro.
+                texto = json.dumps({"listo": False,
+                                    "mensaje": "el estado no se pudo serializar"},
+                                   ensure_ascii=False)
+            cuerpo = texto.encode()
         elif isinstance(cuerpo, str):
             cuerpo = cuerpo.encode()
         self.send_response(codigo)
         self.send_header("Content-Type", tipo)
         self.send_header("Content-Length", str(len(cuerpo)))
-        self.send_header("Cache-Control", "no-store")
+        self.send_header("Cache-Control", cache)
         self.end_headers()
         self.wfile.write(cuerpo)
 
@@ -209,6 +308,30 @@ class Manejador(BaseHTTPRequestHandler):
         ruta = urlparse(self.path).path
         if ruta in ("/", "/index.html"):
             self._enviar(200, AVISO_RAIZ, "text/plain; charset=utf-8")
+        elif ruta in ("/panel", "/panel.html"):
+            # Panel web servido por el propio coach: mismo dato que la app nativa y
+            # ningún proceso extra. Útil también desde otro equipo de la LAN.
+            from .ui.web import PAGINA
+            self._enviar(200, PAGINA.encode("utf-8"), "text/html; charset=utf-8")
+        elif ruta in ("/tarjeta", "/tarjeta.html"):
+            # Tarjeta de 420x160 para mirar entre peleas. Se renderiza con el último
+            # estado ya dentro: si el navegador tarda en ejecutar el JS, la primera
+            # pintura no es un cuadro vacío. El JS la refresca cada segundo.
+            from .ui.tarjeta import pagina
+            datos, _, edad = EST.encuesta()
+            if EST.ts == 0:
+                respaldo = estado_guardado.como_respaldo()
+                if respaldo is not None:
+                    datos = respaldo
+                    edad = respaldo.get("edad_s")
+            if isinstance(datos, dict):
+                datos = dict(datos)
+                rancio = bool(datos.get("rancio")) or (
+                    edad is not None and edad > UMBRAL_RANCIO_S)
+                datos["edad_s"] = round(edad, 1) if edad is not None else None
+                datos["rancio"] = rancio
+            self._enviar(200, pagina(datos, edad).encode("utf-8"),
+                         "text/html; charset=utf-8")
         elif ruta == "/api/estado":
             datos, _, edad = EST.encuesta()
             if EST.ts == 0:
@@ -219,9 +342,7 @@ class Manejador(BaseHTTPRequestHandler):
                     datos = respaldo
                     edad = respaldo.get("edad_s")
             if isinstance(datos, dict):
-                datos = dict(datos)
-                datos["edad_s"] = round(edad, 1) if edad is not None else None
-                datos["rancio"] = bool(edad is not None and edad > UMBRAL_RANCIO_S)
+                datos = estado_publico(datos, edad)
             self._enviar(200, datos)
         elif ruta == "/api/identidad":
             # Qué partida se cree el coach, por qué vía y qué dice el console.log del
@@ -257,7 +378,9 @@ class Manejador(BaseHTTPRequestHandler):
                 ruta_icono = os.path.join(base, iid + ext)
                 if os.path.exists(ruta_icono):
                     with open(ruta_icono, "rb") as f:
-                        self._enviar(200, f.read(), tipo)
+                        # El icono de un id no cambia: cachearlo ahorra 14 peticiones
+                        # por segundo en cada repintado del panel.
+                        self._enviar(200, f.read(), tipo, cache=CACHE_ICONO)
                     return
             self._enviar(404, {"error": "sin icono"})
         elif ruta.startswith("/icono-heroe/"):
@@ -270,9 +393,14 @@ class Manejador(BaseHTTPRequestHandler):
                 ruta_icono = os.path.join(base, nombre + ext)
                 if os.path.exists(ruta_icono):
                     with open(ruta_icono, "rb") as f:
-                        self._enviar(200, f.read(), tipo)
+                        self._enviar(200, f.read(), tipo, cache=CACHE_ICONO)
                     return
             self._enviar(404, {"error": "sin icono"})
+        elif ruta == "/api/version":
+            # ¿La app abierta corre el código que tengo? Ver coach/version.py y
+            # docs/VERSION.md. Sirve para no discutir de memoria si falta reiniciar.
+            from coach import version
+            self._enviar(200, version.comparar())
         elif ruta == "/api/salud":
             self._enviar(200, {"ok": True, "ts": time.time()})
         elif ruta == "/api/revisar":
@@ -339,6 +467,13 @@ class Manejador(BaseHTTPRequestHandler):
 
 
 def arrancar(puerto=8090, analizador=None):
+    # Deja escrito con qué código arrancó esta instancia: así /api/version puede
+    # decir si la ventana abierta quedó vieja tras una edición. Nunca rompe el arranque.
+    try:
+        from coach import version
+        version.marcar_arranque()
+    except Exception:                                    # noqa: BLE001
+        pass
     srv = ThreadingHTTPServer(("127.0.0.1", puerto), Manejador)
     # Sin esto, cada conexión keep-alive deja un hilo esperando y el proceso no termina
     # nunca: el test del servidor se quedaba colgado al salir.

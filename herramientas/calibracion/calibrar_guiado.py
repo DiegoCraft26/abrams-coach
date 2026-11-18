@@ -4,7 +4,7 @@
 Cada paso captura una sola imagen, detecta la cuadrícula, la refina y guarda solo lo que
 salió bien. Se puede correr por partes: si un paso falla, los demás siguen.
 """
-import json, os, sys, time
+import json, os, sys
 sys.path.insert(0, RAIZ)
 from coach import lector, deteccion, autocalibrado, refinar as refino
 

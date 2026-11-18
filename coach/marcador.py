@@ -493,7 +493,6 @@ def leer_captura(ruta_o_im, mi_heroe=None, heroes=False):
         salida["motivo"] = f"no pude separar los equipos ({len(aliados_x)}/{len(enemigos_x)})"
         return salida
 
-    my0, my1 = max(0, y0 - 3), min(lum.shape[0], y1 + 4)
     # Vía principal: una sola llamada a tesseract sobre la tira de las 12 almas.
     # Respaldo: plantillas del propio juego columna por columna (más lentas y sin el
     # dígito 6 en el banco, pero no dependen de que tesseract esté instalado).
@@ -548,11 +547,16 @@ def leer_captura(ruta_o_im, mi_heroe=None, heroes=False):
 
     if mi_heroe:
         buscado = mi_heroe.strip().lower()
-        for j in jugadores:
-            if (j["heroe"] or "").lower() == buscado:
-                salida["almas_propias"] = j["almas"]
-                salida["jugadores"][j["columna"]]["es_yo"] = True
-                break
+        # Tu héroe primero en los aliados. Antes se recorría la lista entera y, si el
+        # mismo héroe estaba en los dos equipos (mirror), podía quedarse con el enemigo;
+        # y el índice de `es_yo` se aplicaba sobre las 12 columnas mezcladas.
+        candidatos = [j for j in jugadores if (j["heroe"] or "").lower() == buscado]
+        candidatos.sort(key=lambda j: 0 if j["equipo"] == "aliado" else 1)
+        if candidatos:
+            elegido = candidatos[0]
+            salida["almas_propias"] = elegido["almas"]
+            elegido["es_yo"] = True
+            salida["mi_columna"] = elegido["columna"]
 
     leidas = sum(1 for v in salida["almas"]["aliados"] + salida["almas"]["enemigos"]
                  if v is not None)

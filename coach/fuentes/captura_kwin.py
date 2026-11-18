@@ -23,7 +23,6 @@ milisegundos, nunca hay dos capturas en paralelo.
 import os
 import select
 import threading
-import time
 
 BUS = "org.kde.KWin"
 RUTA = "/org/kde/KWin/ScreenShot2"

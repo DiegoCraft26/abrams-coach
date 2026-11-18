@@ -14,7 +14,8 @@ import tempfile
 import time
 
 RAIZ = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-RUTA = os.path.join(RAIZ, "salida", "estado_ultimo.json")
+RUTA = os.environ.get("ABRAMS_ESTADO") or os.path.join(
+    RAIZ, "salida", "estado_ultimo.json")
 
 # El coach publica cada pocos segundos; escribir en cada vuelta sería castigar el disco
 # para guardar el mismo estado. Con 2 s ya se salva una partida que se cae.

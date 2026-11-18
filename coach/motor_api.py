@@ -1,5 +1,5 @@
 """Puente: carga datos y expone analizar(estado_dict)."""
-import os, sys, time
+import os, time
 from . import catalogo, motor
 from .estado import Estado, validar
 
@@ -54,6 +54,22 @@ def sanear_almas(d):
     return d
 
 
+def _es_vivo(d):
+    """¿El estado que llega es de ahora?
+
+    El panel se mira entre peleas: un corte histórico calculado con un estado de hace
+    medio minuto se leería como si la partida fuera por ahí. Se apaga por dos vías, la
+    marca explícita (`rancio`, la pone el bucle que sirve) y la edad real (`edad_s`).
+    """
+    if not isinstance(d, dict) or d.get("rancio"):
+        return False
+    edad = d.get("edad_s")
+    if isinstance(edad, (int, float)) and not isinstance(edad, bool) \
+            and edad > motor.EDAD_RANCIO_S:
+        return False
+    return True
+
+
 class Motor:
     def __init__(self, cfg=None):
         self.cat = catalogo.cargar()
@@ -76,7 +92,7 @@ class Motor:
         if problemas:
             e.notas = list(e.notas) + problemas
             e.confianza = min(e.confianza, 0.5)
-        r = motor.recomendar(e, self.conoc, self.cat, self.cfg)
+        r = motor.recomendar(e, self.conoc, self.cat, self.cfg, vivo=_es_vivo(d))
         r["ms"] = round((time.perf_counter() - t0) * 1000, 2)
         r["notas"] = e.notas
         r["heroe"] = e.yo.heroe

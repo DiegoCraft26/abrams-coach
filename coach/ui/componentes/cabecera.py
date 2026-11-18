@@ -44,6 +44,13 @@ class Header(Gtk.Box):
         self.lbl_delta.set_valign(Gtk.Align.CENTER)
         self.append(self.lbl_delta)
 
+        # Amenaza: el rival que no se busca solo. Va en la cabecera porque es lo único
+        # que hay que ver sin abrir ninguna sección.
+        self.lbl_amenaza = etiqueta("", "chip chip-evitar")
+        self.lbl_amenaza.set_valign(Gtk.Align.CENTER)
+        self.lbl_amenaza.set_visible(False)
+        self.append(self.lbl_amenaza)
+
         relleno = Gtk.Box()
         relleno.set_hexpand(True)
         self.append(relleno)
@@ -55,16 +62,35 @@ class Header(Gtk.Box):
         # se leía como un estado contradictorio.
         self.lbl_chiip.set_visible(False)
         self.append(self.lbl_chiip)
+        # Aviso de héroe: el motor solo tiene la ruta de Abrams. Si estás jugando otro,
+        # el panel lo dice en vez de darte ítems de Abrams como si fueran tuyos.
+        self.lbl_aviso = etiqueta("", "chip")
+        self.lbl_aviso.set_valign(Gtk.Align.CENTER)
+        self.lbl_aviso.set_visible(False)
+        self.append(self.lbl_aviso)
 
     def actualizar(self, d):
         if not d:
             self.lbl_conexion.set_label("● sin conexión")
             clase_unica(self.lbl_conexion, INSIGNIAS, "insignia-offline")
             self.lbl_chiip.set_visible(False)
+            self.lbl_amenaza.set_visible(False)
             return
+        aviso = str(d.get("aviso_heroe") or "")
+        self.lbl_aviso.set_label(aviso)
+        self.lbl_aviso.set_visible(bool(aviso))
         fuente = str(d.get("fuente") or "")
+        fase_juego = str(d.get("fase_juego") or "")
         if d.get("listo") is False:
-            self.lbl_conexion.set_label("● sin partida")
+            # El menú, la cola y el fin de partida no son fallos: el console.log del
+            # juego lo dice gratis. Antes todo caía en «sin partida», que se lee como
+            # avería (visto 2026-11-15 al abrir la app antes de entrar a la partida).
+            if fase_juego == "menu":
+                self.lbl_conexion.set_label("● en el menú")
+            elif fase_juego == "partida":
+                self.lbl_conexion.set_label("● en partida · abre Tab")
+            else:
+                self.lbl_conexion.set_label("● sin partida")
             clase_unica(self.lbl_conexion, INSIGNIAS, "insignia-offline")
         elif d.get("rancio"):
             edad = d.get("edad_s")
@@ -96,6 +122,14 @@ class Header(Gtk.Box):
                                       if oro is not None and almas is not None else "")
         dp = (d.get("economia") or {}).get("delta_pct")
         self.lbl_delta.set_label(f"· {dp*100:+.0f}% vs enemigos" if dp is not None else "")
+
+        amen = (d.get("amenazas") or {}).get("peor") or {}
+        if amen.get("evitar_solo") and amen.get("heroe"):
+            self.lbl_amenaza.set_label(f"EVITAR {str(amen['heroe']).upper()}")
+            self.lbl_amenaza.set_tooltip_text(amen.get("motivo") or "")
+            self.lbl_amenaza.set_visible(True)
+        else:
+            self.lbl_amenaza.set_visible(False)
 
         est = (d.get("estado") or {}).get("estado")
         self.lbl_chiip.set_visible(bool(est) and d.get("listo") is not False)

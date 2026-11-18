@@ -57,8 +57,15 @@ def test_revisar_hijos_anota_y_descarta():
     muerto = subprocess.Popen([sys.executable, "-c", "raise SystemExit(3)"])
     try:
         muerto.wait(timeout=10)
-        quedan = vigilar.revisar_hijos([vivo, muerto])
-        assert quedan == [vivo]
+        # El contrato cambió el 2026-11-15: además de los vivos se devuelven las
+        # muertes con su tiempo de vida (un panel que muere en 0-10 s no arrancó).
+        vivos, muertes = vigilar.revisar_hijos([vivo, muerto])
+        assert vivos == [vivo]
+        assert len(muertes) == 1
+        nombre, pid, codigo, vivio = muertes[0]
+        assert pid == muerto.pid
+        assert codigo == 3
+        assert vivio is None        # sin `inicios` no se puede saber cuánto vivió
     finally:
         vivo.kill()
         vivo.wait(timeout=10)

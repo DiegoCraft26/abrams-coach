@@ -6,7 +6,6 @@ cada parche), pero atrapa las roturas de código: recortes movidos, escalado mal
 umbral de color, tiempos.
 """
 import os
-import statistics
 import sys
 import tempfile
 import time
@@ -18,7 +17,25 @@ from PIL import Image, ImageDraw, ImageFont  # noqa: E402
 
 from coach.fuentes import captura, fps, hud_rapido  # noqa: E402
 
-FUENTE = "/usr/share/fonts/TTF/DejaVuSans-Bold.ttf"
+# La ruta de DejaVu depende de la distro: Arch la pone en fonts/TTF, Debian y Ubuntu
+# en fonts/truetype/dejavu. Con una sola ruta fija, la prueba falla en la PC headless
+# (Ubuntu) y pasa en el desktop (Arch), que es justo el tipo de diferencia que hace
+# desconfiar de una suite entera.
+FUENTES = (
+    "/usr/share/fonts/TTF/DejaVuSans-Bold.ttf",
+    "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
+    "/usr/share/fonts/dejavu/DejaVuSans-Bold.ttf",
+)
+
+
+def _primera_fuente():
+    for ruta in FUENTES:
+        if os.path.exists(ruta):
+            return ruta
+    return None
+
+
+FUENTE = _primera_fuente() or FUENTES[0]
 VERDE_ORO = (86, 232, 189)
 
 
@@ -26,7 +43,8 @@ def _fuente(tam):
     try:
         return ImageFont.truetype(FUENTE, tam)
     except OSError:
-        return ImageFont.load_default()
+        import pytest
+        pytest.skip(f"sin fuente DejaVu en ninguna de: {', '.join(FUENTES)}")
 
 
 def hud_sintetico(reloj="12:34", oro="1,234"):

@@ -30,6 +30,13 @@ class Estado:
     confianza: float = 1.0             # 0..1, cuánto se cree la lectura
     fuente: str = "manual"             # manual | ocr
     notas: list = field(default_factory=list)
+    # Últimas muestras {t, a} que publica el bucle: el motor mide con ellas las almas/s
+    # reales de esta partida (ETA del panel). Diagnóstico, no estado de partida.
+    historial: list = field(default_factory=list)
+    # ¿El estado trae KDA de verdad? Solo el broadcast manda bajas/muertes/asistencias;
+    # la pantalla y el OCR publican ceros de relleno. `Jugador` no distingue «0» de «no
+    # vino el dato», así que se marca aquí para no inventar un perfil con esos ceros.
+    con_kda: bool = False
 
     def a_dict(self):
         return asdict(self)
@@ -41,8 +48,16 @@ class Estado:
         e = Estado(t=_num(d.get("t"), 0.0) or 0.0,
                    confianza=_num(d.get("confianza"), 1.0),
                    fuente=str(d.get("fuente", "manual")),
-                   notas=[str(x) for x in _lista(d.get("notas"))])
+                   notas=[str(x) for x in _lista(d.get("notas"))],
+                   historial=[x for x in _lista(d.get("historial"))
+                              if isinstance(x, dict)])
         e.yo = _jugador(d.get("yo"))
+        crudo = d.get("yo")
+        crudo = crudo if isinstance(crudo, dict) else {}
+        # Un 0/0/0 no es señal: o nadie peleó todavía, o el campo no vino. En los dos
+        # casos el perfil de riesgo se queda sin dato en vez de con un cero inventado.
+        kda = [_num(crudo.get(k)) for k in ("bajas", "muertes", "asistencias")]
+        e.con_kda = sum(x for x in kda if x is not None) > 0
         e.aliados = [_jugador(x) for x in _lista(d.get("aliados")) if isinstance(x, dict)]
         e.enemigos = [_jugador(x) for x in _lista(d.get("enemigos")) if isinstance(x, dict)]
         slots = d.get("slots")

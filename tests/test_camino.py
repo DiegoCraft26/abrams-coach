@@ -35,8 +35,11 @@ def main():
     check("trae al menos 8 pasos", len(ruta) >= 8, str(len(ruta)))
     check("no hay repetidos", len({p["id"] for p in ruta}) == len(ruta))
     aperturas = [p for p in ruta if p["etapa"] == "apertura"]
-    check("tres aperturas de 800", len(aperturas) == 3
-          and all(p["costo"] == 800 for p in aperturas))
+    # Dos y no tres: con 20 500 partidas, 800+800+800 gana 51.2 % (n 12 321) contra
+    # 53.3 % de 800+800+1 600 (n 3 201). Ver informes/lab/ENSAYOS-2026-11-17.md.
+    check("dos aperturas de 800", len(aperturas) == 2
+          and all(p["costo"] == 800 for p in aperturas),
+          str([(p["nombre"], p["costo"]) for p in aperturas]))
     check("hay core de 1,600–3,200",
           any(800 < p["costo"] <= 3200 for p in ruta))
     check("hay spike de 3,200+", any(p["costo"] >= 3200 for p in ruta))
@@ -55,12 +58,12 @@ def main():
           and r["decision"]["item"]["costo"] == 800,
           r["decision"]["item"]["nombre"])
 
-    # Con las tres aperturas puestas ya no se recomienda otro 800: toca juntar
-    # 1,600 y el panel debe decir cuánto falta.
-    almas = sum(p["costo"] for p in ruta[:3]) + 800
-    r = m.analizar_dict(_estado(300, almas, ids[:3]))
+    # Con la apertura cerrada ya no se recomienda otro 800: toca juntar 1,600 y el
+    # panel debe decir cuánto falta.
+    almas = sum(p["costo"] for p in ruta[:2]) + 800
+    r = m.analizar_dict(_estado(300, almas, ids[:2]))
     d = r["decision"]
-    check("con las 3 aperturas: el objetivo ya no es un 800",
+    check("con la apertura cerrada: el objetivo ya no es un 800",
           d["item"]["costo"] > 800, f'{d["item"]["nombre"]} ({d["item"]["costo"]})')
     check("faltan ≤1,600 y ETA ≤90 s: AHORRAR",
           d["accion"] == "AHORRAR" and d["modo"] == "ahorro"
@@ -102,13 +105,32 @@ def main():
           (d.get("item") or {}).get("nombre") not in antes,
           str((d.get("item") or {}).get("nombre")))
 
-    # Rama por composición: dos móviles justifican antimovilidad; sin enemigos no.
+    # Rama por composición: dos móviles justifican antimovilidad, pero **no** secuestran
+    # el camino cuando el siguiente paso se puede pagar (antes Slowing Bullets salía como
+    # única recomendación media partida; reportado el 2026-11-10).
     r = m.analizar_dict(_estado(900, 6000, [], enemigos=["haze", "seven", "lash"]))
     d = r["decision"]
-    check("con dos móviles la rama es antimovilidad",
-          (d.get("item") or {}).get("nombre") == "Slowing Bullets"
-          and "slow con balas" in (d.get("motivo") or ""),
+    check("con el camino pagable se avanza el camino, no el counter",
+          (d.get("item") or {}).get("nombre") == "Bullet Resist Shredder",
           str((d.get("item") or {}).get("nombre")))
+    contra = [c["nombre"] for c in (r.get("contra_composicion") or [])]
+    check("el counter de composición sigue ofreciéndose aparte",
+          "Slowing Bullets" in contra, str(contra))
+
+    # Ni siquiera cuando el siguiente paso no se paga: el counter de composición no
+    # cambia la compra (era la causa del vaivén con el oro). Solo el del rival que va
+    # por encima puede desviarla.
+    poseidos = ids[:5]
+    bolsillo = 2000
+    almas = sum((m.conoc["items"].get(x) or {}).get("costo") or 0 for x in poseidos) + bolsillo
+    r = m.analizar_dict(_estado(1400, almas, poseidos,
+                                enemigos=["haze", "seven", "lash"]))
+    d = r["decision"]
+    check("el counter de composición no cambia la compra ni ahorrando",
+          (d.get("item") or {}).get("nombre") != "Slowing Bullets",
+          str((d.get("item") or {}).get("nombre")))
+    check("pero sigue en la lista de composición",
+          "Slowing Bullets" in [c["nombre"] for c in (r.get("contra_composicion") or [])])
     check("el bonus de categoría se publica a 4,800",
           r.get("categorias", {}).get("weapon", {}).get("umbral") == 4800
           and "falta" in r.get("categorias", {}).get("weapon", {}),

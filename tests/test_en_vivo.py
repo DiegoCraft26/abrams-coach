@@ -83,13 +83,13 @@ def main():
         api_vivo._leer_hud = lambda: 134344094
         EV.partida_activa = lambda cuenta, timeout=20, unico=False: 134294885
         api_vivo.olvidar()
-        r = api_vivo.descubrir(cuenta=376225059, forzar=True)
+        r = api_vivo.descubrir(cuenta=123456789, forzar=True)
         probar("HUD mal leído: gana la partida de la cuenta",
                int(r.get("match") or 0) == 134294885 and r.get("via") == "cuenta",
                str(r.get("match")))
         api_vivo._leer_hud = lambda: 134294885
         api_vivo.olvidar()
-        r = api_vivo.descubrir(cuenta=376225059, forzar=True)
+        r = api_vivo.descubrir(cuenta=123456789, forzar=True)
         probar("HUD correcto: se usa y se verifica",
                int(r.get("match") or 0) == 134294885 and "verificado" in (r.get("detalle") or ""),
                str(r.get("detalle")))

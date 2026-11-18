@@ -5,7 +5,6 @@ descartan, los campos que no se ven van a null, el mismo cuadro no se paga dos v
 el tope por partida corta antes de vaciar el presupuesto.
 """
 import io
-import json
 import sys
 from pathlib import Path
 

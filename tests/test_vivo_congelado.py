@@ -50,9 +50,15 @@ threading.Thread(target=R.bucle_vivo, args=(Args(), lambda d: {
     "t": d["t"], "almas": d["yo"].get("almas"), "listo": True, "fuente": "en_vivo"}),
     daemon=True).start()
 
-time.sleep(2.5)
-_, _, edad1 = S.EST.encuesta()
-time.sleep(8.0)
+# Espera activa al primer estado: con la máquina cargada, 2.5 s fijos daban edad1=None
+# y el test fallaba por el reloj, no por el motor (visto el 2026-11-10). El margen de
+# la segunda medida también se amplía: 8 s fijos rozaban el umbral de 8 s.
+for _ in range(50):
+    _, _, edad1 = S.EST.encuesta()
+    if edad1 is not None:
+        break
+    time.sleep(0.1)
+time.sleep(9.5)
 _, _, edad2 = S.EST.encuesta()
 print(json.dumps({"edad1": edad1, "edad2": edad2, "umbral": S.UMBRAL_RANCIO_S}))
 sys.stdout.flush()

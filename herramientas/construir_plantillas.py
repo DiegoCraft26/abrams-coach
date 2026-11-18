@@ -11,12 +11,10 @@ Los trozos donde dos glifos se tocan (pasa con "11" y "14") se parten buscando
 exhaustivamente los cortes que minimizan el costo contra las etiquetas conocidas.
 """
 import itertools
-import json
 import os
 import sys
 
 import numpy as np
-from PIL import Image
 
 RAIZ = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, RAIZ)
@@ -208,7 +206,6 @@ def cosechar_reloj(banco, im, texto):
     trozos = P.trozos(mask, ancho_min=2)
     print(f"      reloj: umbral={thr:.0f} trozos={[(b-a+1) for a,b in trozos]}")
     piezas = [mask[:, a:b + 1] for a, b in trozos]
-    k = len(piezas)
     if len(piezas) == 0:
         return 0
     # asignar las etiquetas conocidas a los trozos (mismo número o resolución)

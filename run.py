@@ -100,6 +100,30 @@ def disparo_por_compra(oro_previo, oro_actual, items_previos=None, items_actuale
 
 _MEMORIA_VISION = {"oro": None, "items_visibles": None}
 
+# Cada cuánto se reintenta la URL del TV cuando no se pudo resolver. Sin URL no se abre
+# el stream (abrir por `match_id` especta y gasta cuota); 60 s basta para recuperarse de
+# un 5xx pasajero sin castigar el límite de 6/hora. Ver docs/api-vivo-sin-vision.md.
+URL_REINTENTO_S = 60.0
+
+
+def _resolver_url_tv(match):
+    """URL del TV de la partida, o None. Nunca lanza: la ausencia es un caso normal."""
+    try:
+        from coach.fuentes import live_api
+        return live_api.url_broadcast(int(match))
+    except Exception as exc:                                   # noqa: BLE001
+        print(f"  sin URL del TV: {type(exc).__name__}: {exc}")
+        return None
+
+
+def _sin_cuota(match):
+    """La API ya negó el espectáculo de esa partida: no tiene sentido reintentar."""
+    try:
+        from coach.fuentes import live_api
+        return live_api.sin_cuota(int(match))
+    except Exception:                                          # noqa: BLE001
+        return False
+
 
 def _latido_vision(cola, sched, estado_hud):
     """Un paso de visión: guarda lo leído y decide si manda otro cuadro.
@@ -158,8 +182,23 @@ def bucle_vivo(a, analizar):
     estado_hud = arrancar_hud(a, _CFG["hud"], _CFG["flags"])
     cola_vision, sched_vision = _arrancar_vision(a)
     conoc = leer_conocimiento()
+    def _modo_pantalla(mensaje):
+        """Sin broadcast: publicar lo que sí se puede leer del HUD, con su nota.
+
+        Devuelve True si publicó. Es el camino que impide que un 504 del CDN o una
+        cuota agotada dejen el panel vacío con la partida en curso.
+        """
+        latido = _latido_vision(cola_vision, sched_vision, estado_hud)
+        if not getattr(a, "pantalla", False):
+            return False
+        return bool(publicar_pantalla(
+            estado_hud, analizar, medir_latencias(a), conoc,
+            inventario=latido if (latido or {}).get("inventario") else None,
+            vision=(latido or {}).get("vision"),
+            nota=mensaje + " · sigo con la pantalla"))
+
     items_previos, heroes_cta, compras = {}, {}, []
-    st = {"match": None, "escucha": None, "ultimo_hud": 0.0,
+    st = {"match": None, "escucha": None, "ultimo_hud": 0.0, "url_ts": 0.0,
           "tick": None, "tick_desde": time.time(), "avisado": False,
           "ultimo_vivo": 0.0, "arranque": time.time()}
 
@@ -170,6 +209,16 @@ def bucle_vivo(a, analizar):
     def _descubrir():
         import threading as _th
         while True:
+            # Sin juego abierto no hay nada que descubrir y seguir preguntando a la API
+            # cada 20 s gasta cuota a cambio de nada (medido: 5.5 % de un núcleo de CPU
+            # y una petición cada 20 s con el juego cerrado). Se sondea cada minuto y
+            # solo si el proceso del juego está vivo.
+            if not juego_abierto():
+                ultimo_cerrado = st.get("sin_juego") or 0.0
+                if time.time() - ultimo_cerrado < 60.0:
+                    _th.Event().wait(5.0)
+                    continue
+                st["sin_juego"] = time.time()
             try:
                 hallado = buscar_match(a, st)
                 if hallado:
@@ -203,7 +252,7 @@ def bucle_vivo(a, analizar):
                 if time.time() - st["arranque"] < 6.0:
                     time.sleep(1.0)
                     continue
-                if publicar_apertura(conoc):
+                if publicar_apertura(conoc, heroe=getattr(a, "mi_heroe", None)):
                     time.sleep(3.0)
                     continue
                 servidor.EST.publicar({"listo": False,
@@ -216,12 +265,84 @@ def bucle_vivo(a, analizar):
             if match != st["match"]:
                 if st["escucha"]:
                     st["escucha"].parar()
-                print(f"partida en vivo: {match}")
-                st["escucha"] = en_vivo.Escucha(match, cuenta=a.cuenta,
-                                              heroe=getattr(a, "mi_heroe", None)).arrancar()
+                    st["escucha"] = None
+                # La URL del TV se resuelve UNA vez por partida y queda cacheada en
+                # `live_api` (memoria y disco): con ella la consulta no especta, así que
+                # la cuota de los 6 espectáculos/hora se gasta una vez y no en cada
+                # reconexión. Ver docs/api-vivo-sin-vision.md (medido el 2026-11-09).
+                url_tv = _resolver_url_tv(match)
                 st["match"] = match
+                st["url_ts"] = time.time()
+                if url_tv is None:
+                    # Sin URL, el stream se abriría por `match_id` y ESO ESPECTA. El
+                    # 2026-11-18 un 504 de la API hizo fallar la resolución, la escalera
+                    # abrió cinco veces en un minuto y se llevó la cuota de la hora.
+                    # Se sigue con HUD y console.log (gratis) y se reintenta la URL.
+                    st["tick"], st["tick_desde"], st["avisado"] = (
+                        None, time.time(), False)
+                    olvidar_reloj_hud()
+                    mensaje = ("sin URL del TV para la partida " + str(match)
+                               + ": no se abre el stream para no gastar la "
+                                 "cuota de espectador")
+                    if _modo_pantalla(mensaje):
+                        time.sleep(max(1.0, a.intervalo))
+                        continue
+                    servidor.EST.publicar({"listo": False, "mensaje": mensaje,
+                                           "modo": "CIEGO", "fuente": "en_vivo"})
+                    time.sleep(10.0)
+                    continue
+                print(f"partida en vivo: {match} · TV {url_tv.rsplit('/', 1)[-1]}")
+                st["escucha"] = en_vivo.Escucha(
+                    match, cuenta=a.cuenta, heroe=getattr(a, "mi_heroe", None),
+                    url_tv=url_tv).arrancar()
                 olvidar_reloj_hud()
                 st["tick"], st["tick_desde"], st["avisado"] = None, time.time(), False
+
+            # Partida conocida pero sin stream: se reintenta la URL del TV sin volver a
+            # descubrir la partida. Ni antes de 60 s ni antes de lo que pida un 429: cada
+            # reintento dentro de la ventana cuenta otra vez y mantiene la cuota agotada
+            # para siempre (la escalera del 2026-11-18 lo demostró).
+            if st["escucha"] is None and st.get("match") is not None:
+                pausa = en_vivo.pausa_restante_s()
+                if (not _sin_cuota(st["match"])
+                        and time.time() - st.get("url_ts", 0.0) >= max(URL_REINTENTO_S,
+                                                                      pausa)):
+                    st["url_ts"] = time.time()
+                    url_tv = _resolver_url_tv(st["match"])
+                    if url_tv is not None:
+                        print(f"partida en vivo: {st['match']}"
+                              f" · TV {url_tv.rsplit('/', 1)[-1]}")
+                        st["escucha"] = en_vivo.Escucha(
+                            st["match"], cuenta=a.cuenta,
+                            heroe=getattr(a, "mi_heroe", None),
+                            url_tv=url_tv).arrancar()
+                        st["tick"], st["tick_desde"], st["avisado"] = (
+                            None, time.time(), False)
+                if st["escucha"] is None:
+                    pausa = en_vivo.pausa_restante_s()
+                    if pausa > 0:
+                        mensaje = (f"cuota de espectador: la API pidió esperar "
+                                   f"{int(pausa)} s")
+                    elif _sin_cuota(st["match"]):
+                        mensaje = (f"cuota agotada para la partida {st['match']}: no se "
+                                   "reintenta (cada intento gasta otra petición); "
+                                   "se sigue con el HUD")
+                    else:
+                        mensaje = (f"sin URL del TV para la partida {st['match']}: "
+                                   "se reintenta cada minuto y no se abre el stream "
+                                   "para no gastar la cuota de espectador")
+                    # Sin broadcast la app NO se apaga: el HUD sigue leyendo reloj,
+                    # almas e inventario. Antes se publicaba listo=False y se saltaba
+                    # el modo pantalla, así que un 504 de la API dejaba el panel vacío
+                    # una hora aunque la partida estuviera en curso.
+                    if _modo_pantalla(mensaje):
+                        time.sleep(max(1.0, a.intervalo))
+                        continue
+                    servidor.EST.publicar({"listo": False, "mensaje": mensaje,
+                                           "modo": "CIEGO", "fuente": "en_vivo"})
+                    time.sleep(max(2.0, a.intervalo))
+                    continue
+
             escucha = st["escucha"]
             est = escucha.estado
             # Cuota de espectador agotada: no es un fallo del panel ni de la partida.
@@ -247,7 +368,7 @@ def bucle_vivo(a, analizar):
                         vision=(latido or {}).get("vision"))):
                     time.sleep(max(1.0, a.intervalo))
                     continue
-                if publicar_apertura(conoc):
+                if publicar_apertura(conoc, heroe=getattr(a, "mi_heroe", None)):
                     time.sleep(3.0)
                     continue
                 servidor.EST.publicar({"listo": False,
@@ -286,7 +407,41 @@ def bucle_vivo(a, analizar):
             anotar_compras(est, conoc, items_previos, heroes_cta, compras)
             salida = analizar(crudo)
             salida["latencia"] = latencias
+            # El motor solo tiene la ruta de Abrams: si el héroe es otro, se dice. La
+            # apertura ya es del héroe correcto (coach/apertura.py), pero el camino,
+            # los contras y los ítems siguen siendo de Abrams.
+            heroe_jugado = (getattr(a, "mi_heroe", None) or (crudo.get("yo") or {})
+                            .get("heroe") or "")
+            if heroe_jugado and str(heroe_jugado).strip().lower() not in ("abrams", "6"):
+                salida["aviso_heroe"] = f"motor solo Abrams · juegas {heroe_jugado}"
+                # Con otro héroe el motor no puede puntuar (su economía es de Abrams),
+                # pero sí se le da el camino observado de ese héroe por minuto.
+                try:
+                    from coach import camino_heroe
+                    camino_heroe.aplicar_a_salida(salida, heroe_jugado)
+                except Exception:                             # noqa: BLE001
+                    pass
             salida["compras"] = list(compras)
+            # Lo que el archivo local sabe de esta composición enemiga: «ya la jugaste,
+            # así te fue». Sale del índice en disco (234 kB, se relee una vez por hora),
+            # nunca de la red, así que no toca la cuota del API ni el ciclo del HUD.
+            try:
+                from coach import historico
+                nombres_enemigos = [j.get("heroe") for j in crudo["enemigos"]]
+                visto = historico.para_panel(nombres_enemigos)
+                if visto:
+                    salida["visto"] = visto
+                # Y qué compran los que ganan contra estos héroes, por héroe y con
+                # muestra: se exige que el ítem coincida en dos enemigos o más.
+                from coach import items_comp
+                traduccion = historico.nombre_a_id()
+                ids_enemigos = [traduccion.get(str(n).strip().lower())
+                                for n in nombres_enemigos if n]
+                texto = items_comp.texto_sugerencia([i for i in ids_enemigos if i])
+                if texto:
+                    salida["sugerencia_items"] = texto
+            except Exception:                                 # noqa: BLE001
+                pass
             registro.anotar(salida, crudo)
             filtrar_por_oro(salida, crudo)
             # Las 12 almas del marcador, en el mismo campo que usa el modo OCR, para
@@ -297,6 +452,9 @@ def bucle_vivo(a, analizar):
                 + [j.get("almas") for j in crudo["enemigos"]])
             servidor.EST.publicar(salida)
             st["ultimo_vivo"] = time.time()      # hubo broadcast: el respaldo no entra
+            # Avisa al hilo del HUD de que el reloj ya viene por HTTP: así deja de
+            # capturar la pantalla durante la partida (cada captura son ~29 ms).
+            estado_hud["broadcast_ts"] = time.time()
         except Exception as exc:                                    # noqa: BLE001
             print(f"error en vivo: {type(exc).__name__}: {exc}", flush=True)
             servidor.EST.publicar({"listo": False, "mensaje": f"error en vivo: {exc}"})
@@ -314,15 +472,22 @@ def bucle_ocr(a, analizar):
             time.sleep(5.0)
             continue
         try:
-            img = a.imagen or lector.capturar(fuente=a.captura)
-            lec = marcador.leer_captura(img, mi_heroe=mi_heroe)
+            img = a.imagen or lector.capturar(fuente=a.captura, devolver_imagen=True)
+            lec = marcador.leer_captura(img, mi_heroe=mi_heroe,
+                                           heroes=bool(mi_heroe))
             almas_12 = lec["almas"]["aliados"] + lec["almas"]["enemigos"]
 
             propias = lec.get("almas_propias")
             if propias is None and a.mi_columna is not None:
                 propias = lec["almas"]["aliados"][a.mi_columna]
             if propias is None:
-                publicar_sin_columna(lec, almas_12)
+                # Solo pedir la columna si de verdad hay marcador. Antes se publicaba
+                # «veo las 12 almas, no sé cuál eres tú» con cero almas leídas: en el
+                # menú el panel afirmaba ver un marcador que no estaba (visto 2026-11-15).
+                if lec.get("ok"):
+                    publicar_sin_columna(lec, almas_12)
+                else:
+                    publicar_sin_marcador(lec)
                 time.sleep(max(0.2, a.intervalo))
                 continue
 
@@ -350,64 +515,36 @@ def bucle_auto(a, analizar):
     bucle_vivo(a, analizar)
 
 
-def bucle_ocr(a, analizar):
-    """Modo OCR: captura de pantalla + plantillas del propio juego."""
-    from coach import lector, marcador, registro
-    mi_heroe = (a.mi_heroe or "").strip().lower() or None
-    while True:
-        if not a.imagen and not juego_abierto():
-            servidor.EST.publicar({"listo": False,
-                                   "mensaje": "Deadlock no está abierto: en espera"})
-            time.sleep(5.0)
-            continue
-        try:
-            img = a.imagen or lector.capturar(fuente=a.captura)
-            lec = marcador.leer_captura(img, mi_heroe=mi_heroe)
-            almas_12 = lec["almas"]["aliados"] + lec["almas"]["enemigos"]
-
-            propias = lec.get("almas_propias")
-            if propias is None and a.mi_columna is not None:
-                propias = lec["almas"]["aliados"][a.mi_columna]
-            if propias is None:
-                publicar_sin_columna(lec, almas_12)
-                time.sleep(max(0.2, a.intervalo))
-                continue
-
-            estado = estado_desde_ocr(lec, a, propias)
-            salida = analizar(estado)
-            salida["almas_12"] = almas_12
-            servidor.EST.publicar(salida)
-            if salida.get("recomendaciones"):
-                registro.anotar(salida, estado)
-        except Exception as exc:                                    # noqa: BLE001
-            servidor.EST.publicar({"listo": False, "mensaje": f"error de lectura: {exc}"})
-        time.sleep(max(0.2, a.intervalo))
-
-
-def bucle_auto(a, analizar):
-    """Decide al arrancar: broadcast si tu cuenta está en partida, si no OCR.
-
-    Si tu cuenta está en una partida, el broadcast da todo (almas por jugador,
-    héroes, KDA) sin depender del marcador; si no, se lee la pantalla como siempre.
-    """
-    from coach import en_vivo
-    if a.cuenta is None:
-        # Sin cuenta no se puede preguntar "¿está mi cuenta en partida?", pero sí se
-        # puede leer el MATCH del HUD y enganchar el broadcast a esa partida.
-        print("automático: sin cuenta -> match_id del HUD y respaldo por pantalla")
-        bucle_vivo(a, analizar)
-        return
-    match = a.match or en_vivo.partida_activa(a.cuenta)
-    if match:
-        print(f"automático: partida en vivo {match} -> broadcast")
-        a.match = match
-        bucle_vivo(a, analizar)
-    else:
-        print("automático: sin partida en vivo -> lectura por pantalla")
-        bucle_ocr(a, analizar)
-
-
 # ------------------------------------------------------------------ modo OCR
+
+def publicar_sin_marcador(lec):
+    """No hay marcador legible: menú, cola, tienda o pantalla de fin.
+
+    No es un error. La fase se lee del console.log del juego (`-condebug`), que cuesta
+    un `stat`, sin capturar un solo píxel ni gastar API. Si el log no dice nada, se
+    dice «no veo el marcador» y se sigue: jamás se afirma haber visto almas.
+    """
+    fase, frescura_s = None, None
+    try:
+        from coach.fuentes import log_juego
+        fase, frescura_s = log_juego.estado_ui()
+    except Exception:                                          # noqa: BLE001
+        pass
+    if fase == "partida":
+        mensaje = "en partida, pero no veo tu marcador: abre Tab unos segundos"
+    elif fase == "menu":
+        mensaje = "en el menú del juego, esperando partida"
+    else:
+        mensaje = "no veo tu marcador (¿Tab apretado?)"
+    servidor.EST.publicar({
+        "listo": False,
+        "mensaje": mensaje,
+        "fase_juego": fase or "desconocida",
+        "frescura_juego_s": round(frescura_s, 1) if frescura_s is not None else None,
+        "tiempo_s": lec.get("tiempo_s"),
+        "motivo_lectura": lec.get("motivo"),
+    })
+
 
 def publicar_sin_columna(lec, almas_12):
     """Ve el marcador pero no sabe cuál de las 12 almas sos vos: pide el dato."""
@@ -460,6 +597,9 @@ def crear_analizador(m):
 
     def analizar(d):
         e = m.estado_desde(d)
+        # El motor mide el ritmo real de almas con estas muestras (ETA del panel).
+        if isinstance(d, dict) and historial:
+            d = {**d, "historial": list(historial)[-60:]}
         salida = con_historial(est.procesar(e, m.analizar_dict(d)))
         # El marcador de 12 almas se arma en un solo sitio: así el demo y las
         # inyecciones de prueba muestran lo mismo que el modo vivo.
@@ -501,8 +641,10 @@ def leer_argumentos():
     ap = argparse.ArgumentParser()
     ap.add_argument("--fuente", default="simulado", choices=["simulado", "ocr", "vivo", "auto"])
     ap.add_argument("--puerto", type=int, default=8090)
-    ap.add_argument("--captura", default="auto", choices=["auto", "bufer", "spectacle"],
-                    help="fuente de imagen: reutilizar el bufer de pantalla o capturar aparte")
+    ap.add_argument("--captura", default="auto",
+                    choices=["auto", "kwin", "bufer", "spectacle"],
+                    help="fuente de imagen: KWin por región (por defecto), el búfer "
+                         "de pantalla si está fresco, o spectacle como último recurso")
     ap.add_argument("--intervalo", type=float, default=1.0,
                     help="segundos entre lecturas en modo ocr/vivo")
     ap.add_argument("--acelerar", type=float, default=30.0,

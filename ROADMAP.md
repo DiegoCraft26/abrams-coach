@@ -1,8 +1,10 @@
 # Hoja de ruta
 
-Estado: **v0.2**, solo Abrams, uso local de una persona. Este documento dice qué viene, en
-qué orden y con qué criterio se considera terminado. Las fechas son objetivos, no promesas;
-lo que no se mida no se marca como hecho.
+Estado: **v1.0**. El ciclo diario está completo (listo → plan → panel/overlay → nota →
+sesión), los datos por héroe y por parche existen, y el motor de ítems se cerró como
+resultado negativo. Uso local de una persona. Este documento dice qué viene, en qué orden y
+con qué criterio se considera terminado. Las fechas son objetivos, no promesas; lo que no se
+mida no se marca como hecho.
 
 ## Dónde estamos
 
@@ -10,6 +12,68 @@ lo que no se mida no se marca como hecho.
 |---|---|---|
 | v0.1 | Lee la partida (broadcast y marcador), motor de compras, panel GTK | hecho |
 | v0.2 | Panel responsive, SQLite, contra-composición, respaldo de modelos | hecho (2026-11-07) |
+| v0.6 | Captura por caja, estado menú/partida/cierre, histórico de composiciones, ítems contra comp, camino por héroe, panel web | hecho (2026-11-15), pendiente la medición en partida real |
+| v0.7 | Cuota de espectador persistida, sin URL no se especta, versión comprobable | hecho (2026-11-18) |
+| v0.8 | Motor v2 con valor medido (AIPW + bootstrap por partida), corpus congelado con hash, cupo local de espectador, degradación a HUD, panel al contrato de siete zonas | hecho (2026-11-18) |
+| v0.8.2 | G4: replicación fuera de muestra (Spearman 0.796, signo 90.5 %), desempate avisado en 19 de 21 ítems, pruebas de caos | hecho (2026-11-18) |
+| v0.9 | Tarjeta 420×160 y overlay layer-shell con solo certeza; corpus filtrado a partidas completas; motor en modo CIEGO hasta reestimar; demos por SQL con 100 % de recall; estudio macro y diagnóstico personal; equipo documentado | hecho (2026-11-18) |
+| v1.0 | Ciclo diario completo (`listo`, `plan`, `nota`, `sesion`), nota sin depender de la demo, 4 héroes y 20 parches de datos, motor de ítems cerrado con datos, Windows ejecutado bajo Wine, paquete probado, equipo portable, 528 pruebas | hecho (2026-11-18) |
+
+## Lo que queda después de la v1.0
+
+- **Demos**: la cuota de `demo/query` está rota desde el 2026-11-18 (429 en cadena). El
+  crawler respeta `Retry-After` y no pierde partidas, pero a ~1 partida/hora no llega a las
+  800 que disparan el Motor v3. No depende de nosotros.
+- **Windows nativo**: overlay y captura corren bajo Wine (10 comprobaciones, GDI 27,7 ms).
+  Falta DXGI real, compositor, instalador y una máquina donde medirlo.
+- **La subida de rango**: el producto está listo; falta que se juegue una sesión y que
+  `sesion` diga qué regla se fue.
+
+## Lo que queda de la v0.9 (prioridad)
+
+- **Motor de ítems · cerrado como resultado negativo (2026-11-18).** Se recorrió el camino
+  completo: la contaminación por modo, la riqueza relativa, el contrafactual del mismo tramo
+  de precio y, al final, la serie de 20 parches con 63 680 compras. **Ningún ítem tiene un
+  efecto demostrado ni réplica**; el límite es la muestra (~200 partidas de Abrams por
+  parche), no el meta. Harían falta dos órdenes de magnitud. El panel no enseña evidencia por
+  ítem y no debe: su valor está en el camino, las reglas y la nota. Informe:
+  `informes/lab/PARCHES-MODELO-2026-11-18.md`.
+- **Ingesta continua de demos.** No backfill de 5 000 (caducan): crawl de partidas recién
+  terminadas, con `CurrencyChangedEvent` para el oro real. `docs/DATOS-DEL-JUEGO.md`.
+- **Windows**: el código de overlay y captura **se ejecuta bajo Wine** (`herramientas/
+  probar_windows_wine.sh`, 10 comprobaciones) y la captura por GDI mide **27,7 ms** por
+  cuadro contra 415–514 ms de KWin. Falta DXGI real, compositor y el instalador; sin una
+  máquina Windows no se puede cerrar.
+- **Overlay en partida real**: probado con un proceso falso, no con Deadlock abierto.
+
+- **Aviso de riesgo en vivo.** Las reglas de muerte y participación están validadas en
+  3 538 partidas (≤6 muertes: 76.9 % vs 36.2 %; ≥0.40 participación: 70.9 % vs 12.8 %). El
+  panel ya recibe K/D/A del broadcast: puede enseñar el umbral y avisar cuando se cruza, con
+  el dato histórico como contexto, no como predicción. Sin inventar: si no hay KDA, no hay aviso.
+
+## Lo que queda de la v0.8
+
+- **G4 · hecho, y no autorizó reordenar.** La replicación fuera de muestra sostiene el
+  signo en 19 de 21 ítems (Spearman 0.796), así que se habilitó un **desempate avisado**;
+  el valor de política con DR no distingue (ESS 640 de 14 397). Para reordenar de verdad
+  hace falta ESS ≥ 25 %, más acciones con soporte y MMR. Ver `informes/lab/G4-POLITICA.md`.
+- **Más corpus.** 21 ítems medidos de 170: el shortlist por franja recorta. Con más
+  partidas (otros parches, otros días) entran más ítems y los intervalos se estrechan.
+- **MMR.** `partidas_api.badge` es nulo en el 88 %; sin MMR no hay instrumento para el
+  confusor de habilidad y el E-value del mejor hallazgo es 1.36. Es la prioridad 1 de
+  datos, no de código.
+- **Migrar `/v1/sql` a DuckDB.** Está deprecado por la API y el código que lo usa tiene
+  cuenta atrás.
+
+## Lo que queda de la v0.6
+
+- **Medición en partida real**: `herramientas/medir_impacto.py` mide GPU, CPU y RAM sin
+  overlays; falta correrlo con el juego abierto y ver el fin de partida en el log.
+- **Economía por héroe**: la apertura y el camino ya salen de los datos de cada héroe, pero
+  el ranking de ítems y los contras siguen siendo de Abrams. Para generalizarlos hace falta
+  bajar timelines de otros héroes (`archivo_abrams.py --heroe <id> --con-items`).
+- **Plantilla completa con muestra**: con 151 653 partidas la comp más repetida sale 18
+  veces; a 300–400k empezaría a repetir en serio.
 
 ## Qué falta para que sea un producto
 

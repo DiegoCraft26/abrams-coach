@@ -20,7 +20,13 @@ verdad/*_full.png
 data/iconos/
 
 # Informes de sesión, experimentos y notas de traspaso: locales, no del repo público.
-informes/
+informes/*
+# …excepto el laboratorio medido: es el registro de qué se probó y qué salió
+!informes/lab/
+!informes/lab/**
+# El bot de la PC deja ahí su auditoría: tiene que poder versionarla
+!informes/pc/
+!informes/pc/**
 experimentos/
 salida/archivo/
 RELEVO.md
@@ -58,3 +64,57 @@ salida/estado_ultimo.json
 salida/inventario.json
 salida/vision_uso.json
 salida/.estado-*.tmp
+# Con qué código arrancó la app abierta: lo escribe coach/version.py, es de la máquina.
+salida/version-en-vivo.json
+
+# El archivo en bloque (166 653 partidas, 21 MB) no va al repo: se regenera con
+# `herramientas/archivo_abrams.py` en minutos. El índice (672 kB) sí, para que el panel
+# tenga histórico desde el primer arranque.
+data/archivo/
+
+# Extractos NDJSON de demos (herramientas/demos/consulta.py): se regeneran en
+# ~10-30 s por partida y pesan ~1-2 MB cada uno.
+data/demos_cache/
+# Lo mismo para las partidas propias (herramientas/demos/personal.py): 58 MB de
+# extractos y 34 MB de metadata, todo regenerable con el comando del informe.
+salida/demos_cache/
+salida/cache_meta/
+
+# Laboratorio (ronda 2026-11): la base se regenera con herramientas/lab/ingesta_api.py
+datos/lab.db
+# Corpus de evaluación: se regenera con herramientas/lab/corpus_actual.py
+data/replay_actual.json
+# Fixture y evaluaciones: salidas de herramienta, no fuente
+salida/fixture-partidas.json
+salida/evaluaciones/*.json
+
+# WAL/SHM de SQLite: se regeneran solos
+datos/*.db-shm
+datos/*.db-wal
+
+# Crawler de demos: NDJSON crudo, se regenera
+datos/demos/
+
+# Tabla normalizada de demos: se regenera con herramientas/lab/demos_norm.py
+datos/demos_norm.csv.gz
+
+# Caché del plan de antes de jugar
+salida/plan_cache.json
+
+# Objetivo de la sesión actual (se renueva cada día)
+salida/plan_actual.json
+
+# Paquetes construidos con herramientas/empaquetar.sh
+dist/
+
+# Corpus histórico por parche (167 MB, se regenera con ingesta_parches.py)
+datos/historico.db
+datos/parch-es/
+
+# Corpus derivado por parche (se regenera con herramientas/lab/corpus_parches.py)
+datos/corpus_parches.csv.gz
+datos/corpus_parches.manifiesto.json
+
+# Notas por partida y última nota: salida de uso, no del repo
+salida/notas/
+salida/ultima_nota.txt

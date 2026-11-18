@@ -7,7 +7,6 @@ el panel entero dejaba de abrir por una variable fuera de ámbito en un componen
 Si no hay servidor gráfico, la suite se salta la parte de pintado y lo dice (no se inventa
 un verde).
 """
-import json
 import os
 import subprocess
 import sys

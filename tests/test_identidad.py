@@ -29,7 +29,7 @@ def test_hud_y_console_log_de_acuerdo_no_gastan_api(monkeypatch):
     monkeypatch.setattr(api_vivo.en_vivo, "partidas_con_broadcast", _no_llamar)
     monkeypatch.setattr(api_vivo.en_vivo, "partida_activa", _no_llamar)
 
-    hallado = api_vivo.descubrir(cuenta=376225059, forzar=True)
+    hallado = api_vivo.descubrir(cuenta=123456789, forzar=True)
     assert hallado["match"] == 134452212
     assert hallado["via"] == "hud+log"
 
@@ -55,7 +55,7 @@ def test_si_no_coinciden_manda_el_console_log(monkeypatch, tmp_path):
     monkeypatch.setattr(api_vivo, "_leer_log", lambda: 134452212)
     monkeypatch.setattr(api_vivo.en_vivo, "partidas_con_broadcast",
                         lambda timeout=20: {134452212})
-    hallado = api_vivo.descubrir(cuenta=376225059, forzar=True)
+    hallado = api_vivo.descubrir(cuenta=123456789, forzar=True)
     assert hallado["match"] == 134452212
     assert hallado["via"] == "hud"
     rechazos = [e for e in telemetria.leer(5, ruta=str(tmp_path / "tel.jsonl"))
@@ -69,7 +69,7 @@ def test_la_cuenta_manda_sobre_un_hud_equivocado(monkeypatch):
     monkeypatch.setattr(api_vivo, "_leer_log", lambda: None)
     monkeypatch.setattr(api_vivo.en_vivo, "partida_activa",
                         lambda cuenta, timeout=20: 134452212)
-    hallado = api_vivo.descubrir(cuenta=376225059, forzar=True)
+    hallado = api_vivo.descubrir(cuenta=123456789, forzar=True)
     assert hallado["match"] == 134452212
     assert hallado["via"] == "cuenta"
 
@@ -81,7 +81,7 @@ def test_la_decision_queda_en_telemetria(monkeypatch, tmp_path):
     monkeypatch.setattr(telemetria, "RUTA", str(tmp_path / "tel.jsonl"))
     monkeypatch.setattr(api_vivo, "_leer_hud", lambda: 134452212)
     monkeypatch.setattr(api_vivo, "_leer_log", lambda: 134452212)
-    api_vivo.descubrir(cuenta=376225059, forzar=True)
+    api_vivo.descubrir(cuenta=123456789, forzar=True)
     eventos = telemetria.leer(5, ruta=str(tmp_path / "tel.jsonl"))
     assert eventos[-1]["via"] == "hud+log"
     assert eventos[-1]["match"] == 134452212

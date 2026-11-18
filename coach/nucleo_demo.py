@@ -7,6 +7,7 @@ import glob
 import json
 import os
 import subprocess
+import time
 
 _RAIZ = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
@@ -44,18 +45,57 @@ def aviso_vram():
         pass
 
 
-def juego_abierto():
+_JUEGO = {"ts": 0.0, "abierto": True}
+VIDA_JUEGO_S = 2.0
+
+
+def _buscar_en_proc():
+    """True/False mirando /proc, o None si /proc no está disponible.
+
+    Antes esto era un `subprocess.run(["ps", "-eo", "args"])` por llamada. Con el bucle
+    principal, el hilo del HUD y el de descubrimiento preguntando cada pocos segundos,
+    eran ~50 ms de CPU por segundo solo en lanzar `ps`: el 5 % de un núcleo medido el
+    2026-11-15 con el juego cerrado. Leer /proc cuesta microsegundos.
+    """
+    buscados = (b"deadlock.exe", b"deadlock/game/bin", b"project8")
+    try:
+        pids = os.listdir("/proc")
+    except OSError:
+        return None
+    for pid in pids:
+        if not pid.isdigit():
+            continue
+        try:
+            with open(f"/proc/{pid}/cmdline", "rb") as f:
+                linea = f.read().lower()
+        except OSError:
+            continue
+        if any(b in linea for b in buscados):
+            return True
+    return False
+
+
+def juego_abierto(usar_cache=True):
     """¿Está corriendo Deadlock? Si no, no tiene sentido capturar pantalla.
 
-    `comm` del proceso es steam.exe/wine, no deadlock; hay que mirar los args.
+    `comm` del proceso es steam.exe/wine, no deadlock; hay que mirar los args. Se cachea
+    dos segundos porque la respuesta no cambia más rápido que eso y lo preguntan tres
+    hilos distintos.
     """
-    try:
-        salida = subprocess.run(["ps", "-eo", "args"], capture_output=True,
-                                text=True, timeout=5).stdout.lower()
-        return any(n in salida for n in ("deadlock.exe", "deadlock/game/bin",
-                                         "project8"))
-    except Exception:
-        return True
+    ahora = time.time()
+    if usar_cache and ahora - _JUEGO["ts"] < VIDA_JUEGO_S:
+        return _JUEGO["abierto"]
+    resultado = _buscar_en_proc()
+    if resultado is None:
+        try:
+            salida = subprocess.run(["ps", "-eo", "args"], capture_output=True,
+                                    text=True, timeout=5).stdout.lower()
+            resultado = any(n in salida for n in ("deadlock.exe", "deadlock/game/bin",
+                                                  "project8"))
+        except Exception:                                       # noqa: BLE001
+            resultado = True
+    _JUEGO.update({"ts": ahora, "abierto": resultado})
+    return resultado
 
 
 def inventario_simulado(t):

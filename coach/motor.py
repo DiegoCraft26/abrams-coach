@@ -3,10 +3,16 @@ import json
 import os
 
 from .decision import camino as camino_mod
-from .decision import explicador, heroe as heroes, patrones, situacionales
+from .decision import amenazas as amenazas_mod
+from .decision import explicador, heroe as heroes, patrones, perfil as perfil_mod
+from .decision import situacionales
+from .decision import ventas as ventas_mod
 from .estado import Estado
+from . import objetivos as objetivos_mod
 
 _RAIZ = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+# A/B de una hipótesis del meta sin tocar código: ABRAMS_FORZAR="id1,id2".
+_FORZAR = [x.strip() for x in (os.environ.get("ABRAMS_FORZAR") or "").split(",") if x.strip()]
 _cache_componentes = None
 
 
@@ -73,6 +79,7 @@ CFG_DEFECTO = {
     "empate_margen": 0.5,        # puntos por debajo de los cuales dos ítems son un empate
     "ctx_lift_cierre": 0.10,     # cuánto baja el peso del residual en el cierre (ver ganancias)
     "w_bonus_categoria": 0.40,   # empujón suave si el ítem cae cerca del bonus de 4,800
+    "forzar_items": list(_FORZAR),  # solo para A/B (ver camino.CFG_CAMINO)
 }
 
 
@@ -301,7 +308,8 @@ def peso_apertura(t_s, cfg=CFG_DEFECTO):
     return (hasta - t_s) / (hasta - desde)
 
 
-def candidatos(estado: Estado, conoc, cat, cfg=CFG_DEFECTO, limite=3, heroe=None):
+def candidatos(estado: Estado, conoc, cat, cfg=CFG_DEFECTO, limite=3, heroe=None,
+               amenazas=None):
     econ = economia(estado)
     almas = estado.yo.almas or 0
     poseidos = {str(i) for i in estado.yo.items}
@@ -337,7 +345,7 @@ def candidatos(estado: Estado, conoc, cat, cfg=CFG_DEFECTO, limite=3, heroe=None
                    for iid in situacionales.SITUACIONALES}
     if cfg.get("contexto_activo", True):
         ctx_puntos, ctx_razones = situacionales.bonus_contexto(
-            heroes_enemigos, senal_datos=senal_datos)
+            heroes_enemigos, senal_datos=senal_datos, amenazas=amenazas)
     else:
         ctx_puntos, ctx_razones = {}, {}
     gan = (ganancias_contexto(estado, econ, heroes_enemigos, cfg)
@@ -546,6 +554,39 @@ def _peor_vendible(estado, conoc, cat, cfg, slot):
     return None, None
 
 
+def tasa_almas_historial(historial, ventana_s=90.0):
+    """Almas/s medidas en esta partida con las últimas muestras del bucle.
+
+    Por qué: el ETA del panel se calculaba con el benchmark del héroe, así que decía
+    «faltan 40 s» aunque el jugador fuera a otro ritmo. Diego (2026-11-16): «afecta que
+    no esté tan actualizado el timer de souls, sí cambia decisiones justo cuando sabes
+    que tienes al menos para el siguiente tier». Con la tasa real, el ETA responde a lo
+    que de verdad entra por segundo.
+
+    La ventana es de 90 s de reloj de partida: más corta la vuelve ruidosa (una ola o
+    una kill la duplican), más larga deja de reflejar el late. Si no hay muestras
+    suficientes o la tasa no es creíble, se devuelve None y el motor usa el benchmark.
+    """
+    muestras = [m for m in (historial or [])
+                if isinstance(m, dict) and m.get("t") is not None
+                and m.get("a") is not None]
+    if len(muestras) < 3:
+        return None
+    ultimo = muestras[-1]
+    t1, a1 = float(ultimo["t"]), float(ultimo["a"])
+    referencia = next((m for m in reversed(muestras)
+                       if t1 - float(m["t"]) >= ventana_s), muestras[0])
+    t0, a0 = float(referencia["t"]), float(referencia["a"])
+    dt = t1 - t0
+    if dt < 20.0:
+        return None
+    tasa = (a1 - a0) / dt
+    # Techo: una recompra o un cambio de patrimonio no son 90 almas/s sostenidas.
+    if not (0.5 <= tasa <= 90.0):
+        return None
+    return tasa
+
+
 def sugerir_venta(estado: Estado, conoc, cat, cfg=CFG_DEFECTO, filas=None):
     """Propone vender solo cuando un slot está lleno y lo que entra es claramente mejor.
 
@@ -592,16 +633,103 @@ def sugerir_venta(estado: Estado, conoc, cat, cfg=CFG_DEFECTO, filas=None):
     return None
 
 
-def recomendar(estado: Estado, conoc, cat, cfg=None):
+def _contra_del_estado(estado: Estado, conoc, cfg, amenazas):
+    """Counters de composición + qué rival concreto está ganando la partida.
+
+    Devuelve {item_id: {puntos, razon, amenaza}} donde `amenaza` es el nombre del rival
+    que va por encima y que ese ítem frena. `camino._objetivo` usa ese campo para no
+    frenar el counter con la ventana de fase: si el rival crítico suena, se compra.
+    """
+    heroes_enemigos = [j.heroe for j in estado.enemigos if j.heroe]
+    indice = conoc.get("heroes_index", {})
+    senal_datos = {iid: _bonus_counter(iid, heroes_enemigos, conoc, cfg, indice)
+                   for iid in situacionales.SITUACIONALES}
+    puntos, razones = situacionales.bonus_contexto(
+        heroes_enemigos, senal_datos=senal_datos, amenazas=amenazas)
+    criticos = [a for a in (amenazas or ()) if a.get("nivel") == "critico"]
+    salida = {}
+    for iid, valor in puntos.items():
+        señal = situacionales.SEÑAL_DE_TAG.get(
+            (situacionales.SITUACIONALES.get(iid) or {}).get("tag"))
+        rival = next((a.get("heroe") for a in criticos
+                      if señal and señal in situacionales.tags_de_heroe(a.get("heroe"))),
+                     None)
+        salida[iid] = {"puntos": valor, "razon": razones.get(iid, ""),
+                       "amenaza": rival}
+    return salida
+
+
+# --- perfil histórico de riesgo -------------------------------------------------
+# Fuente: informes/lab/REGLAS-VALIDADAS-2026-11-18.md — 3 538 partidas de Abrams en
+# ranked de la temporada 2 (match-history de 540 cuentas, hero_id=6, match_mode=4).
+# Es **descriptivo**: en las partidas que se ganan se muere menos y se participa más.
+# La UI lo enseña como contexto histórico, nunca como predicción.
+MUERTES_META = 6
+PART_META = 0.40
+RIESGO_MIN_S = 300          # antes del minuto 5 los cortes no dicen nada de la partida
+# Mismo umbral que `servidor.UMBRAL_RANCIO_S`; el test de contrato obliga a que no se
+# separen (un aviso «en vivo» con datos de hace 8 s ya no es en vivo).
+EDAD_RANCIO_S = 8.0
+CONTEXTO_RIESGO = ("≤6 muertes: 76.9 % vs 36.2 % · ≥0.40: 70.9 % vs 12.8 % "
+                   "(n=3 538)")
+
+
+def riesgo_de(estado: Estado, vivo=True):
+    """Perfil histórico de la partida, o None si no hay señal que lo sostenga.
+
+    Devuelve `{muertes, participacion, muertes_meta, part_meta, cruza_muertes,
+    bajo_participacion, contexto}`. Nada más: los dos cortes, sus metas y el contexto
+    con su n, para que el panel pueda decir «7 muertes · meta ≤6» y llevar el
+    histórico en el `title`.
+
+    Es None —no un cero— cuando la partida no lo sostiene:
+      · reloj menor a 5 min (`RIESGO_MIN_S`): con una sola pelea la participación se
+        dispara y el corte no informa de nada;
+      · sin KDA (`estado.con_kda`): la pantalla y el OCR no traen bajas, muertes ni
+        asistencias y publican ceros de relleno;
+      · datos viejos (`vivo=False`): un contexto de hace medio minuto no es contexto
+        vivo, y el panel se mira entre peleas como si lo fuera.
+    """
+    if not vivo:
+        return None
+    if not getattr(estado, "con_kda", False):
+        return None
+    t = float(estado.t or 0)
+    if t < RIESGO_MIN_S:
+        return None
+    minutos = t / 60.0
+    muertes = int(estado.yo.muertes or 0)
+    participacion = (int(estado.yo.bajas or 0)
+                     + int(estado.yo.asistencias or 0)) / minutos
+    # Las comparaciones usan el valor sin redondear: 6/15 = 0.40 exacto no es «bajo».
+    return {
+        "muertes": muertes,
+        "participacion": round(participacion, 2),
+        "muertes_meta": MUERTES_META,
+        "part_meta": PART_META,
+        "cruza_muertes": muertes > MUERTES_META,
+        "bajo_participacion": participacion < PART_META,
+        "contexto": CONTEXTO_RIESGO,
+    }
+
+
+def recomendar(estado: Estado, conoc, cat, cfg=None, vivo=True):
     cfg = cfg or CFG_DEFECTO
     # El héroe sale del estado. Si no hay datos suyos en data/heroes/, se usan los de
     # Abrams: la app nunca se queda sin decidir.
     h = heroes.cargar(estado.yo.heroe or "abrams")
     econ = economia(estado)
     tactico = estado_tactico(estado, econ, cfg)
+    # Amenazas primero: quién del otro equipo está por encima condiciona la compra, y
+    # tanto el ranking como el camino necesitan ese dato antes de puntuar nada.
+    amenazas = amenazas_mod.evaluar(estado)
+    t_ef = (int(max(0.0, float(estado.t))) // 10) * 10.0
+    perfil = perfil_mod.calcular(estado, econ, amenazas, t_ef=t_ef,
+                                 poseidos={str(i) for i in estado.yo.items})
     # 10 candidatos: el panel filtra por oro y así puede ofrecer algo comprable
     # en vez de enseñar siempre un tier 4 que no alcanza.
-    top, filas = candidatos(estado, conoc, cat, cfg, limite=10, heroe=h)
+    top, filas = candidatos(estado, conoc, cat, cfg, limite=10, heroe=h,
+                            amenazas=amenazas["lista"])
     venta = sugerir_venta(estado, conoc, cat, cfg, filas)
     poseidos = {str(i) for i in estado.yo.items}
     # Una venta de algo que ya no está en el inventario es basura: si el estado cambió
@@ -610,20 +738,177 @@ def recomendar(estado: Estado, conoc, cat, cfg=None):
         venta = None
     almas = estado.yo.almas or 0
     # Counter de composición: se calcula con la misma señal de datos que el ranking
-    # (matchup de 1.9 M de partidas) y la composición enemiga.
+    # (matchup de 1.9 M de partidas) y la composición enemiga. Si un rival va por
+    # encima, su counter pesa más y se nombra.
     heroes_enemigos = [j.heroe for j in estado.enemigos if j.heroe]
-    indice = conoc.get("heroes_index", {})
-    senal_datos = {iid: _bonus_counter(iid, heroes_enemigos, conoc, cfg, indice)
-                   for iid in situacionales.SITUACIONALES}
-    ctx_puntos, ctx_razones = situacionales.bonus_contexto(
-        heroes_enemigos, senal_datos=senal_datos)
-    contra = {iid: {"puntos": puntos, "razon": ctx_razones.get(iid, "")}
-              for iid, puntos in ctx_puntos.items()}
+    contra = _contra_del_estado(estado, conoc, cfg, amenazas["lista"])
+    tasa_medida = tasa_almas_historial(getattr(estado, "historial", None))
     decision = camino_mod.decidir(estado, conoc, cat, cfg, heroe=h, venta=venta,
-                                  contra=contra)
-    # La venta solo se enseña si es para el ítem que de verdad toca comprar.
+                                  contra=contra, perfil=perfil, tasa=tasa_medida)
+    if tasa_medida:
+        # El panel cuenta hacia atrás con este número: se publica para que el ETA no sea
+        # un número congelado entre lecturas del broadcast.
+        decision["tasa_s"] = round(tasa_medida, 2)
+    # Camino agotado: con los 12 slots hay veces que no queda más build que comprar. Antes
+    # se decía «build completo» aunque hubiera oro y algo mejor en el ranking; ahora la
+    # siguiente pieza sale de ahí, con su cuenta de faltan/ETA.
+    if not decision.get("item") and filas:
+        # Con el camino agotado, la pieza de refuerzo tiene que ser del tamaño de la
+        # partida: un 800 al minuto 25 no arregla nada (el banco lo vio 3,557 veces).
+        minimo = 1600 if estado.t >= 1200 else 0
+        if estado.t >= 1800:
+            minimo = 3200
+        caro_ok = estado.t >= 900
+
+        def _vale(x):
+            lista = x.get("costo_lista") or x.get("costo") or 0
+            if (x.get("costo") or 0) < minimo:
+                return False
+            if lista >= 6400 and not caro_ok:
+                return False
+            return True
+
+        f = next((x for x in filas
+                  if str(x["id"]) not in poseidos and _vale(x)), None)
+        if f is None:
+            f = next((x for x in filas if str(x["id"]) not in poseidos), None)
+        if f is not None:
+            bolsillo = decision.get("bolsillo") or 0
+            costo = f.get("costo") or 0
+            faltan = max(0, costo - bolsillo)
+            tasa = camino_mod.tasa_almas(conoc, h, estado.t, real=tasa_medida)
+            eta = int(-(-faltan // max(1.0, tasa))) if faltan else 0
+            ficha = {"id": str(f["id"]), "nombre": f["nombre"], "costo": int(costo),
+                     "costo_lista": int(f.get("costo_lista") or costo),
+                     "ahorro": int(f.get("ahorro") or 0), "icono": f.get("icono")}
+            decision = {
+                "accion": "AHORRAR" if faltan else "COMPRAR", "modo": "refuerzo",
+                "bolsillo": bolsillo, "item": ficha, "objetivo": dict(ficha),
+                "faltan": faltan, "eta_s": eta,
+                "motivo": (f"camino completo: la siguiente pieza sale del ranking y "
+                           f"cuesta {costo:,}"),
+                "camino": [], "alternativas": [],
+                "perfil": perfil.get("etiqueta"), "perfil_modo": perfil.get("modo"),
+                "perfil_motivo": perfil.get("motivo"), "perfil_contra": perfil.get("rival"),
+                "target": str(f["id"]), "target_nombre": f["nombre"],
+            }
+    # Prioridad de venta: qué de lo que llevas sale primero. Se calcula con el camino ya
+    # resuelto porque el nivel «ahora» depende de si el build se agotó. Esto es lo que
+    # faltaba en late: el panel decía «build completo» y no nombraba nada que soltar.
+    ventas = ventas_mod.prioridad(estado, conoc, cfg,
+                                  camino_agotado=not (decision.get("camino") or []))
+    if not decision.get("item") and ventas:
+        p = ventas[0]
+        decision = {**decision, "modo": "completo",
+                    "motivo": (f"build completo: lo primero que sale es {p['nombre']} "
+                               f"({p['slot_nombre']}, {p['pp']:+.1f}pp)"),
+                    "vende_prioridad": p["id"]}
+    # La venta se calcula para el paso que de verdad toca comprar, no solo para el nº1
+    # del ranking. Antes `venta` se anulaba si el paso del camino no era ese ítem y por
+    # eso en partida casi nunca aparecía (Diego, 2026-11-15: «debería recomendar ventas
+    # específicas y tomarlas en cuenta en el plan»).
     if venta and decision.get("item") and str(venta.get("comprar")) != str(decision["item"]["id"]):
         venta = None
+
+    def _venta_para(iid, exigir_mejora):
+        """La venta concreta para meter `iid`: qué sale, de qué slot y por qué.
+
+        Con `exigir_mejora` solo se propone si lo que entra supera a lo que sale por el
+        margen del motor. Sin ella (el camino ya decidió que hay que vender) se nombra
+        el peor vendible del slot y no se afirma ninguna mejora.
+        """
+        iid = str(iid)
+        slot = (conoc["items"].get(iid) or {}).get("slot")
+        if not slot:
+            return None
+        usados = sum(1 for i in poseidos
+                     if (conoc["items"].get(i) or {}).get("slot") == slot)
+        if usados < 4:
+            return None
+        peor, info_peor = _peor_vendible(estado, conoc, cat, cfg, slot)
+        if not peor or peor == iid:
+            return None
+        nombre_peor = (info_peor or {}).get("nombre", peor)
+        tasa = ((info_peor or {}).get("tasa_venta") or 0) * 100
+        mio = (conoc["items"].get(iid) or {}).get("lift_residual") or 0.0
+        mejora = (mio - (info_peor or {}).get("lift_residual", -1.0)) * 100
+        if exigir_mejora and mejora < cfg["venta_margen_pp"]:
+            return None
+        entra = (decision.get("item") or {}).get("nombre") or iid
+        motivo = (f"slot {slot} lleno: {entra} supera a {nombre_peor} por {mejora:+.1f}pp"
+                  if exigir_mejora else
+                  f"slot {slot} lleno: vende {nombre_peor} para meter {entra}")
+        return {"vender": peor, "nombre": nombre_peor, "slot": slot,
+                "comprar": iid, "para": entra,
+                "costo": (decision.get("item") or {}).get("costo"),
+                "ahorro": (decision.get("item") or {}).get("ahorro") or 0,
+                "ganancia_pp": round(mejora, 2) if exigir_mejora else None,
+                "se_vende": f"{tasa:.0f}% de las partidas",
+                "motivo": motivo}
+
+    if decision.get("item"):
+        iid_dec = str(decision["item"]["id"])
+        bolsillo_dec = decision.get("bolsillo") or 0
+        costo_dec = (decision.get("item") or {}).get("costo") or 0
+        # Solo se nombra la venta cuando el ítem ya se paga: si no, es una orden que
+        # no se puede ejecutar (y el invariante de caja la marca como compra imposible).
+        if venta is None and costo_dec <= bolsillo_dec:
+            venta = _venta_para(iid_dec, exigir_mejora=False)
+        # Vender para pagar: con el slot lleno, el hueco vale el precio completo del ítem
+        # que sale. Antes, con 3 600 almas y un 6 400 pendiente, el panel decía «faltan
+        # 2 800» aunque soltando una pieza ya llegabas a comprarlo.
+        lista_dec = (decision.get("item") or {}).get("costo_lista") or costo_dec
+        if venta is None and costo_dec > bolsillo_dec and lista_dec <= almas:
+            # El tope es el patrimonio (almas), no el bolsillo: vender no crea almas,
+            # solo las mueve del ítem que sale. Sin este tope, un estado imposible
+            # (12 slots con patrimonio de 900) generaba una compra que no se paga.
+            falta_pagar = costo_dec - bolsillo_dec
+            for cand in ventas:
+                if falta_pagar <= (cand.get("costo") or 0) and cand["slot"] == \
+                        (conoc["items"].get(iid_dec) or {}).get("slot"):
+                    entra = (decision.get("item") or {}).get("nombre") or iid_dec
+                    venta = {"vender": cand["id"], "nombre": cand["nombre"],
+                             "slot": cand["slot"], "comprar": iid_dec, "para": entra,
+                             "costo": costo_dec,
+                             "ahorro": (decision.get("item") or {}).get("ahorro") or 0,
+                             "ganancia_pp": None, "vende_pp": cand["pp"],
+                             "se_vende": f"{cand['tasa'] * 100:.0f}% de las partidas",
+                             "para_pagar": True,
+                             "motivo": (f"vende {cand['nombre']} ({cand['slot_nombre']}): "
+                                        f"te devuelve {cand['costo']:,} y entras ya a "
+                                        f"{entra}")}
+                    break
+        # VENDER solo cuando de verdad toca hacerlo: el ítem entra y hay que abrir hueco.
+        if venta and decision.get("accion") in ("COMPRAR", "AHORRAR"):
+            if costo_dec <= bolsillo_dec:
+                # El sufijo de la decisión («· a 800 del bonus de spirit») se conserva,
+                # pero el nombre que sale lo pone la venta final: antes el motivo decía
+                # «vende X» (del ranking) y la venta «vende Y» (del slot del ítem).
+                previo = decision.get("motivo") or ""
+                cola = previo[previo.find(" · "):] if " · " in previo else ""
+                decision = {**decision, "accion": "VENDER", "modo": "slot",
+                            "motivo": venta["motivo"] + cola}
+            else:
+                # No se cambia la acción: todavía no lo pagas, pero el panel ya dice qué
+                # vender y que con eso entras. VENDER aquí sería una compra sin pagar.
+                decision = {**decision, "modo": "venta-pago",
+                            "motivo": venta["motivo"],
+                            "vende_prioridad": venta["vender"]}
+        # Una venta sin nombres es una orden a ciegas: si no se puede nombrar, no se dice.
+        if decision.get("accion") == "VENDER" and not venta:
+            decision = {**decision,
+                        "accion": "AHORRAR" if (decision.get("faltan") or 0) else "COMPRAR",
+                        "modo": "slot-indefinido",
+                        "motivo": (f"slot lleno y no hay candidato claro a vender; "
+                                   f"revisa el inventario antes de comprar "
+                                   f"{decision['item']['nombre']}")}
+        if venta:
+            # El plan lo tiene en cuenta: el paso que toca se pinta con su venta.
+            camino_dec = list(decision.get("camino") or [])
+            if camino_dec:
+                camino_dec[0] = {**camino_dec[0], "vende": venta["nombre"],
+                                 "vende_id": venta["vender"]}
+                decision = {**decision, "camino": camino_dec}
 
     def _fila(iid):
         return next((f for f in filas if f["id"] == str(iid)), None)
@@ -639,7 +924,10 @@ def recomendar(estado: Estado, conoc, cat, cfg=None):
             fila = {"id": iid, "nombre": d["nombre"], "costo": d["costo"],
                     "slot": (conoc["items"].get(iid) or {}).get("slot"),
                     "score": 0.0, "residual": 0.0, "n": 0,
-                    "razones": [decision.get("motivo") or ""], "alcanzable": False,
+                    "razones": [decision.get("motivo") or ""],
+                    # La fila sintética se marcaba siempre como no alcanzable, y el
+                    # objetivo salía con «faltan» negativo (invariante 1 del QA).
+                    "alcanzable": d["costo"] <= (decision.get("bolsillo") or 0),
                     "peso_lift": 1.0, "coef_pp": 0.0,
                     "costo_lista": d.get("costo_lista", d["costo"]),
                     "ahorro": d.get("ahorro", 0), "absorbe": [],
@@ -677,7 +965,8 @@ def recomendar(estado: Estado, conoc, cat, cfg=None):
                     "residual": f.get("residual", 0.0), "icono": d.get("icono")}
     else:
         for f in filas:
-            if f["alcanzable"] or f["residual"] < cfg["lift_minimo"]:
+            if (f["alcanzable"] or (f.get("costo") or 0) <= almas
+                    or f["residual"] < cfg["lift_minimo"]):
                 continue
             objetivo = {"id": f["id"], "nombre": f["nombre"], "costo": f["costo"],
                         "faltan": f["costo"] - almas, "ahorro": f["ahorro"],
@@ -707,14 +996,24 @@ def recomendar(estado: Estado, conoc, cat, cfg=None):
                      "icono": f"/icono/{iid}"})
         if len(plan) >= 2:
             break
+    # Enemigos con su marca de amenaza: el panel pinta en rojo al que va por encima y
+    # escribe "EVITAR" en el que no se busca solo. El orden no cambia (mantiene la
+    # posición de la rejilla); la ficha del peligroso se marca, no se reordena.
+    ficha_amenaza = {str(a.get("heroe")): a for a in amenazas["lista"] if a.get("heroe")}
     enemigos = []
     for j in estado.enemigos:
         if not j.heroe:
             continue
         clave = str(j.heroe).lower().replace(" ", "_").replace("-", "_")
+        a = ficha_amenaza.get(str(j.heroe)) or {}
         enemigos.append({"heroe": j.heroe, "icono": f"/icono-heroe/{clave}",
                          "almas": j.almas, "bajas": j.bajas,
-                         "muertes": j.muertes, "asistencias": j.asistencias})
+                         "muertes": j.muertes, "asistencias": j.asistencias,
+                         "nivel": a.get("nivel"),
+                         "delta_pct": (round(a["delta_pct"], 3)
+                                       if a.get("delta_pct") is not None else None),
+                         "evitar_solo": bool(a.get("evitar_solo")),
+                         "motivo": a.get("motivo")})
     aliados = [{"heroe": j.heroe, "almas": j.almas, "bajas": j.bajas,
                 "muertes": j.muertes, "asistencias": j.asistencias}
                for j in estado.aliados if (j.heroe or j.almas is not None)]
@@ -741,7 +1040,8 @@ def recomendar(estado: Estado, conoc, cat, cfg=None):
            if cfg.get("contexto_activo", True) else dict(GANANCIAS_NEUTRAS))
     contra = situacionales.sugerencias_composicion(
         heroes_enemigos, estado.yo.items, residuales=residuales,
-        ganancia=gan["lift"], motivo_ajuste=motivo_ganancia(gan))
+        ganancia=gan["lift"], motivo_ajuste=motivo_ganancia(gan),
+        amenazas=amenazas["lista"])
     # Huecos por categoría: el panel puede decir "3/4 weapon" sin recalcular nada.
     slots = {}
     categorias = {}
@@ -766,16 +1066,73 @@ def recomendar(estado: Estado, conoc, cat, cfg=None):
             "bonus": gastado_cat >= 4800,
         }
 
+    # Objetivos: si el ritmo de almas va por debajo (walkers que no caen), el plan deja
+    # de empujar el ahorro fino y pide farmear objetivo. Se calcula con lo que llega por
+    # HTTP; si no hay datos suficientes, `prioridad` es False y no se dice nada.
+    objetivos = objetivos_mod.evaluar(estado)
+    if objetivos.get("prioridad") and decision.get("accion") == "AHORRAR" \
+            and decision.get("modo") in ("ahorro", "rush"):
+        decision = {**decision, "modo": "farm",
+                    "motivo": (decision.get("motivo") or "")
+                              + " · vas corto por objetivos"}
+
+    if venta:
+        # Un solo «vende esto» a la vez: si el motor ya nombró el ítem, la lista de
+        # prioridad se alinea con él. Dos nombres distintos para la misma acción es
+        # ruido; el inventario y el aviso tienen que apuntar al mismo slot.
+        for v in ventas:
+            v["nivel"] = ("ahora" if str(v.get("id")) == str(venta.get("vender"))
+                          else "luego")
+        if decision.get("accion") == "VENDER" \
+                and venta["motivo"] not in (decision.get("motivo") or ""):
+            previo = decision.get("motivo") or ""
+            cola = previo[previo.find(" · "):] if " · " in previo else ""
+            decision = {**decision, "motivo": venta["motivo"] + cola}
+
+    # Evidencia medida del motor v2: se adjunta a la recomendación, no la reordena.
+    # El efecto estimado es de 1-2 pp con intervalo ancho; usarlo para reescribir el
+    # ranking sería cambiar una heurística medible por otra peor medida. Primero se
+    # acumula el desacuerdo en telemetría y se decide con datos (puerta G4).
+    evidencia = None
+    desacuerdo = None
+    valor_modelo = None
+    try:
+        from . import valor as valor_mod
+        valor_modelo = valor_mod.resumen()
+        if top:
+            evidencia = valor_mod.evidencia(top[0]["id"])
+            desacuerdo = valor_mod.comparar(top, cfg["empate_margen"])
+        if evidencia and top:
+            top = [{**top[0], "evidencia": evidencia}] + list(top[1:])
+        if desacuerdo:
+            from . import telemetria
+            telemetria.anotar("valor_desacuerdo", **desacuerdo)
+        # Aviso de desempate: el modelo prefiere otra compra que el motor considera
+        # equivalente. No se cambia la recomendación (eso exige mover el camino, la
+        # venta y los componentes a la vez); se dice en una línea.
+        desempate = valor_mod.preferencia(top, cfg["empate_margen"]) if top else None
+    except Exception:                                      # noqa: BLE001
+        # Un artefacto ilegible no puede tumbar una recomendación: el motor sigue.
+        evidencia, desacuerdo, valor_modelo, desempate = None, None, None, None
+
     return {
         "t": estado.t,
         "estado": tactico,
         "contexto_fase": contexto_fase,
         "contra_composicion": contra,
+        "amenazas": amenazas,
+        "perfil": {"etiqueta": perfil.get("etiqueta"), "modo": perfil.get("modo"),
+                   "motivo": perfil.get("motivo"), "rival": perfil.get("rival"),
+                   "tope": perfil.get("tope")},
+        # Perfil histórico de la partida (contexto, no predicción). None sin KDA,
+        # antes de 5 min o si el estado que llega ya no es de ahora.
+        "riesgo": riesgo_de(estado, vivo),
         "fase_economica": patrones.fase_economica(estado.yo.almas, h),
         "heroe_datos": h.datos.get("clave") if hasattr(h, "datos") else None,
         "economia": econ,
         "recomendaciones": top,
         "venta": venta,
+        "ventas": ventas,
         "decision": decision,
         "slots": slots,
         "categorias": categorias,
@@ -785,8 +1142,13 @@ def recomendar(estado: Estado, conoc, cat, cfg=None):
         "objetivo": objetivo,
         "enemigos": enemigos,
         "aliados": aliados,
-        "inventario": inventario,
+        "inventario": ventas_mod.anotar(inventario, ventas),
         "almas": estado.yo.almas,
+        "tasa_almas_s": round(tasa_medida, 2) if tasa_medida else None,
+        "objetivos": objetivos,
         "confianza": estado.confianza,
         "notas": estado.notas,
+        "evidencia": evidencia,
+        "desempate": desempate,
+        "valor_modelo": valor_modelo,
     }

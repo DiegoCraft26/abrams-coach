@@ -5,7 +5,7 @@ No necesita el juego ni la pantalla: toma el historial real de compras de cada p
 reconstruye el estado en cada momento y compara la recomendación con lo que el jugador
 compró de verdad.
 """
-import argparse, json, os, random, sys, urllib.parse, urllib.request
+import argparse, json, os, sys, urllib.parse, urllib.request
 sys.path.insert(0, RAIZ)
 from coach.motor_api import Motor
 

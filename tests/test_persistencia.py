@@ -6,7 +6,6 @@ Ejecutable como script (`python3 tests/test_persistencia.py`) y como pytest.
 from __future__ import annotations
 
 import json
-import os
 import subprocess
 import sys
 import tempfile

@@ -18,7 +18,7 @@ import time
 RAIZ = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, RAIZ)
 
-from herramientas.evaluar_motor import CACHE, almas_en, estado_en  # noqa: E402
+from herramientas.evaluar_motor import CACHE, estado_en  # noqa: E402
 from coach.motor_api import Motor  # noqa: E402
 
 

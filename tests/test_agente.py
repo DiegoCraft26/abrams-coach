@@ -10,7 +10,7 @@ import time
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from coach.agente import herramientas, presupuesto, proveedor
+from coach.agente import herramientas, proveedor
 from coach.agente.presupuesto import Presupuesto
 from coach.agente.proveedor import (
     ErrorProveedor,

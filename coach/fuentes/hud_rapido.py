@@ -12,7 +12,6 @@ import os
 import re
 import subprocess
 import tempfile
-import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
 
@@ -29,6 +28,83 @@ CAJAS_DEFECTO = {
     "match": (4050, 1330, 4480, 1440),
 }
 REFERENCIA = (4480, 1440)
+
+
+class MarcoPerezoso:
+    """Marco sin píxeles: captura lo justo para servir las cajas que le pidan.
+
+    Dos modos, y la diferencia se midió con el juego abierto en el menú (2026-11-15,
+    GPU al 62 %):
+
+    - **una_vez=True** (por defecto): pide el monitor del juego una sola vez (25.7 ms) y
+      recorta las demás cajas en memoria (gratis).
+    - **una_vez=False**: una petición por caja. Con el compositor ocupado cada una cuesta
+      ~33 ms —más que el monitor entero, porque se espera al siguiente cuadro— así que
+      leer reloj y oro costaba ~66 ms por ciclo.
+
+    Con el juego cerrado el readback es tan barato (0.9–2.5 ms) que los dos modos daban
+    igual y por eso el problema solo apareció al medir con el juego vivo.
+
+    Sustituye al cuadro real sin cambiar a los lectores: solo necesitan `.crop(caja)`.
+    """
+
+    def __init__(self, capturador=None, tamano=REFERENCIA, una_vez=None, caja=None):
+        self._capturar = capturador or _capturar_caja
+        self._cuadro = None
+        self._origen = (0, 0)
+        # Con un capturador inyectado (pruebas) se respeta caja por caja; el modo de una
+        # sola captura solo aplica cuando el marco captura de verdad.
+        self._una_vez = (capturador is None) if una_vez is None else bool(una_vez)
+        self._caja = caja
+        self.size = tamano
+        self.capturas = 0
+        self.errores = 0
+
+    def crop(self, caja):
+        if self._una_vez:
+            if self._cuadro is None:
+                self._cuadro, self._origen = _capturar_monitor(self._caja)
+                if self._cuadro is not None:
+                    self.capturas += 1
+            if self._cuadro is not None:
+                # Las cajas vienen en coordenadas del escritorio; el cuadro es el
+                # monitor, así que hay que descontar su origen.
+                ox, oy = self._origen
+                return self._cuadro.crop((caja[0] - ox, caja[1] - oy,
+                                          caja[2] - ox, caja[3] - oy))
+            # Si el monitor entero no se pudo, se cae a pedir la caja suelta.
+        im = self._capturar(caja)
+        if im is None:
+            self.errores += 1
+            raise OSError("KWin no entregó la caja")
+        self.capturas += 1
+        return im
+
+    def metricas(self):
+        return {"capturas": self.capturas, "errores": self.errores}
+
+
+def _capturar_caja(caja):
+    """PIL de esa caja del escritorio por KWin, o None."""
+    try:
+        from . import captura_kwin
+        x0, y0, x1, y1 = (int(v) for v in caja)
+        return captura_kwin.capturar(x0, y0, max(1, x1 - x0), max(1, y1 - y0))
+    except Exception:                                     # noqa: BLE001
+        return None
+
+
+def _capturar_monitor(caja=None):
+    """(PIL del monitor del juego, (x0, y0)), o (None, (0, 0))."""
+    try:
+        from . import captura_bajo_demanda as cbd, captura_kwin
+        caja = caja or cbd.caja_juego()
+        if not caja:
+            return None, (0, 0)
+        im = captura_kwin.capturar(caja[0], caja[1], caja[2], caja[3])
+        return (im, (caja[0], caja[1])) if im is not None else (None, (0, 0))
+    except Exception:                                     # noqa: BLE001
+        return None, (0, 0)
 
 
 def _escalar(caja, tamano):

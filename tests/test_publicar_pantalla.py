@@ -11,7 +11,6 @@ RAIZ = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(RAIZ))
 
 from coach import nucleo_vivo as NV  # noqa: E402
-from coach import servidor as S  # noqa: E402
 
 
 class EstadoFalso:
