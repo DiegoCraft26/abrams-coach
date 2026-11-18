@@ -1,0 +1,17 @@
+{
+ "id": 13,
+ "nombre": "Haze",
+ "clave": "haze",
+ "apertura": {
+  "items": [
+   "668299740",
+   "4104549924",
+   "968099481",
+   "381961617",
+   "3633614685"
+  ],
+  "fuente": "datos/lab.db: 13505 compras en los primeros 10 min, 4312 partidas",
+  "fecha": "2026-11-18"
+ },
+ "notas": "Apertura medida en la base. Hitos de almas y fases no se derivan: usan el respaldo de Abrams hasta que haya una fuente medida por héroe."
+}

@@ -3,12 +3,13 @@
 Es el juez del bucle de mejora: cada cambio de pesos o de reglas se mide aquí,
 contra partidas reales, no contra intuición.
 """
+from . import identidad
 import json, os, urllib.parse, urllib.request
 
 DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 API = "https://api.deadlock-api.com"
 SOLO_GANADAS = True
-H = {"User-Agent": "abrams-coach/1.0", "Accept": "application/json"}
+H = {"User-Agent": identidad.AGENTE, "Accept": "application/json"}
 
 
 def _get(path, **q):

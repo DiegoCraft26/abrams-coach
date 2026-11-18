@@ -363,8 +363,11 @@ def url_broadcast(match_id, forzar=False):
 def _lineas(url_api, timeout):
     """Generador de líneas del SSE. Aislado para poder falsearlo en las pruebas."""
     import urllib.request
-    peticion = urllib.request.Request(url_api, headers={
-        **CABECERAS, "Accept": "text/event-stream"})
+    # `CABECERAS` es de otro módulo: aquí se pide el agente explícito para que
+    # ningún cambio futuro deje esta ruta sin identidad (la que fue anónima era
+    # justo la del watcher del live).
+    peticion = urllib.request.Request(
+        url_api, headers=identidad.cabeceras(Accept="text/event-stream"))
     with urllib.request.urlopen(peticion, timeout=timeout) as respuesta:
         for linea in respuesta:
             yield linea.decode("utf-8", "replace")

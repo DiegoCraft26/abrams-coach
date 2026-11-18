@@ -22,6 +22,7 @@ tick 9492 (~148 s de juego).
 Esto NO lee memoria del proceso del juego, no inyecta y no hookea: es la misma vía por
 la que se ve una partida en el cliente de espectador.
 """
+from . import identidad
 import json
 import os
 import threading
@@ -55,7 +56,7 @@ ESPERA_SIN_URL_S = 300.0
 # La API está detrás de un CDN que devuelve 403 al User-Agent de urllib. Con un
 # User-Agent propio responde 200 (verificado: urllib 403 -> 200 con esta cabecera).
 CABECERAS = {
-    "User-Agent": "abrams-coach/1.0 (Linux; captura de pantalla local)",
+    "User-Agent": identidad.AGENTE,
     "Accept": "application/json, text/event-stream",
 }
 

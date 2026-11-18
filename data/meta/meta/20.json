@@ -1,0 +1,60 @@
+{
+ "apertura": [
+  {
+   "id": 1437614329,
+   "nombre": "Melee Lifesteal",
+   "costo": 800,
+   "rel_pct": 17.6,
+   "muestra": 21557,
+   "winrate": 0.5365,
+   "wlb": 0.5299
+  },
+  {
+   "id": 1548066885,
+   "nombre": "Extended Magazine",
+   "costo": 800,
+   "rel_pct": 8.6,
+   "muestra": 1021982,
+   "winrate": 0.5222,
+   "wlb": 0.5213
+  },
+  {
+   "id": 3776945997,
+   "nombre": "Extra Charge",
+   "costo": 800,
+   "rel_pct": 22.4,
+   "muestra": 632545,
+   "winrate": 0.5215,
+   "wlb": 0.5203
+  },
+  {
+   "id": 2829638276,
+   "nombre": "Extra Regen",
+   "costo": 800,
+   "rel_pct": 22.0,
+   "muestra": 455304,
+   "winrate": 0.5196,
+   "wlb": 0.5182
+  },
+  {
+   "id": 1009965641,
+   "nombre": "Monster Rounds",
+   "costo": 800,
+   "rel_pct": 14.6,
+   "muestra": 386509,
+   "winrate": 0.5174,
+   "wlb": 0.5158
+  }
+ ],
+ "base_wr": 0.5327,
+ "muestra": 22355248,
+ "criterio": {
+  "rel_max": 27.0,
+  "costo_max": 800,
+  "min_muestra": 2000,
+  "orden": "wilson"
+ },
+ "hero_id": 20,
+ "fuente": "api.deadlock-api.com item-stats",
+ "generado": "2026-11-15T17:36:52"
+}

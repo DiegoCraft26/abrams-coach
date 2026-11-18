@@ -16,12 +16,13 @@ No adivina de quién es la partida: si no se le pasa cuenta ni slot y hay más d
 Abrams, devuelve None. Un resultado mal atribuido es peor que no tener resultado.
 """
 from __future__ import annotations
+from . import identidad
 
 import json
 import urllib.request
 
 API = "https://api.deadlock-api.com"
-H = {"User-Agent": "abrams-coach/1.0", "Accept": "application/json"}
+H = {"User-Agent": identidad.AGENTE, "Accept": "application/json"}
 HEROE = 6                      # Abrams
 TIMEOUT = 60
 

@@ -1,0 +1,60 @@
+{
+ "apertura": [
+  {
+   "id": 1998374645,
+   "nombre": "Mystic Burst",
+   "costo": 800,
+   "rel_pct": 16.8,
+   "muestra": 951965,
+   "winrate": 0.4603,
+   "wlb": 0.4593
+  },
+  {
+   "id": 3776945997,
+   "nombre": "Extra Charge",
+   "costo": 800,
+   "rel_pct": 14.8,
+   "muestra": 955307,
+   "winrate": 0.4601,
+   "wlb": 0.4591
+  },
+  {
+   "id": 754480263,
+   "nombre": "Mystic Expansion",
+   "costo": 800,
+   "rel_pct": 23.6,
+   "muestra": 934754,
+   "winrate": 0.4597,
+   "wlb": 0.4586
+  },
+  {
+   "id": 1672893796,
+   "nombre": "Grit",
+   "costo": 800,
+   "rel_pct": 23.5,
+   "muestra": 298967,
+   "winrate": 0.4589,
+   "wlb": 0.4571
+  },
+  {
+   "id": 3399065363,
+   "nombre": "Sprint Boots",
+   "costo": 800,
+   "rel_pct": 23.7,
+   "muestra": 444334,
+   "winrate": 0.4582,
+   "wlb": 0.4567
+  }
+ ],
+ "base_wr": 0.4685,
+ "muestra": 18590277,
+ "criterio": {
+  "rel_max": 27.0,
+  "costo_max": 800,
+  "min_muestra": 2000,
+  "orden": "wilson"
+ },
+ "hero_id": 69,
+ "fuente": "api.deadlock-api.com item-stats",
+ "generado": "2026-11-15T17:38:17"
+}

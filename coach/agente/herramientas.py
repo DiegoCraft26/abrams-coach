@@ -10,10 +10,11 @@ import urllib.error
 import urllib.parse
 import urllib.request
 
+from .. import identidad
 from .proveedor import AGENTE_USUARIO, leer_credencial
 
 BASE_API = "https://api.deadlock-api.com"
-CABECERAS_API = {"User-Agent": AGENTE_USUARIO + " (Deadlock local)", "Accept": "application/json"}
+CABECERAS_API = identidad.cabeceras(Accept="application/json")
 
 # Rutas permitidas de la API pública. Todo lo demás se rechaza sin salir a red.
 RUTAS_PERMITIDAS = (

@@ -5,6 +5,7 @@ la petición no lleva cabecera `User-Agent`. Con `User-Agent: abrams-coach/1.0`
 y `Authorization: Bearer <clave>` responde 200. Todo va por urllib (stdlib).
 """
 from __future__ import annotations
+from .. import identidad
 
 import base64
 import json
@@ -15,7 +16,7 @@ import urllib.request
 from pathlib import Path
 from typing import Protocol, runtime_checkable
 
-AGENTE_USUARIO = "abrams-coach/1.0"
+AGENTE_USUARIO = identidad.AGENTE
 
 
 def _ruta_credenciales() -> Path:

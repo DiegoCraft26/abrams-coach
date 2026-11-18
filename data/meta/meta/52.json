@@ -1,0 +1,60 @@
+{
+ "apertura": [
+  {
+   "id": 1439347412,
+   "nombre": "Mystic Regeneration",
+   "costo": 800,
+   "rel_pct": 8.3,
+   "muestra": 670927,
+   "winrate": 0.4423,
+   "wlb": 0.4411
+  },
+  {
+   "id": 2010028405,
+   "nombre": "Headshot Booster",
+   "costo": 800,
+   "rel_pct": 12.9,
+   "muestra": 231631,
+   "winrate": 0.4398,
+   "wlb": 0.4378
+  },
+  {
+   "id": 3077079169,
+   "nombre": "High-Velocity Rounds",
+   "costo": 800,
+   "rel_pct": 14.4,
+   "muestra": 154052,
+   "winrate": 0.4387,
+   "wlb": 0.4362
+  },
+  {
+   "id": 968099481,
+   "nombre": "Extra Spirit",
+   "costo": 800,
+   "rel_pct": 22.6,
+   "muestra": 335892,
+   "winrate": 0.4354,
+   "wlb": 0.4337
+  },
+  {
+   "id": 1009965641,
+   "nombre": "Monster Rounds",
+   "costo": 800,
+   "rel_pct": 11.0,
+   "muestra": 308963,
+   "winrate": 0.4345,
+   "wlb": 0.4327
+  }
+ ],
+ "base_wr": 0.4533,
+ "muestra": 12247716,
+ "criterio": {
+  "rel_max": 27.0,
+  "costo_max": 800,
+  "min_muestra": 2000,
+  "orden": "wilson"
+ },
+ "hero_id": 52,
+ "fuente": "api.deadlock-api.com item-stats",
+ "generado": "2026-11-15T17:37:31"
+}

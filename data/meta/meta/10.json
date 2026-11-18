@@ -1,0 +1,60 @@
+{
+ "apertura": [
+  {
+   "id": 1342610602,
+   "nombre": "Close Quarters",
+   "costo": 800,
+   "rel_pct": 15.2,
+   "muestra": 35669,
+   "winrate": 0.4744,
+   "wlb": 0.4692
+  },
+  {
+   "id": 968099481,
+   "nombre": "Extra Spirit",
+   "costo": 800,
+   "rel_pct": 25.1,
+   "muestra": 145426,
+   "winrate": 0.4707,
+   "wlb": 0.4682
+  },
+  {
+   "id": 3077079169,
+   "nombre": "High-Velocity Rounds",
+   "costo": 800,
+   "rel_pct": 12.9,
+   "muestra": 1364344,
+   "winrate": 0.4664,
+   "wlb": 0.4656
+  },
+  {
+   "id": 3862866912,
+   "nombre": "Restorative Shot",
+   "costo": 800,
+   "rel_pct": 8.8,
+   "muestra": 922256,
+   "winrate": 0.4599,
+   "wlb": 0.4588
+  },
+  {
+   "id": 2010028405,
+   "nombre": "Headshot Booster",
+   "costo": 800,
+   "rel_pct": 12.8,
+   "muestra": 824540,
+   "winrate": 0.4599,
+   "wlb": 0.4588
+  }
+ ],
+ "base_wr": 0.477,
+ "muestra": 29304980,
+ "criterio": {
+  "rel_max": 27.0,
+  "costo_max": 800,
+  "min_muestra": 2000,
+  "orden": "wilson"
+ },
+ "hero_id": 10,
+ "fuente": "api.deadlock-api.com item-stats",
+ "generado": "2026-11-15T17:36:02"
+}

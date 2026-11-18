@@ -1,4 +1,5 @@
 """Catálogo de ítems de Deadlock normalizado desde deadlock-api."""
+from . import identidad
 import json, os, urllib.request
 
 BASE = "https://api.deadlock-api.com"
@@ -9,7 +10,7 @@ def _get(path, **params):
     url = BASE + path
     if params:
         url += "?" + urllib.parse.urlencode(params)
-    req = urllib.request.Request(url, headers={"User-Agent": "abrams-coach/1.0"})
+    req = urllib.request.Request(url, headers={"User-Agent": identidad.AGENTE})
     with urllib.request.urlopen(req, timeout=120) as r:
         return json.load(r)
 

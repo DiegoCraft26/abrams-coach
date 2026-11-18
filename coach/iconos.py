@@ -7,6 +7,7 @@ deja en `data/iconos/`, que está en `.gitignore`.
 Uso manual:
     python3 coach/iconos.py
 """
+from . import identidad
 import json
 import os
 import threading
@@ -26,7 +27,7 @@ def _bajar(url, destino, intentos=3):
         return True
     for i in range(intentos):
         try:
-            req = urllib.request.Request(url, headers={"User-Agent": "abrams-coach/1.0"})
+            req = urllib.request.Request(url, headers={"User-Agent": identidad.AGENTE})
             with urllib.request.urlopen(req, timeout=30) as r:
                 crudo = r.read()
             temporal = destino + ".tmp"
@@ -76,7 +77,7 @@ def heroes():
     if any(f.endswith("_n.png") for f in os.listdir(carpeta)):
         return len([f for f in os.listdir(carpeta) if f.endswith("_n.png")])
     url = "https://api.deadlock-api.com/v1/assets/heroes"
-    req = urllib.request.Request(url, headers={"User-Agent": "abrams-coach/1.0"})
+    req = urllib.request.Request(url, headers={"User-Agent": identidad.AGENTE})
     with urllib.request.urlopen(req, timeout=60) as r:
         hs = json.load(r)
     ok = 0

@@ -1,0 +1,60 @@
+{
+ "apertura": [
+  {
+   "id": 3776945997,
+   "nombre": "Extra Charge",
+   "costo": 800,
+   "rel_pct": 16.7,
+   "muestra": 711312,
+   "winrate": 0.5067,
+   "wlb": 0.5055
+  },
+  {
+   "id": 4139877411,
+   "nombre": "Extra Stamina",
+   "costo": 800,
+   "rel_pct": 25.2,
+   "muestra": 455626,
+   "winrate": 0.5049,
+   "wlb": 0.5034
+  },
+  {
+   "id": 1439347412,
+   "nombre": "Mystic Regeneration",
+   "costo": 800,
+   "rel_pct": 18.3,
+   "muestra": 215789,
+   "winrate": 0.5045,
+   "wlb": 0.5024
+  },
+  {
+   "id": 1009965641,
+   "nombre": "Monster Rounds",
+   "costo": 800,
+   "rel_pct": 9.8,
+   "muestra": 497820,
+   "winrate": 0.4959,
+   "wlb": 0.4945
+  },
+  {
+   "id": 2462046703,
+   "nombre": "Golden Goose Egg",
+   "costo": 800,
+   "rel_pct": 13.7,
+   "muestra": 34527,
+   "winrate": 0.485,
+   "wlb": 0.4797
+  }
+ ],
+ "base_wr": 0.5086,
+ "muestra": 15106182,
+ "criterio": {
+  "rel_max": 27.0,
+  "costo_max": 800,
+  "min_muestra": 2000,
+  "orden": "wilson"
+ },
+ "hero_id": 8,
+ "fuente": "api.deadlock-api.com item-stats",
+ "generado": "2026-11-15T17:35:55"
+}

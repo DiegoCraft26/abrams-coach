@@ -1,0 +1,60 @@
+{
+ "apertura": [
+  {
+   "id": 668299740,
+   "nombre": "Rapid Rounds",
+   "costo": 800,
+   "rel_pct": 22.7,
+   "muestra": 504183,
+   "winrate": 0.5095,
+   "wlb": 0.5081
+  },
+  {
+   "id": 1548066885,
+   "nombre": "Extended Magazine",
+   "costo": 800,
+   "rel_pct": 20.3,
+   "muestra": 652444,
+   "winrate": 0.5012,
+   "wlb": 0.5
+  },
+  {
+   "id": 3077079169,
+   "nombre": "High-Velocity Rounds",
+   "costo": 800,
+   "rel_pct": 7.2,
+   "muestra": 801406,
+   "winrate": 0.5002,
+   "wlb": 0.4992
+  },
+  {
+   "id": 1009965641,
+   "nombre": "Monster Rounds",
+   "costo": 800,
+   "rel_pct": 15.7,
+   "muestra": 394746,
+   "winrate": 0.4884,
+   "wlb": 0.4869
+  },
+  {
+   "id": 2829638276,
+   "nombre": "Extra Regen",
+   "costo": 800,
+   "rel_pct": 15.3,
+   "muestra": 233262,
+   "winrate": 0.4839,
+   "wlb": 0.4819
+  }
+ ],
+ "base_wr": 0.5074,
+ "muestra": 16937472,
+ "criterio": {
+  "rel_max": 27.0,
+  "costo_max": 800,
+  "min_muestra": 2000,
+  "orden": "wilson"
+ },
+ "hero_id": 25,
+ "fuente": "api.deadlock-api.com item-stats",
+ "generado": "2026-11-15T17:37:05"
+}

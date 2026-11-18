@@ -1,4 +1,5 @@
 """Construye la base de conocimiento: lift residual, pares, ventas y counters."""
+from . import identidad
 import json, math, os, sys, time, urllib.parse, urllib.request
 
 BASE = "https://api.deadlock-api.com"
@@ -13,7 +14,7 @@ def get(path, **params):
     url = BASE + path + ("?" + urllib.parse.urlencode(params) if params else "")
     for i in range(4):
         try:
-            req = urllib.request.Request(url, headers={"User-Agent": "abrams-coach/1.0"})
+            req = urllib.request.Request(url, headers={"User-Agent": identidad.AGENTE})
             with urllib.request.urlopen(req, timeout=180) as r:
                 return json.load(r)
         except Exception as e:

@@ -1,0 +1,17 @@
+{
+ "id": 84,
+ "nombre": "Rat King",
+ "clave": "ratking",
+ "apertura": {
+  "items": [
+   "3077079169",
+   "2064029594",
+   "3633614685",
+   "1009965641",
+   "3399065363"
+  ],
+  "fuente": "datos/lab.db: 17532 compras en los primeros 10 min, 6248 partidas",
+  "fecha": "2026-11-18"
+ },
+ "notas": "Apertura medida en la base. Hitos de almas y fases no se derivan: usan el respaldo de Abrams hasta que haya una fuente medida por héroe."
+}

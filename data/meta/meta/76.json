@@ -1,0 +1,60 @@
+{
+ "apertura": [
+  {
+   "id": 1672893796,
+   "nombre": "Grit",
+   "costo": 800,
+   "rel_pct": 15.5,
+   "muestra": 1329164,
+   "winrate": 0.5895,
+   "wlb": 0.5887
+  },
+  {
+   "id": 4139877411,
+   "nombre": "Extra Stamina",
+   "costo": 800,
+   "rel_pct": 24.9,
+   "muestra": 2423222,
+   "winrate": 0.5781,
+   "wlb": 0.5775
+  },
+  {
+   "id": 3862866912,
+   "nombre": "Restorative Shot",
+   "costo": 800,
+   "rel_pct": 7.0,
+   "muestra": 2575609,
+   "winrate": 0.5763,
+   "wlb": 0.5757
+  },
+  {
+   "id": 968099481,
+   "nombre": "Extra Spirit",
+   "costo": 800,
+   "rel_pct": 16.8,
+   "muestra": 2281562,
+   "winrate": 0.5756,
+   "wlb": 0.575
+  },
+  {
+   "id": 1437614329,
+   "nombre": "Melee Lifesteal",
+   "costo": 800,
+   "rel_pct": 21.5,
+   "muestra": 15254,
+   "winrate": 0.5699,
+   "wlb": 0.5621
+  }
+ ],
+ "base_wr": 0.5795,
+ "muestra": 46876697,
+ "criterio": {
+  "rel_max": 27.0,
+  "costo_max": 800,
+  "min_muestra": 2000,
+  "orden": "wilson"
+ },
+ "hero_id": 76,
+ "fuente": "api.deadlock-api.com item-stats",
+ "generado": "2026-11-15T17:38:33"
+}

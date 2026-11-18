@@ -14,6 +14,7 @@ Reglas que impone este módulo:
 Todo se puede falsear (`transporte=`) para probarlo sin red.
 """
 from __future__ import annotations
+from .. import identidad
 
 import hashlib
 import json
@@ -26,7 +27,7 @@ import urllib.request
 
 BASE = "https://api.deadlock-api.com"
 CABECERAS = {
-    "User-Agent": "abrams-coach/1.0 (Linux; analitica con presupuesto)",
+    "User-Agent": identidad.AGENTE,
     "Accept": "application/json",
 }
 TTL_S = 24 * 3600

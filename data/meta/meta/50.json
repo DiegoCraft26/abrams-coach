@@ -1,0 +1,60 @@
+{
+ "apertura": [
+  {
+   "id": 968099481,
+   "nombre": "Extra Spirit",
+   "costo": 800,
+   "rel_pct": 26.7,
+   "muestra": 445748,
+   "winrate": 0.4642,
+   "wlb": 0.4628
+  },
+  {
+   "id": 1439347412,
+   "nombre": "Mystic Regeneration",
+   "costo": 800,
+   "rel_pct": 26.9,
+   "muestra": 28848,
+   "winrate": 0.4557,
+   "wlb": 0.45
+  },
+  {
+   "id": 1998374645,
+   "nombre": "Mystic Burst",
+   "costo": 800,
+   "rel_pct": 11.8,
+   "muestra": 1135452,
+   "winrate": 0.444,
+   "wlb": 0.4431
+  },
+  {
+   "id": 2829638276,
+   "nombre": "Extra Regen",
+   "costo": 800,
+   "rel_pct": 10.0,
+   "muestra": 530494,
+   "winrate": 0.4426,
+   "wlb": 0.4413
+  },
+  {
+   "id": 1009965641,
+   "nombre": "Monster Rounds",
+   "costo": 800,
+   "rel_pct": 14.6,
+   "muestra": 856110,
+   "winrate": 0.4379,
+   "wlb": 0.4369
+  }
+ ],
+ "base_wr": 0.4585,
+ "muestra": 20928572,
+ "criterio": {
+  "rel_max": 27.0,
+  "costo_max": 800,
+  "min_muestra": 2000,
+  "orden": "wilson"
+ },
+ "hero_id": 50,
+ "fuente": "api.deadlock-api.com item-stats",
+ "generado": "2026-11-15T17:37:28"
+}

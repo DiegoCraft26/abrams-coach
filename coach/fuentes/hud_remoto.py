@@ -14,6 +14,7 @@ Si el servidor no contesta, `leer()` devuelve None y el llamador sigue con el OC
 el panel nunca depende de la red para pintar el reloj.
 """
 from __future__ import annotations
+from .. import identidad
 
 import base64
 import io
@@ -38,7 +39,7 @@ def _pedir(servidor: str, cuerpo: dict, timeout_s: float) -> dict:
     pet = urllib.request.Request(
         servidor.rstrip("/") + "/leer", data=datos, method="POST",
         headers={"Content-Type": "application/json",
-                 "User-Agent": "abrams-coach/1.0 (HUD remoto)"})
+                 "User-Agent": identidad.AGENTE})
     with urllib.request.urlopen(pet, timeout=timeout_s) as r:
         return json.loads(r.read().decode("utf-8"))
 

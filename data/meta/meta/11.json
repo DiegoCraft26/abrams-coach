@@ -1,0 +1,60 @@
+{
+ "apertura": [
+  {
+   "id": 3077079169,
+   "nombre": "High-Velocity Rounds",
+   "costo": 800,
+   "rel_pct": 11.2,
+   "muestra": 139615,
+   "winrate": 0.5212,
+   "wlb": 0.5185
+  },
+  {
+   "id": 3399065363,
+   "nombre": "Sprint Boots",
+   "costo": 800,
+   "rel_pct": 23.4,
+   "muestra": 840666,
+   "winrate": 0.5187,
+   "wlb": 0.5177
+  },
+  {
+   "id": 3776945997,
+   "nombre": "Extra Charge",
+   "costo": 800,
+   "rel_pct": 15.1,
+   "muestra": 1205264,
+   "winrate": 0.5185,
+   "wlb": 0.5176
+  },
+  {
+   "id": 4139877411,
+   "nombre": "Extra Stamina",
+   "costo": 800,
+   "rel_pct": 21.7,
+   "muestra": 460546,
+   "winrate": 0.518,
+   "wlb": 0.5166
+  },
+  {
+   "id": 2010028405,
+   "nombre": "Headshot Booster",
+   "costo": 800,
+   "rel_pct": 12.0,
+   "muestra": 666099,
+   "winrate": 0.5164,
+   "wlb": 0.5152
+  }
+ ],
+ "base_wr": 0.5237,
+ "muestra": 25087549,
+ "criterio": {
+  "rel_max": 27.0,
+  "costo_max": 800,
+  "min_muestra": 2000,
+  "orden": "wilson"
+ },
+ "hero_id": 11,
+ "fuente": "api.deadlock-api.com item-stats",
+ "generado": "2026-11-15T17:36:09"
+}

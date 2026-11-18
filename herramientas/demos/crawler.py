@@ -22,9 +22,15 @@ El NDJSON crudo (descomprimido) queda en `datos/demos/<match_id>/` y el estado e
 `datos/demos/estado.json`. Es idempotente: si el archivo existe, no se vuelve a
 pedir; al arrancar, lo que quedó `en_curso` vuelve a la cola.
 
-Límites: 2-3 jobs en vuelo (tope duro 3), <= `--rpm` peticiones por minuto (150 por
-defecto de la API, aquí 120) y ante un 429 se para todo el proceso el tiempo que
-diga `Retry-After` (mínimo 60 s).
+Límites: 2-3 jobs en vuelo (tope duro 3), <= `--rpm` peticiones por minuto, un techo
+propio de 170 peticiones por hora (el real de la API es 200 por IP y cuenta también
+los sondeos) y ante un 429 se para todo el proceso el tiempo que diga `Retry-After`
+(mínimo 60 s).
+
+Cuentas: cada partida son 2 trabajos y ~5 sondeos por trabajo con el espaciado nuevo,
+unos 12-15 peticiones. A 170/h eso son ~12 partidas por hora, no 800: las 800 piden
+ocho días seguidos o dejar de preguntar por la API y bajar el .dem uno mismo
+(`demo_url` viene en `/v1/matches/demo/schema`).
 
 Uso:
     python3 herramientas/demos/crawler.py --dry-run
@@ -35,6 +41,7 @@ Uso:
 from __future__ import annotations
 
 import argparse
+import collections
 import json
 import os
 import random
@@ -129,6 +136,40 @@ class Limitador:
             time.sleep(falta)
 
 
+class CupoHorario:
+    """El techo que de verdad existe: 200 peticiones por hora y por IP.
+
+    El limitador de `rpm` no protege de esto y da una falsa sensación de seguridad:
+    120/min son 7 200/h, y el techo real es 200/h contando **también los sondeos de
+    cada trabajo**. El 2026-11-18 el crawler gastó la hora completa en veinte minutos
+    y el 429 se leyó como «la cuota de la API está rota» cuando el gasto era nuestro:
+    `{"type":"IP","limit":200,"requests":202,"remaining":0}`.
+
+    Aquí se cuentan las peticiones propias en una ventana móvil y se espera antes de
+    pasarse. Se deja margen (`tope` < 200) para no chocar con el resto de la app, que
+    usa la misma IP.
+    """
+
+    def __init__(self, tope: int = 170, ventana_s: float = 3600.0) -> None:
+        self.tope = tope
+        self.ventana_s = ventana_s
+        self._marcas: collections.deque[float] = collections.deque()
+        self._candado = threading.Lock()
+
+    def esperar(self) -> None:
+        while True:
+            with self._candado:
+                ahora = time.monotonic()
+                while self._marcas and ahora - self._marcas[0] > self.ventana_s:
+                    self._marcas.popleft()
+                if len(self._marcas) < self.tope:
+                    self._marcas.append(ahora)
+                    return
+                falta = self.ventana_s - (ahora - self._marcas[0])
+            log(f"cupo horario lleno ({self.tope}/h): espero {falta:.0f}s")
+            time.sleep(min(max(falta, 1.0), 60.0))
+
+
 class Cortacircuitos:
     """Ante 429 se para todo: ningún hilo vuelve a pedir hasta que pase."""
 
@@ -156,6 +197,7 @@ class Cliente:
 
     def __init__(self, rpm: int) -> None:
         self.limitador = Limitador(rpm)
+        self.cupo = CupoHorario()
         self.corte = Cortacircuitos()
         self._clave = _leer_clave()      # X-API-KEY si está configurada; si no, None
         self._candado = threading.Lock()
@@ -174,6 +216,7 @@ class Cliente:
         if datos is not None:
             cabeceras["Content-Type"] = "application/json"
         peticion = urllib.request.Request(url, data=datos, headers=cabeceras)
+        self.cupo.esperar()
         self.limitador.esperar()
         self.corte.esperar()
         self._contar("peticiones")
@@ -306,7 +349,7 @@ def lanzar(cliente: Cliente, match: int, sql: str) -> str:
 
 def esperar_job(cliente: Cliente, job: str, tope_s: float) -> str:
     arranque = time.monotonic()
-    pausa = 2.0
+    pausa = 5.0
     while not _PARADA.is_set():
         try:
             datos = cliente.json(f"/v1/matches/demo/query/{job}", timeout=40.0)
@@ -329,7 +372,7 @@ def esperar_job(cliente: Cliente, job: str, tope_s: float) -> str:
         if time.monotonic() - arranque > tope_s:
             raise ErrorTemporal(f"job {job} sigue en {situacion} tras {tope_s:.0f}s")
         time.sleep(pausa)
-        pausa = min(pausa * 1.3, 5.0)
+        pausa = min(pausa * 1.5, 15.0)
     raise ErrorTemporal("parada pedida mientras esperaba el job")
 
 

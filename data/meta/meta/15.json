@@ -1,0 +1,60 @@
+{
+ "apertura": [
+  {
+   "id": 465043967,
+   "nombre": "Spirit Strike",
+   "costo": 800,
+   "rel_pct": 18.8,
+   "muestra": 1822980,
+   "winrate": 0.4859,
+   "wlb": 0.4851
+  },
+  {
+   "id": 3399065363,
+   "nombre": "Sprint Boots",
+   "costo": 800,
+   "rel_pct": 20.4,
+   "muestra": 1682485,
+   "winrate": 0.4851,
+   "wlb": 0.4844
+  },
+  {
+   "id": 968099481,
+   "nombre": "Extra Spirit",
+   "costo": 800,
+   "rel_pct": 21.9,
+   "muestra": 1429854,
+   "winrate": 0.4839,
+   "wlb": 0.4831
+  },
+  {
+   "id": 1998374645,
+   "nombre": "Mystic Burst",
+   "costo": 800,
+   "rel_pct": 11.2,
+   "muestra": 1945798,
+   "winrate": 0.4832,
+   "wlb": 0.4825
+  },
+  {
+   "id": 2829638276,
+   "nombre": "Extra Regen",
+   "costo": 800,
+   "rel_pct": 11.3,
+   "muestra": 1168000,
+   "winrate": 0.4821,
+   "wlb": 0.4812
+  }
+ ],
+ "base_wr": 0.4925,
+ "muestra": 39781556,
+ "criterio": {
+  "rel_max": 27.0,
+  "costo_max": 800,
+  "min_muestra": 2000,
+  "orden": "wilson"
+ },
+ "hero_id": 15,
+ "fuente": "api.deadlock-api.com item-stats",
+ "generado": "2026-11-15T17:36:21"
+}

@@ -11,6 +11,7 @@ No toca `data/catalogo.json`, que el motor usa para costes y tiers: aquí solo s
 tipo, para no cambiar decisiones ya validadas.
 """
 from __future__ import annotations
+from .. import identidad
 
 import json
 import os
@@ -19,7 +20,7 @@ import urllib.request
 RAIZ = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 RUTA = os.path.join(RAIZ, "data", "items_tipos.json")
 API = "https://api.deadlock-api.com/v1/assets/items"
-CABECERAS = {"User-Agent": "abrams-coach/1.0 (assets de ítems)",
+CABECERAS = {"User-Agent": identidad.AGENTE,
              "Accept": "application/json"}
 
 _cache = {"datos": None, "ts": 0.0}

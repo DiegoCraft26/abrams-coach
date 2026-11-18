@@ -23,6 +23,7 @@ gi.require_version("Gdk", "4.0")
 from gi.repository import Gdk, GLib, Gtk  # noqa: E402
 
 from . import preferencias
+from .. import identidad
 from .componentes.cabecera import Header
 from .componentes.compras import PurchaseFeed
 from .componentes.contra import ContraComposicion
@@ -92,7 +93,8 @@ class Sondeo(threading.Thread):
         while not self.parar:
             t0 = time.perf_counter()
             try:
-                req = urllib.request.Request(self.url, headers={"Accept": "application/json"})
+                req = urllib.request.Request(self.url,
+                                             headers=identidad.cabeceras(Accept="application/json"))
                 with urllib.request.urlopen(req, timeout=5) as r:
                     datos = json.load(r)
                 firma = hashlib.blake2b(

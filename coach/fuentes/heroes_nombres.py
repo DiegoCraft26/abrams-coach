@@ -8,6 +8,7 @@ nombres. Son Violet y Baba, héroes añadidos después de la última copia de
 slugs) se respeta tal cual para no romper nada que ya lo lea.
 """
 from __future__ import annotations
+from .. import identidad
 
 import json
 import os
@@ -16,7 +17,7 @@ import urllib.request
 RAIZ = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 HEROES = os.path.join(RAIZ, "data", "heroes.json")
 API = "https://api.deadlock-api.com/v1/assets/heroes"
-CABECERAS = {"User-Agent": "abrams-coach/1.0 (nombres de héroes)",
+CABECERAS = {"User-Agent": identidad.AGENTE,
              "Accept": "application/json"}
 
 

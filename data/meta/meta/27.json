@@ -1,0 +1,60 @@
+{
+ "apertura": [
+  {
+   "id": 1437614329,
+   "nombre": "Melee Lifesteal",
+   "costo": 800,
+   "rel_pct": 12.5,
+   "muestra": 1351285,
+   "winrate": 0.478,
+   "wlb": 0.4771
+  },
+  {
+   "id": 465043967,
+   "nombre": "Spirit Strike",
+   "costo": 800,
+   "rel_pct": 17.3,
+   "muestra": 1361850,
+   "winrate": 0.4766,
+   "wlb": 0.4757
+  },
+  {
+   "id": 3862866912,
+   "nombre": "Restorative Shot",
+   "costo": 800,
+   "rel_pct": 8.5,
+   "muestra": 1307260,
+   "winrate": 0.4741,
+   "wlb": 0.4732
+  },
+  {
+   "id": 1439347412,
+   "nombre": "Mystic Regeneration",
+   "costo": 800,
+   "rel_pct": 26.8,
+   "muestra": 674239,
+   "winrate": 0.4742,
+   "wlb": 0.473
+  },
+  {
+   "id": 968099481,
+   "nombre": "Extra Spirit",
+   "costo": 800,
+   "rel_pct": 25.8,
+   "muestra": 821490,
+   "winrate": 0.4726,
+   "wlb": 0.4715
+  }
+ ],
+ "base_wr": 0.4888,
+ "muestra": 29084775,
+ "criterio": {
+  "rel_max": 27.0,
+  "costo_max": 800,
+  "min_muestra": 2000,
+  "orden": "wilson"
+ },
+ "hero_id": 27,
+ "fuente": "api.deadlock-api.com item-stats",
+ "generado": "2026-11-15T17:37:12"
+}

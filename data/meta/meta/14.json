@@ -1,0 +1,60 @@
+{
+ "apertura": [
+  {
+   "id": 3633614685,
+   "nombre": "Extra Health",
+   "costo": 800,
+   "rel_pct": 25.5,
+   "muestra": 409948,
+   "winrate": 0.4847,
+   "wlb": 0.4832
+  },
+  {
+   "id": 465043967,
+   "nombre": "Spirit Strike",
+   "costo": 800,
+   "rel_pct": 25.2,
+   "muestra": 174634,
+   "winrate": 0.4784,
+   "wlb": 0.4761
+  },
+  {
+   "id": 3399065363,
+   "nombre": "Sprint Boots",
+   "costo": 800,
+   "rel_pct": 21.6,
+   "muestra": 274779,
+   "winrate": 0.4758,
+   "wlb": 0.474
+  },
+  {
+   "id": 3776945997,
+   "nombre": "Extra Charge",
+   "costo": 800,
+   "rel_pct": 12.9,
+   "muestra": 1268142,
+   "winrate": 0.4744,
+   "wlb": 0.4735
+  },
+  {
+   "id": 2010028405,
+   "nombre": "Headshot Booster",
+   "costo": 800,
+   "rel_pct": 8.3,
+   "muestra": 911924,
+   "winrate": 0.4721,
+   "wlb": 0.4711
+  }
+ ],
+ "base_wr": 0.4847,
+ "muestra": 23694309,
+ "criterio": {
+  "rel_max": 27.0,
+  "costo_max": 800,
+  "min_muestra": 2000,
+  "orden": "wilson"
+ },
+ "hero_id": 14,
+ "fuente": "api.deadlock-api.com item-stats",
+ "generado": "2026-11-15T17:36:15"
+}

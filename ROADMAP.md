@@ -21,9 +21,15 @@ mida no se marca como hecho.
 
 ## Lo que queda después de la v1.0
 
-- **Demos**: la cuota de `demo/query` está rota desde el 2026-11-18 (429 en cadena). El
-  crawler respeta `Retry-After` y no pierde partidas, pero a ~1 partida/hora no llega a las
-  800 que disparan el Motor v3. No depende de nosotros.
+- **Demos**: el 429 del 2026-11-18 **no era de la API, era nuestro**. La respuesta dice
+  `{"type":"IP","quota":{"limit":200,"period":3600},"requests":202,"remaining":0}`: el
+  techo documentado de `/demo/query` es 200 peticiones por hora **por IP**, y cada partida
+  consume 2 trabajos más un sondeo cada 2-5 s por trabajo. Con eso, la hora se agota en
+  ~20 minutos y quedan ~7 partidas/hora, no 800.
+  Arreglado: `CupoHorario` (170/h propias, cuenta también los sondeos) y sondeo cada
+  5-15 s. Aun así son ~12 partidas/hora. Las 800 no salen de preguntar por la API: salen
+  de bajar el `.dem` (`demo_url` viene en `/v1/matches/demo/schema`) y parsearlo aquí, o
+  de una API key (400/h, solo duplica).
 - **Windows nativo**: overlay y captura corren bajo Wine (10 comprobaciones, GDI 27,7 ms).
   Falta DXGI real, compositor, instalador y una máquina donde medirlo.
 - **La subida de rango**: el producto está listo; falta que se juegue una sesión y que

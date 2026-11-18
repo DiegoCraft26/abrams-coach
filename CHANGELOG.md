@@ -1,5 +1,40 @@
 # Cambios
 
+## v1.0.1 — 2026-11-18 (noche, tras la 1.0)
+
+**Lo que motivó esto:** cuatro cosas que no se veían jugando pero sí mirando el repo
+desde fuera —en concreto, desde el ticket que pedía acceso a la API.
+
+### Una sola identidad en las peticiones salientes
+
+`coach/identidad.py`: `abrams-coach/1.0 (+https://github.com/DiegoCraft26/abrams-coach)`,
+un solo string para todo. Antes había **seis variantes** —«(HUD remoto)», «(assets de
+ítems)», «(analitica con presupuesto)»…— y la ruta que más pega, el watcher del live en
+`ui/app.py`, iba **sin cabecera**: salía como `Python-urllib/3.x`. Para quien mira sus
+registros eso no era una aplicación, eran siete clientes, uno anónimo.
+`tests/test_user_agent.py` fija las cuatro invariantes, y encontró una ruta más:
+`fuentes/live_api.py` construía su SSE con cabeceras de otro módulo.
+
+### Fuera el espejo `datos/coach/`
+
+81 módulos viejos del paquete copiados dentro de `datos/` (les faltaban `apertura.py`,
+`cuota.py` y `camino_heroe.py`). Nadie los importaba, pero `grep` los devolvía como si
+fueran código vivo. Archivados en `datos/coach-espejo-viejo-2026-11-18.tar.gz` (560 KB) y
+borrados del árbol.
+
+### El 429 de `demo/query` no era de la API
+
+Diagnóstico real: `{"type":"IP","quota":{"limit":200,"period":3600},"requests":202,
+"remaining":0}`. El techo es **200 peticiones por hora por IP** y cada partida gasta 2
+trabajos más un sondeo cada 2-5 s por trabajo: la hora se agotaba en veinte minutos.
+`CupoHorario` (170/h propias, contando sondeos) y sondeo cada 5-15 s. Aun así son ~12
+partidas/hora: las 800 del Motor v3 no salen de preguntar por la API.
+
+### MCP de deadlock-api
+
+Registrado en DSH (`~/.dsh/cordis.patch.yml`, `mcp-deadlock`): SQL de solo lectura sobre
+el data lake público, sin clave. 126 rutas en el OpenAPI, 1480 parches parquet.
+
 ## v1.0 — 2026-11-18 (noche)
 
 **Lo que motivó esto:** cerrar el ciclo completo del jugador — antes, durante, después,
