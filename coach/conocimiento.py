@@ -1,5 +1,8 @@
 """Construye la base de conocimiento: lift residual, pares, ventas y counters."""
-from . import identidad
+try:  # también se corre como script suelto (`python3 coach/iconos.py`)
+    from . import identidad
+except ImportError:  # sin paquete: el script está en coach/
+    import identidad
 import json, math, os, sys, time, urllib.parse, urllib.request
 
 BASE = "https://api.deadlock-api.com"

@@ -54,3 +54,20 @@ def test_toda_peticion_saliente_lleva_agente():
         if "User-Agent" not in texto and "identidad.cabeceras" not in texto:
             sin_agente.append(p.relative_to(RAIZ).as_posix())
     assert sin_agente == [], sin_agente
+
+
+def test_modulos_ejecutables_toleran_el_import_relativo():
+    """`python3 coach/iconos.py` es un paso del CI: ahí no hay paquete.
+
+    El 2026-11-18 unificar el agente rompió ese paso con «attempted relative import
+    with no known parent package». Los módulos que se corren como script tienen que
+    poder importar la identidad de las dos maneras.
+    """
+    culpables = []
+    for p in sorted((RAIZ / "coach").rglob("*.py")):
+        texto = p.read_text(errors="ignore")
+        if "__main__" not in texto or "from . import identidad" not in texto:
+            continue
+        if "except ImportError" not in texto:
+            culpables.append(p.relative_to(RAIZ).as_posix())
+    assert culpables == [], culpables

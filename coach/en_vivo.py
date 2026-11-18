@@ -22,7 +22,10 @@ tick 9492 (~148 s de juego).
 Esto NO lee memoria del proceso del juego, no inyecta y no hookea: es la misma vía por
 la que se ve una partida en el cliente de espectador.
 """
-from . import identidad
+try:  # también se corre como script suelto (`python3 coach/iconos.py`)
+    from . import identidad
+except ImportError:  # sin paquete: el script está en coach/
+    import identidad
 import json
 import os
 import threading

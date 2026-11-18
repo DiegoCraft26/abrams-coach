@@ -7,7 +7,10 @@ deja en `data/iconos/`, que está en `.gitignore`.
 Uso manual:
     python3 coach/iconos.py
 """
-from . import identidad
+try:  # también se corre como script suelto (`python3 coach/iconos.py`)
+    from . import identidad
+except ImportError:  # sin paquete: el script está en coach/
+    import identidad
 import json
 import os
 import threading

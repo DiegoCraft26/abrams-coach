@@ -1,5 +1,8 @@
 """Catálogo de ítems de Deadlock normalizado desde deadlock-api."""
-from . import identidad
+try:  # también se corre como script suelto (`python3 coach/iconos.py`)
+    from . import identidad
+except ImportError:  # sin paquete: el script está en coach/
+    import identidad
 import json, os, urllib.request
 
 BASE = "https://api.deadlock-api.com"
