@@ -43,7 +43,7 @@ done
 
 # 2. Archivos de la raíz, uno por uno (un directorio necesita su propia forma).
 RAIZ=(arrancar.sh panel_nativo.py run.py instalar.sh requirements.txt pytest.ini LICENSE
-      NOTICE README.md CHANGELOG.md CALIDAD.md CONTRIBUTING.md POLITICA.md ROADMAP.md
+      NOTICE README.md README.es.md CHANGELOG.md CALIDAD.md CONTRIBUTING.md POLITICA.md ROADMAP.md
       SECURITY.md)
 for f in "${RAIZ[@]}"; do
     [ -e "$PRIV/$f" ] && "${RSYNC[@]}" "$PRIV/$f" "$PUB/$f"
