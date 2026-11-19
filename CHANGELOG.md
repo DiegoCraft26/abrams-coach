@@ -1,5 +1,30 @@
 # Cambios
 
+## v1.0.3 — 2026-11-18 (noche)
+
+**Lo que motivó esto:** el laboratorio dependía de cupos que ya no hacen falta. El corpus
+se llenaba partida a partida por API y el motor estaba en modo CIEGO porque el artefacto
+no coincidía con la base.
+
+### El corpus se reconstruye desde el data lake
+
+`herramientas/lab/desde_lago.py` se attacha al catálogo DuckLake público
+(`https://data.deadlock-api.com/v1/catalog.ducklake`) y lee los parquet **por HTTP con
+DuckDB**: ni descargas, ni 200/h de `demo/query`, ni una petición por partida. Cero cupo.
+
+- 15 horas de datos → **28 016 partidas, 322 846 jugadores, 5 389 319 compras** en 4 min 25 s.
+- Antes: 20 500 / 235 011 / 3 868 185. Compras de Abrams: **429 332** (antes 313 324, +37 %).
+- Validado contra la ingesta por API en una hora: 185.8 vs 188.7 compras por partida;
+  net worth medio 14 476 vs 14 457. El `net_worth` por compra se deriva del muestreo
+  `stats.net_worth` con ASOF, no de `net_worth_at_buy` (diferencia ≈ un intervalo de
+  muestreo, declarada en el módulo).
+
+### El motor deja de estar ciego
+
+Corpus congelado de nuevo (`datos/corpus.json`) y estimador re-corrido con 200 réplicas:
+**385 744 filas · 24 691 partidas · 21 ítems medidos**. `coach/valor.modo()` pasa de
+`CIEGO` a **`MEDIDO`**: el artefacto ya coincide con la base.
+
 ## v1.0.2 — 2026-11-19
 
 **Lo que motivó esto:** una respuesta del operador de la API que cambia una conclusión
