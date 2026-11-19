@@ -104,7 +104,10 @@ def hilo_hud(estado_hud, hud_cfg):
     """
     from .fuentes import hud_rapido
     hz = float(hud_cfg.get("frecuencia_hz") or 0.5)
-    intervalo = max(2.0, 1.0 / max(0.1, hz))
+    # Piso configurable: `--intervalo` (o ABRAMS_INTERVALO) puede espaciar el OCR a 4 s
+    # cuando el equipo va justo de CPU. Sin broadcast, el reloj se retrasa lo mismo.
+    intervalo = max(float(hud_cfg.get("intervalo_min_s") or 2.0),
+                    1.0 / max(0.1, hz))
     cajas = hud_cfg.get("cajas") or None
     color = hud_cfg.get("color_oro")
     while True:
@@ -162,13 +165,18 @@ def arrancar_hud(a, hud_cfg, flags):
     estado_hud = {"t": None, "oro": None, "ts": 0.0}
     if getattr(a, "sin_hud", False) or not (flags or {}).get("hud_ocr", True):
         return estado_hud
-    if getattr(a, "pantalla", False):
-        # El reloj solo cambia una vez por segundo y las almas no necesitan más: con
-        # la captura a 0.15 s se paga un cuadro cada 150 ms para leer a 1 Hz. A 0.4 s
-        # sobra y el juego respira mejor.
-        from coach.fuentes import captura
-        captura.global_().intervalo = 0.4
-    threading.Thread(target=hilo_hud, args=(estado_hud, hud_cfg or {}),
+    # Aquí arrancaba `captura.global_()` con intervalo 0.4 s: un hilo que capturaba los
+    # DOS monitores (4480×1440) 2,3 veces por segundo y **no lo leía nadie** (el HUD usa
+    # `MarcoPerezoso`, una captura por ciclo, y `leer_actual` no tiene llamadas). Medido
+    # el 2026-11-18 en reposo: 39 ms por captura → ~92 ms de CPU/s (9 % de un núcleo) más
+    # 2,3 readbacks del compositor por segundo. Era el coste más caro del coach y no
+    # servía para nada.
+    #
+    # `--intervalo` manda en la cadencia del HUD: antes el OCR tenía un piso duro de 2 s
+    # y la opción no cambiaba nada (el comentario de partida.sh decía lo contrario).
+    hud_cfg = {**(hud_cfg or {}),
+               "intervalo_min_s": max(2.0, float(getattr(a, "intervalo", 1.0) or 1.0))}
+    threading.Thread(target=hilo_hud, args=(estado_hud, hud_cfg),
                      daemon=True).start()
     return estado_hud
 

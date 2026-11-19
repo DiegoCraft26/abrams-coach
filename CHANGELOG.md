@@ -1,5 +1,29 @@
 # Cambios
 
+## v1.0.5 — 2026-11-18 (noche)
+
+**Lo que motivó esto:** una auditoría del coste del coach con la máquina en reposo, después
+de notar el juego «ligeramente más laggy».
+
+### Fuera el hilo de captura que nadie leía
+
+`arrancar_hud` llamaba a `captura.global_()` con intervalo 0.4 s. Ese singleton capturaba
+los **dos monitores** (4480×1440) 2,3 veces por segundo y el cuadro no lo consumía nadie: el
+HUD usa `MarcoPerezoso` y `leer_actual()` no tiene ni una llamada. Medido: 39 ms por captura
+→ **~92 ms de CPU/s (9 % de un núcleo)** más 2,3 readbacks del compositor por segundo. Con
+broadcast el coach entero costaba ~13 ms/s; esto solo costaba siete veces más.
+
+### `--intervalo` / `ABRAMS_INTERVALO` ahora manda de verdad
+
+El OCR tenía un piso duro de 2 s (`max(2.0, 1/hz)`), así que `ABRAMS_INTERVALO=2` no cambiaba
+nada aunque el comentario de `partida.sh` lo prometía. Ahora la cadencia es
+`max(2 s, --intervalo)`: en un equipo justo de CPU se puede llevar a 4 s y el coste sin
+broadcast baja a la mitad (312 ms de CPU por ciclo: 2 tesseract de 103 ms + PIL).
+
+Medido en reposo: tesseract 103 ms de CPU por proceso, `hud_rapido.leer()` 144 ms de reloj /
+312 ms de CPU, captura 39 ms, motor + estabilizador 7,4 ms, registro 4,5 ms, panel 0,15 ms
+de firma. El panel ya estaba óptimo (repintado por firma, un timer cada 700 ms).
+
 ## v1.0.4 — 2026-11-18 (noche, tras la primera partida real)
 
 **Lo que motivó esto:** primera partida jugada con el panel. El panel se queda como está
