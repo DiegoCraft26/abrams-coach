@@ -84,8 +84,11 @@ prep() {
     # --pantalla: sin broadcast (cuota agotada, 504 del CDN o partida sin TV) el
     # coach sigue leyendo reloj, almas e inventario de la pantalla. Sin esto, el
     # panel se quedaba vacío una hora aunque la partida estuviera en curso.
+    # --intervalo: cada cuánto se lee la pantalla cuando no hay broadcast. 1 s es el
+    # defecto; ABRAMS_INTERVALO=2 baja la carga a la mitad si el juego tironea.
     ( cd "$BASE" && exec nohup python3 run.py --fuente vivo --puerto "$PUERTO" \
-        --mi-heroe "${ABRAMS_HEROE:-abrams}" --pantalla >"$LOG_COACH" 2>&1 ) &
+        --mi-heroe "${ABRAMS_HEROE:-abrams}" --pantalla \
+        --intervalo "${ABRAMS_INTERVALO:-1.0}" >"$LOG_COACH" 2>&1 ) &
     echo $! >"$PID_COACH"
     nace_coach=1
     sleep 2

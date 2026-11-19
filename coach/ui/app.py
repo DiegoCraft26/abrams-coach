@@ -26,7 +26,6 @@ from . import preferencias
 from .. import identidad
 from .componentes.cabecera import Header
 from .componentes.compras import PurchaseFeed
-from .componentes.contra import ContraComposicion
 from .componentes.enemigos import EnemyGrid
 from .componentes.equipo import Equipo
 from .componentes.inventario import Inventory
@@ -182,7 +181,6 @@ class Panel(Gtk.ApplicationWindow):
         self.tendencia = TrendChart()
         self.ventas = Ventas()
         self.equipo = Equipo()
-        self.contra = ContraComposicion()
         self.pie = StatusBar()
 
         # el cuerpo va en un scrolled: si el monitor es 800×600 no se pierde nada
@@ -246,7 +244,7 @@ class Panel(Gtk.ApplicationWindow):
         vaciar(self.cuerpo)
         for comp in (self.recomendacion, self.inventario, self.enemigos,
                      self.compras, self.plan, self.tendencia, self.ventas,
-                     self.equipo, self.contra):
+                     self.equipo):
             desacoplar(comp)
 
         principal = self._columna()
@@ -281,11 +279,8 @@ class Panel(Gtk.ApplicationWindow):
             "compras": (self._seccion("COMPRAS", self.compras), ("compras",)),
             "ventas": (self._seccion("VENTAS", self.ventas), ("ventas", "venta")),
             "equipo": (self._seccion("TU EQUIPO", self.equipo), ("aliados",)),
-            # Las claves son las que de verdad publica el motor: `contra_composicion`
-            # (no «contra») e `historial` (no «serie»/«tendencia»). Antes las dos cajas
-            # salían vacías siempre o no salían nunca.
-            "contra": (self._seccion("CONTRA SU COMPOSICIÓN", self.contra),
-                       ("sugerencia_items", "contra_composicion", "visto")),
+            # `historial` (no «serie»/«tendencia»): antes la caja salía vacía siempre
+            # o no salía nunca.
             "tendencia": (self._seccion("TENDENCIA DE ALMAS", self.tendencia),
                           ("historial",)),
         }
@@ -295,7 +290,6 @@ class Panel(Gtk.ApplicationWindow):
         seccion_comp = self._secciones["compras"][0]
         seccion_venta = self._secciones["ventas"][0]
         seccion_equipo = self._secciones["equipo"][0]
-        seccion_contra = self._secciones["contra"][0]
         seccion_tend = self._secciones["tendencia"][0]
 
         if modo == "angosto":
@@ -306,7 +300,6 @@ class Panel(Gtk.ApplicationWindow):
             # Sin el toggle «Más» estas cinco secciones no tenían contenedor y eran
             # inalcanzables en el ancho por defecto. Se apilan; las que no tengan dato
             # se ocultan solas en `_secciones_con_dato`.
-            principal.append(seccion_contra)
             principal.append(seccion_equipo)
             principal.append(seccion_venta)
             principal.append(seccion_comp)
@@ -320,7 +313,6 @@ class Panel(Gtk.ApplicationWindow):
             contexto.append(seccion_enem)
             contexto.append(seccion_comp)
             contexto.append(seccion_venta)
-            contexto.append(seccion_contra)
             contexto.append(seccion_equipo)
             contexto.set_size_request(300, -1)
             contexto.set_hexpand(False)
@@ -332,7 +324,6 @@ class Panel(Gtk.ApplicationWindow):
             principal.append(seccion_inv)
             principal.append(seccion_tend)
             contexto.append(seccion_enem)
-            contexto.append(seccion_contra)
             contexto.append(seccion_equipo)
             lateral.append(seccion_comp)
             lateral.append(seccion_venta)
@@ -469,7 +460,6 @@ class Panel(Gtk.ApplicationWindow):
             self.tendencia.actualizar(datos)
             self.ventas.actualizar(datos)
             self.equipo.actualizar(datos)
-            self.contra.actualizar(datos)
             self.pie.actualizar(datos)
         except Exception as exc:                           # noqa: BLE001
             self.pie.lbl_aviso.set_label(f"error de pintado: {exc}"[:90])

@@ -14,7 +14,7 @@ también como **overlay** en el borde derecho del HUD.
 | Motor v2 (valor medido por compra) | **cerrado como resultado negativo**: con 20 parches y 63 680 compras ningún ítem tiene efecto demostrado ni réplica. El panel funciona con camino y reglas | `docs/MOTOR-V2.md` |
 | Datos por héroe | **4 héroes**: Abrams (guía) + Haze, Rat King y Graves (apertura medida en `lab.db`) | `data/heroes/` |
 | Tarjeta 420×160 (solo certeza) | hecho, commit `0831d22` | `coach/ui/tarjeta.py`, `capturas/tarjeta-*` |
-| Overlay layer-shell (KDE) | funcionando y enganchado al vigilante (`--sin-overlay` lo apaga; respeta `~/.abrams-silencio`) | `herramientas/overlay.py`, `herramientas/vigilar.py` |
+| Overlay layer-shell (KDE) | funciona, pero **apagado por defecto** desde el 2026-11-18: se enciende con `esperar --overlay`. Respeta `~/.abrams-silencio` | `herramientas/overlay.py`, `herramientas/vigilar.py` |
 | Panel web `/panel` | hecho; sin «faltan/te alcanza», chip de riesgo en vivo y, sin partida, la última nota | `coach/ui/web.py` |
 | Panel GTK4 | hecho, pesado (127 MB) | `coach/ui/app.py` |
 | Datos multi-héroe en la PC | hecho (8 300 partidas, 4 héroes) | `~/abrams-coach` en `pc` |

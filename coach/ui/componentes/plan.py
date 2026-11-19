@@ -38,7 +38,8 @@ class BuildPlan(Gtk.Box):
         plan = d.get("plan") or []
         objetivo = d.get("objetivo")
         perfil = d.get("perfil") or {}
-        firma = (tuple((c.get("id"), c.get("estado")) for c in camino),
+        firma = (tuple((c.get("id"), c.get("estado"), c.get("contra"))
+                       for c in camino),
                  tuple(p.get("id") for p in plan),
                  (objetivo or {}).get("id"), (objetivo or {}).get("faltan"),
                  perfil.get("etiqueta"), perfil.get("motivo"))
@@ -131,7 +132,13 @@ class BuildPlan(Gtk.Box):
         etiqueta_estado = {"tienes": "tienes", "ahora": "ahora", "despues": ""}.get(
             estado, "")
         etapa = str(paso.get("etapa") or "")
-        pie = " · ".join(x for x in (etapa, etiqueta_estado) if x)
+        # El counter de composición ya no vive en su propia caja: entra en la tira como
+        # un paso más y aquí solo se marca para saber por qué está (2026-11-18).
+        contra = str(paso.get("contra") or "")
+        pie = " · ".join(x for x in (etapa, "counter" if contra else "", etiqueta_estado)
+                         if x)
+        if contra:
+            caja.set_tooltip_text(contra)
         if pie:
             caja.append(etiqueta(pie, "camino-etapa", 0.5))
         return caja

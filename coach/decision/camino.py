@@ -247,11 +247,55 @@ def _elegir(candidatos, perfil, camino, conoc, cat, cfg=None):
     return mejor
 
 
-def construir(conoc, cat, heroe=None, max_pasos=None, perfil=None, cfg=None):
+def _contra_del_camino(conoc, cat, camino, contra_datos, perfil):
+    """El counter de composición que entra como paso del camino, o None.
+
+    Uno solo por camino (dos counters convierten el build en una lista de reacciones) y
+    solo si la composición lo justifica con fuerza: `puntos` ≥ 2.5, que es el mismo
+    umbral que ya usaba la decisión. Un 6 400 no entra salvo que el rival que lo
+    justifica vaya ganando la partida (`amenaza`), porque ahí no es composición: es
+    frenar al que está arriba.
+    """
+    items = conoc.get("items") or {}
+    tope = perfil.get("tope")
+    mejor, mejor_puntos = None, None
+    for iid, datos in (contra_datos or {}).items():
+        iid = str(iid)
+        datos = datos or {}
+        puntos = float(datos.get("puntos") or 0)
+        if puntos < 2.5 or iid in camino or iid not in items:
+            continue
+        if not (cat.get(iid) or {}).get("comprable", True):
+            continue
+        costo = _costo(conoc, iid)
+        if tope and costo > tope:
+            continue
+        if costo > 3200 and not datos.get("amenaza"):
+            continue
+        if any(iid in _componentes([p]) for p in camino):
+            continue
+        slot = _slot(conoc, cat, iid)
+        if slot and sum(1 for p in camino if _slot(conoc, cat, p) == slot) >= 4:
+            continue
+        if mejor_puntos is None or puntos > mejor_puntos:
+            mejor, mejor_puntos = iid, puntos
+    return mejor
+
+
+def construir(conoc, cat, heroe=None, max_pasos=None, perfil=None, cfg=None,
+              contra_datos=None, t=None, poseidos=()):
     """Camino ordenado de ítems. Se cachea por héroe, conocimiento, perfil y reglas.
 
     `cfg` entra desde `_decidir`: antes se leía CFG_CAMINO del módulo y un A/B por
     configuración no cambiaba el camino, sólo la decisión final.
+
+    `contra_datos` es el dict {item_id: {puntos, razon, amenaza}} del consejo de
+    composición. Entra como **paso** del camino y no como cajón aparte: el panel enseña
+    una sola línea (reportado el 2026-11-18: la caja recomendaba Unstoppable al minuto 0
+    mientras el camino no lo pedía hasta el 25, dos consejos que se contradecían).
+
+    `t` y `poseidos` solo filtran lo que se DEVUELVE para pintar: un 800 de apertura que
+    ya pasó su ventana no es un paso futuro, es ruido en la tira.
     """
     cfg = {**CFG_CAMINO, **(cfg or {})}
     max_pasos = max_pasos or cfg["max_pasos"]
@@ -269,7 +313,10 @@ def construir(conoc, cat, heroe=None, max_pasos=None, perfil=None, cfg=None):
              tuple(sorted(cfg.get("forzar_items") or ())),
              int(cfg.get("aperturas", 3)),
              cfg.get("sin_800_desde_s"),
-             cfg.get("sin_800_hasta_s"))
+             cfg.get("sin_800_hasta_s"),
+             # La composición enemiga cambia el camino: sin ella en la clave, la
+             # segunda partida contra el mismo héroe reusaba el camino sin counter.
+             tuple(sorted(str(x) for x in (contra_datos or ()))))
     if _CACHE["clave"] == clave and _CACHE["caminos"].get(clave):
         return [dict(p) for p in _CACHE["caminos"][clave]]
 
@@ -277,9 +324,20 @@ def construir(conoc, cat, heroe=None, max_pasos=None, perfil=None, cfg=None):
     items = conoc.get("items") or {}
     sig = (conoc.get("flujo") or {}).get("siguiente") or {}
     camino = _base(conoc, heroe, cfg)
+    apertura_n = len(camino)
     contra = {str(x) for x in (perfil.get("contra") or ())}
     forzados = {str(x) for x in (cfg.get("forzar_items") or ()) if str(x) in items}
     etapa = {iid: _etapa(_costo(conoc, iid)) for iid in camino}
+    # Counter de composición como paso del camino: entra justo después de la apertura,
+    # que es donde se paga un 3 200 que frena al rival. Ni en el minuto 2 (no hay oro)
+    # ni al final de la partida (ya no hace falta).
+    marca_contra = {}
+    elegido_contra = _contra_del_camino(conoc, cat, camino, contra_datos, perfil)
+    if elegido_contra:
+        camino.insert(apertura_n, elegido_contra)
+        etapa[elegido_contra] = _etapa(_costo(conoc, elegido_contra))
+        razon = ((contra_datos or {}).get(elegido_contra) or {}).get("razon")
+        marca_contra[elegido_contra] = razon or "counter de su composición"
 
     while len(camino) < max_pasos:
         core = sum(1 for iid in camino
@@ -430,9 +488,21 @@ def construir(conoc, cat, heroe=None, max_pasos=None, perfil=None, cfg=None):
     salida = [{"id": iid, "nombre": (items.get(iid) or {}).get("nombre", iid),
                "costo": _costo(conoc, iid), "slot": _slot(conoc, cat, iid),
                "etapa": etapa.get(iid, _etapa(_costo(conoc, iid))),
+               "contra": marca_contra.get(iid),
                "icono": f"/icono/{iid}"} for iid in camino]
     _CACHE.update({"clave": clave, "caminos": {clave: salida}})
-    return [dict(p) for p in salida]
+    if t is None:
+        return [dict(p) for p in salida]
+    # La tira del panel solo enseña lo que todavía se puede comprar (o lo que ya
+    # llevas). Antes pintaba el camino completo y por eso a los 20 minutos seguía
+    # saliendo Restorative Shot como «cuarto paso»: `_elegible` ya lo habría rechazado
+    # al comprar, así que enseñarlo era prometer algo que el motor no iba a pedir.
+    propios = {str(x) for x in poseidos}
+    aperturas = sum(1 for p in salida
+                    if (p.get("costo") or 0) <= 800 and str(p["id"]) in propios)
+    permitir = aperturas < int(cfg.get("aperturas", 3))
+    return [dict(p) for p in salida
+            if str(p["id"]) in propios or _elegible(conoc, p, t, permitir)]
 
 
 def _rellenar(conoc, cat, camino, cuantos, tope):
@@ -602,9 +672,10 @@ def _objetivo(conoc, cat, camino, poseidos, superados, t, contra=None, perfil=No
     # separadas por 5 s, y a los 30 min no vuelve a pedir un 800.
     aperturas = sum(1 for p in camino
                     if (p.get("costo") or 0) <= 800 and str(p["id"]) in poseidos)
-    # La apertura se cierra por piezas, no por reloj: el corte a los 12 minutos era
-    # otro borde que cambiaba el objetivo sin que cambiara nada en el inventario.
-    permitir_apertura = t < 900 and aperturas < int(cfg.get("aperturas", 3))
+    # La apertura se cierra por piezas, no por reloj: cualquier corte temporal metía un
+    # escalón que cambiaba el ítem entre dos lecturas seguidas (invariante 3 del banco).
+    # El 800 de sobra ya lo bloquea `bloqueo_800` y, más adelante, `_elegible`.
+    permitir_apertura = aperturas < int(cfg.get("aperturas", 3))
     # Ventana sin 800: medido con ΔW sobre 20 500 partidas (R4). El reloj, no el
     # inventario, decide cuándo un 800 deja de rendir por oro.
     # El 800 sólo se permite mientras la apertura sigue abierta (las piezas pactadas)
@@ -741,12 +812,13 @@ def _decidir(estado, conoc, cat, cfg=None, heroe=None, venta=None, contra=None,
     """Estado de la compra: COMPRAR / AHORRAR / VENDER, con ETA y camino."""
     cfg = {**CFG_CAMINO, **(cfg or {})}
     perfil = perfil or {}
-    camino = construir(conoc, cat, heroe, perfil=perfil, cfg=cfg)
     poseidos = {str(i) for i in estado.yo.items}
     superados = _componentes(poseidos)
     # Mismo bloque de 10 s que el resto del motor: dos lecturas del mismo momento
     # tienen que dar exactamente la misma compra.
     t_ef = (int(max(0.0, float(estado.t))) // 10) * 10
+    camino = construir(conoc, cat, heroe, perfil=perfil, cfg=cfg,
+                       contra_datos=contra, t=t_ef, poseidos=poseidos)
     bolsillo = _bolsillo(estado, conoc)
     objetivo = _objetivo(conoc, cat, camino, poseidos, superados, t_ef,
                          contra=contra, perfil=perfil, bolsillo=bolsillo, cfg=cfg)

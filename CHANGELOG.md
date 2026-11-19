@@ -1,5 +1,41 @@
 # Cambios
 
+## v1.0.4 — 2026-11-18 (noche, tras la primera partida real)
+
+**Lo que motivó esto:** primera partida jugada con el panel. El panel se queda como está
+(Diego está acostumbrado a mirarlo en el segundo monitor), el overlay no aportó nada y el
+camino se contradecía con el consejo de composición.
+
+### El overlay es opt-in
+
+`abrams-coach esperar` ya **no** abre la tarjeta encima del HUD: se enciende con
+`esperar --overlay`. En la primera partida real el overlay no aportó nada frente al panel
+del segundo monitor y encima es una superficie más que el compositor tiene que sostener
+sobre el juego. `--sin-overlay` se sigue aceptando (sin efecto) para no romper guiones.
+
+### El counter de composición entra en el camino, no en una caja aparte
+
+La caja «CONTRA SU COMPOSICIÓN» recomendaba Spellbreaker (6 400) al minuto 0 mientras el
+camino no lo pedía hasta el 25: dos consejos que se contradecían en la misma pantalla.
+Ahora el counter se inserta **como un paso** del camino (uno solo, marcado `counter` en la
+tira), justo después de la apertura, y la caja desaparece. Un 6 400 de composición no entra
+salvo que su rival vaya ganando la partida (`amenaza`), que es el caso en el que frenar no
+es composición sino la partida. `contra_composicion` se sigue publicando en el motor para
+el visor.
+
+### La tira no promete pasos que el motor no va a pedir
+
+`construir()` filtra lo que devuelve para pintar: un 800 de apertura sin comprar sale de la
+tira cuando ya pasó su ventana. Era el «Restorative Shot de cuarto ítem» reportado. La
+apertura se cierra **por piezas** y no por reloj: el corte temporal a los 15 min era el que
+dejaba ese hueco y además metía un escalón que cambiaba el ítem entre dos lecturas
+seguidas (invariante 3 del banco).
+
+### `ABRAMS_INTERVALO`
+
+La lectura de pantalla cuando no hay broadcast se puede espaciar sin tocar el código:
+`ABRAMS_INTERVALO=2 abrams-coach jugar`. Medido: captura 39 ms, ciclo de HUD 118 ms.
+
 ## v1.0.3 — 2026-11-18 (noche)
 
 **Lo que motivó esto:** el laboratorio dependía de cupos que ya no hacen falta. El corpus

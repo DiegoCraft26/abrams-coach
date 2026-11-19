@@ -113,32 +113,38 @@ def main():
           (d.get("item") or {}).get("nombre") not in antes,
           str((d.get("item") or {}).get("nombre")))
 
-    # Rama por composición: dos móviles justifican antimovilidad, pero **no** secuestran
-    # el camino cuando el siguiente paso se puede pagar (antes Slowing Bullets salía como
-    # única recomendación media partida; reportado el 2026-11-10).
-    r = m.analizar_dict(_estado(900, 6000, [], enemigos=["haze", "seven", "lash"]))
-    d = r["decision"]
-    check("con el camino pagable se avanza el camino, no el counter",
-          (d.get("item") or {}).get("nombre") == "Bullet Resist Shredder",
-          str((d.get("item") or {}).get("nombre")))
-    contra = [c["nombre"] for c in (r.get("contra_composicion") or [])]
-    check("el counter de composición sigue ofreciéndose aparte",
-          "Slowing Bullets" in contra, str(contra))
-
-    # Ni siquiera cuando el siguiente paso no se paga: el counter de composición no
-    # cambia la compra (era la causa del vaivén con el oro). Solo el del rival que va
-    # por encima puede desviarla.
-    poseidos = ids[:5]
-    bolsillo = 2000
-    almas = sum((m.conoc["items"].get(x) or {}).get("costo") or 0 for x in poseidos) + bolsillo
-    r = m.analizar_dict(_estado(1400, almas, poseidos,
-                                enemigos=["haze", "seven", "lash"]))
-    d = r["decision"]
-    check("el counter de composición no cambia la compra ni ahorrando",
-          (d.get("item") or {}).get("nombre") != "Slowing Bullets",
-          str((d.get("item") or {}).get("nombre")))
-    check("pero sigue en la lista de composición",
-          "Slowing Bullets" in [c["nombre"] for c in (r.get("contra_composicion") or [])])
+    # Rama por composición: dos móviles justifican antimovilidad y, desde el 2026-11-18,
+    # el counter entra **en el camino** (una sola línea en el panel). Antes vivía en una
+    # caja aparte que enseñaba Spellbreaker (6 400) al minuto 0 mientras el camino no lo
+    # pedía hasta el 25: dos consejos que se contradecían.
+    ids_por_nombre = {d.get("nombre"): k for k, d in m.conoc["items"].items()}
+    cid = ids_por_nombre["Slowing Bullets"]
+    ruta_contra = camino.construir(m.conoc, m.cat, h,
+                                   contra_datos={cid: {"puntos": 3.0,
+                                                       "razon": "antimovilidad"}})
+    nombres = [p["nombre"] for p in ruta_contra]
+    check("el counter de composición entra en el camino", "Slowing Bullets" in nombres)
+    pos = nombres.index("Slowing Bullets") if "Slowing Bullets" in nombres else -1
+    check("y entra después de la apertura", pos >= 2, str(pos))
+    check("marcado como counter para la tira",
+          any(p.get("contra") and p["nombre"] == "Slowing Bullets" for p in ruta_contra))
+    check("un solo counter por camino", sum(1 for p in ruta_contra if p.get("contra")) <= 1)
+    check("sin composición el camino no lleva counter",
+          not any(p.get("contra") for p in camino.construir(m.conoc, m.cat, h)))
+    check("un 6 400 de composición no entra sin que el rival vaya arriba",
+          "Spellbreaker" not in [p["nombre"] for p in camino.construir(
+              m.conoc, m.cat, h,
+              contra_datos={ids_por_nombre["Spellbreaker"]: {"puntos": 4.0,
+                                                             "razon": "x"}})])
+    # La tira ya no promete pasos que el motor no va a pedir: a los 25 min un 800 de
+    # apertura sin comprar sale del camino. Era el "Restorative Shot de cuarto ítem".
+    tarde = camino.construir(m.conoc, m.cat, h, t=1500, poseidos=())
+    check("a los 25 min la tira no lleva apertura sin comprar",
+          all((p.get("costo") or 0) > 800 for p in tarde))
+    r_comp = m.analizar_dict(_estado(900, 6000, [], enemigos=["haze", "seven", "lash"]))
+    contra_lista = [c["nombre"] for c in (r_comp.get("contra_composicion") or [])]
+    check("el motor sigue publicando la composición para el visor",
+          "Slowing Bullets" in contra_lista, str(contra_lista))
     check("el bonus de categoría se publica a 4,800",
           r.get("categorias", {}).get("weapon", {}).get("umbral") == 4800
           and "falta" in r.get("categorias", {}).get("weapon", {}),

@@ -51,8 +51,8 @@ Si no hay partidas de la temporada, lo dice y no inventa un plan.
 - **Overlay** (esquina derecha): solo ítem, precio de lista y camino. Sin partida enseña
   **el objetivo de la sesión** (`3 de 5 con ≤6 muertes`). Si no aparece, revisa que no
   exista `~/.abrams-silencio` (apaga todas las ventanas).
-- Arrancar todo: `abrams-coach esperar` deja al vigilante listo y abre coach, panel y overlay
-  cuando detecta Deadlock.
+- Arrancar todo: `abrams-coach esperar` deja al vigilante listo y abre coach y panel cuando
+  detecta Deadlock. El overlay encima del HUD está apagado: `esperar --overlay` lo enciende.
 
 Lo que el panel **no** hace: decir «te alcanza» ni estimar cuánto falta. Las almas llegan con
 retraso; fingir precisión de oro costaba credibilidad.

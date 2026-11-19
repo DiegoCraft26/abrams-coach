@@ -7,8 +7,12 @@ de procesos cada pocos segundos.
 Uso:
     python3 herramientas/vigilar.py            # espera, arranca, cierra y archiva
     python3 herramientas/vigilar.py --sin-panel
+    python3 herramientas/vigilar.py --overlay   # además abre la tarjeta encima del HUD
 
 Al terminar la partida: cierra el coach, archiva en SQLite y escribe el informe.
+
+El overlay NO se abre solo: es opt-in (`--overlay`) desde el 2026-11-18, cuando quedó
+claro que el panel del segundo monitor basta y la tarjeta encima del HUD no aporta.
 """
 import argparse
 import fcntl
@@ -287,8 +291,12 @@ def juego_abierto():
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--sin-panel", action="store_true")
-    ap.add_argument("--sin-overlay", action="store_true",
-                    help="no abre la tarjeta encima del HUD")
+    # El overlay está APAGADO por defecto: Diego lo probó en partida el 2026-11-18 y
+    # no le aportó nada frente al panel del segundo monitor, y encima es una ventana
+    # más que mantener viva. Se enciende a propósito con `abrams-coach esperar --overlay`.
+    ap.add_argument("--overlay", action="store_true",
+                    help="abre la tarjeta encima del HUD (apagada por defecto)")
+    ap.add_argument("--sin-overlay", action="store_true", help=argparse.SUPPRESS)
     ap.add_argument("--intervalo", type=float, default=5.0)
     a = ap.parse_args()
 
@@ -347,8 +355,7 @@ def main():
                         and panel_vivo() is None):
                     abrir_panel(a, procesos, inicios)
                     ultima_apertura[0] = time.time()
-                if (not a.sin_overlay and not en_silencio()
-                        and overlay_vivo() is None):
+                if a.overlay and not en_silencio() and overlay_vivo() is None:
                     abrir_overlay(procesos, inicios)
             except (OSError, subprocess.SubprocessError) as exc:
                 registrar(f"no pude arrancar: {exc}")
@@ -361,8 +368,7 @@ def main():
                 registrar("el panel no está: reabriéndolo")
                 abrir_panel(a, procesos, inicios)
                 ultima_apertura[0] = time.time()
-            if (not a.sin_overlay and not en_silencio()
-                    and overlay_vivo() is None):
+            if a.overlay and not en_silencio() and overlay_vivo() is None:
                 registrar("el overlay no está: reabriéndolo")
                 abrir_overlay(procesos, inicios)
         elif not abierto and dentro:

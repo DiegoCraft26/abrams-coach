@@ -86,9 +86,10 @@ Dos causas del vaivén, las dos cerradas:
    del ranking en vez de «completo».
 2. **El counter de composición competía con el camino.** Slowing Bullets aparecía como
    recomendación principal cada vez que dos enemigos eran móviles, y oscilaba con el oro
-   («ahorra Hunter's Aura» ↔ «compra Slowing Bullets»). Ahora el counter de composición
-   **no cambia la compra**: vive en «CONTRA SU COMPOSICIÓN». Solo el counter del rival
-   `critico` desvía el build.
+   («ahorra Hunter's Aura» ↔ «compra Slowing Bullets»). Desde el 2026-11-18 el counter
+   de composición **entra en el camino como un paso más** (uno solo, marcado `counter`
+   en la tira) y el panel no tiene caja aparte: una sola línea, sin consejos que se
+   contradicen. Un 6 400 de composición no entra salvo que su rival sea `critico`.
 
 ## 5. Remontada
 

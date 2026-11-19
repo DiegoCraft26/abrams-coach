@@ -13,6 +13,7 @@
 #   abrams-coach listo     chequeo previo: cuenta, red, captura, overlay, puerto, disco
 #   abrams-coach ayuda     el ciclo de una sesión, en una pantalla
 #   abrams-coach esperar   arranca solo cuando abres Deadlock y archiva al salir
+#                          (el overlay encima del HUD es opt-in: `esperar --overlay`)
 #   abrams-coach api       prueba la partida en vivo por HTTP (sin visión, sin capturas)
 #   abrams-coach medir     mide la cadena de latencia
 #   abrams-coach linea     rejuega una partida real minuto a minuto (qué recomienda)
@@ -148,7 +149,8 @@ Abrams Coach · el ciclo de una sesión
     abrams-coach plan         qué atacar hoy, con tu referencia de banda y un objetivo
 
   Durante la partida
-    abrams-coach esperar      abre coach, panel y overlay solo cuando abres Deadlock
+    abrams-coach esperar      abre coach y panel solo cuando abres Deadlock
+    abrams-coach esperar --overlay   igual, y además la tarjeta encima del HUD
 
   Al terminar cada partida
     abrams-coach nota         las reglas de la última partida (sale sola al cerrar el juego)
