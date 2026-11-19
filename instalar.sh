@@ -72,33 +72,22 @@ fi
 mkdir -p "$DESTINO"
 ln -sfn "$BASE/herramientas/cli.sh" "$DESTINO/abrams-coach"
 
-# Entradas de menú. El `Exec` apunta al symlink de `~/.local/bin`, no a la carpeta
+# Entrada de menú. El `Exec` apunta al symlink de `~/.local/bin`, no a la carpeta
 # desde donde se corrió el instalador: el 2026-11-18 el menú llamaba a
 # `/tmp/pkgtest/abrams-coach-v0.9-.../cli.sh`, un directorio de pruebas, y abría la
 # versión vieja sin que nada lo dijera.
-menu() {
-  local id="$1" nombre="$2" com="$3" icono="$4" terminal="$5"
-  cat > "$HOME/.local/share/applications/$id.desktop" <<DESKTOP
+mkdir -p "$HOME/.local/share/applications"
+cat > "$HOME/.local/share/applications/abrams-coach.desktop" <<DESKTOP
 [Desktop Entry]
 Type=Application
-Name=$nombre
-Comment=$com
-Exec=$DESTINO/abrams-coach $6
-Icon=$icono
-Terminal=$terminal
-Categories=Game;Utility;
+Name=Abrams Coach
+Comment=Panel de decisiones para Deadlock
+Exec=$DESTINO/abrams-coach jugar
+Icon=applications-games
+Terminal=false
+Categories=Game;
 DESKTOP
-}
-
-mkdir -p "$HOME/.local/share/applications"
-menu abrams-coach            "Abrams Coach"                  "Panel de decisiones para Deadlock" applications-games false "jugar"
-menu abrams-coach-esperar    "Abrams Coach · Espera"         "Abre coach, panel y overlay al abrir Deadlock" applications-games false "esperar"
-menu abrams-coach-demo       "Abrams Coach · Demo"           "Panel con datos de ejemplo, sin juego" applications-games false "demo"
-menu abrams-coach-listo      "Abrams Coach · Chequeo"        "Revisa cuenta, red, captura, overlay y disco" utilities-terminal true "listo"
-menu abrams-coach-nota       "Abrams Coach · Nota"           "Las reglas de la última partida" utilities-terminal true "nota"
-menu abrams-coach-sesion     "Abrams Coach · Sesión"         "Cómo fue la sesión cerrada" utilities-terminal true "sesion"
-
-echo "  menú   6 entradas: Abrams Coach, Espera, Demo, Chequeo, Nota, Sesión"
+echo "  menú   Abrams Coach (atajo global: Ajustes → Atajos → «abrams-coach jugar»)"
 echo "         (atajo global: Ajustes → Atajos → comando «abrams-coach jugar»)"
 
 # Arranque automático opcional: al iniciar sesión queda esperando a Deadlock.
