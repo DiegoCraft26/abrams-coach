@@ -1,323 +1,144 @@
+<div align="center">
+
 # Abrams Coach
 
+**A second-monitor coach for Deadlock.** It reads your HUD from the screen, decides what to buy next, and tells you which rule cost you the game.
+
 [![ci](https://github.com/DiegoCraft26/abrams-coach/actions/workflows/ci.yml/badge.svg)](https://github.com/DiegoCraft26/abrams-coach/actions/workflows/ci.yml)
+[![version](https://img.shields.io/badge/version-1.0.2-blue)](CHANGELOG.md)
+[![license](https://img.shields.io/badge/license-MIT-green)](LICENSE)
+[![python](https://img.shields.io/badge/python-3.11%2B-blue)](https://www.python.org/)
+[![platform](https://img.shields.io/badge/platform-KDE%20Plasma%206%20%C2%B7%20Wayland-informational)](#platforms)
 
-Panel de decisiones para Deadlock. Lee tu partida desde la pantalla (HUD y marcador) y,
-cuando hay broadcast público, desde la API de espectador. Te dice **qué comprar y qué viene
-después**, te avisa cuando pasas de seis muertes, y al terminar te devuelve una nota con las
-reglas que importan. Vive en un segundo monitor y, si quieres, como una tarjeta encima del
-HUD: **no lee memoria, no inyecta y no engancha el proceso del juego**.
+[Español](README.es.md) · [Docs](docs/) · [Roadmap](ROADMAP.md) · [Changelog](CHANGELOG.md)
 
-Estado: **v1.0** (historial en [`CHANGELOG.md`](CHANGELOG.md)). Cuatro héroes con datos
-(Abrams por guía; Haze, Rat King y Graves con la apertura medida en 4 000 partidas). Con
-otro héroe el panel usa el camino de Abrams y lo dice.
+</div>
 
-Lo que se afirma está medido y lo que no, se calla: **dos reglas tienen efecto demostrado**
-(seis muertes o menos y 0,40 de participación, en 3 538 partidas) y el **ranking de ítems
-por «valor medido» está apagado**: con 63 680 compras en 20 parches ningún ítem pasó la
-prueba. Detalle en [`docs/MOTOR-V2.md`](docs/MOTOR-V2.md).
+![Panel in demo mode at 1280x720](capturas/ui-1280x720.png)
 
-![Panel en modo demo a 1280x720](capturas/ui-1280x720.png)
+<sub>Demo mode (`abrams-coach demo`) with sample data. The panel is the same one you get in a match; the header says `en vivo` (live) or `pantalla` (screen) and enemy souls come from the broadcast.</sub>
 
-La captura es del modo demo (`abrams-coach demo`), con datos de ejemplo: el panel es
-el mismo que ves en partida. En partida la cabecera dice «en vivo» o «pantalla» y las
-almas de los rivales llegan del broadcast.
+## What it is
 
-## Medir y probar contra partidas reales
+- **Reads your screen, not the game.** Capture goes through KWin (D-Bus) and OCR. No memory reads, no injection, no hooks, no macros, no overlay inside Deadlock.
+- **Tells you the next step,** not a score: a build path with `BUY / SAVE / SELL`, how much you're short, and an ETA in seconds.
+- **Warns you at six deaths** — one of the two rules with a demonstrated effect on winning.
+- **Writes the post-game note:** which rule you missed, with the population behind it and your own history.
+- **Runs on a second monitor or in your browser** (`http://127.0.0.1:8090/panel`), and you can close it without leaving anything behind.
 
-El motor no se ajusta a ojo: se mide contra las 626 partidas de Abrams de
-`data/replay_cache.json`, sin abrir el juego.
-
-```bash
-abrams-coach linea --match 132662221 --cada 60   # una partida, minuto a minuto
-abrams-coach banco --partidas 120 --cada 30      # todas: métricas, sesgo, outliers
-abrams-coach banco --enemigos atras              # simulando ir perdiendo
-abrams-coach meta                                # meta observado de Abrams
-abrams-coach tesoros                             # combos raros que ganan (API)
-abrams-coach resultado 132662221                 # guarda el win/loss de una partida
-```
-
-`resultado` cierra el bucle: guarda si la partida se ganó, y con eso `winrate_por_primer_item`
-empieza a medir acierto real (no parecido). Si la API falla, el comando lo dice y sigue;
-nunca rompe el archivado.
-
-`tesoros` busca combinaciones que rinden por encima de su estrato de coste y minuto, con
-cohorte de jugadores pobres para no confundir «ganar» con «comprar caro». Metodología e
-hipótesis abiertas en [docs/hipotesis-meta.md](docs/hipotesis-meta.md).
-
-`banco` tarda 38 s con las 626 partidas y saca alcanzabilidad, calibración por tramo,
-cobertura de compras reales, cambios de opinión y qué ítems usa de más o de menos frente
-al meta. Detalle en [docs/banco-partidas.md](docs/banco-partidas.md).
-
-## Plataforma
-
-| Sistema | Estado |
-|---|---|
-| KDE Plasma 6 + Wayland | **probado** (es el entorno de desarrollo) |
-| KDE Plasma + X11 | sin probar; la captura usa KWin por D-Bus, debería funcionar |
-| GNOME / otro escritorio | **no funciona**: no hay KWin ni `org.kde.KWin.ScreenShot2` |
-| Windows / macOS | no |
-
-La captura va por `org.kde.KWin.ScreenShot2` (unos 40 ms por cuadro, sin tirones) y
-`spectacle` como respaldo. Por eso el requisito de KDE es real, no una preferencia.
-
-## Requisitos
-
-Python 3.11 o más, GTK 4 con PyGObject, Pillow, NumPy, PyYAML, `tesseract` y `spectacle`.
-
-**Arch / CachyOS / Manjaro** (probado):
-
-```bash
-sudo pacman -S --needed python-gobject gtk4 tesseract spectacle \
-                       python-pillow python-numpy python-yaml
-```
-
-**Debian / Ubuntu**:
-
-```bash
-sudo apt install python3-gi gir1.2-gtk-4.0 libgtk-4-1 tesseract-ocr spectacle \
-                 python3-pil python3-numpy python3-yaml
-```
-
-**Fedora** (nombres equivalentes, sin probar):
-
-```bash
-sudo dnf install python3-gobject gtk4 tesseract spectacle \
-                 python3-pillow python3-numpy python3-pyyaml
-```
-
-## Instalación
-
-**Con git** (para seguir el desarrollo):
+## Quick start
 
 ```bash
 git clone https://github.com/DiegoCraft26/abrams-coach.git
 cd abrams-coach
-./instalar.sh
-abrams-coach demo
+./instalar.sh          # checks dependencies, no sudo, no package installs
+abrams-coach demo      # panel with sample data, without opening the game
+abrams-coach listo     # pre-flight: account, network, capture, overlay, disk
+abrams-coach jugar     # opens the coach and the panel for a real match
 ```
 
-**Con el paquete** (3.3 MB, sin git, sin datos de partidas ni iconos):
+`abrams-coach ayuda` prints the whole session cycle in one screen: `listo` → `plan` → `jugar` → `nota` → `sesion`.
 
-```bash
-tar xzf abrams-coach-v0.9-<commit>.tar.gz
-cd abrams-coach-v0.9-<commit>
-./instalar.sh
-abrams-coach demo
-```
+## What the panel shows
 
-El tarball lo construye y lo prueba `herramientas/empaquetar.sh`: lo desempaqueta en un
-directorio temporal, arranca el coach en modo simulado y falla si `/api/estado` no responde
-con camino y recomendaciones. Un paquete que no arranca no se publica.
-
-`instalar.sh` comprueba las dependencias, dice cuál falta y deja `abrams-coach` en
-`~/.local/bin`. No instala paquetes ni usa `sudo`.
-
-El arte del juego no viene en el repo: la primera vez que arranca, la app baja unos
-9 MB de iconos del bucket público de `deadlock-api` a `data/iconos/` (ignorado por git).
-
-### La cuenta es opcional
-
-Para el modo en vivo hay dos caminos:
-
-- **Sin cuenta**: la app lee `MATCH: …` del HUD y engancha el broadcast de esa partida.
-  Funciona en cualquier ranked, práctica o bots, sin pedirte el SteamID. Con
-  `--mi-heroe abrams` intenta saber cuál jugador eres; si hay dos Abrams en la partida,
-  no adivina y te lo dice.
-- **Con cuenta**: `abrams-coach jugar` la lee de `.cuenta` (ignorado por git), de
-  `ABRAMS_CUENTA` o de `--cuenta`. Así sabe sin ambigüedad qué columna es la tuya y
-  puede avisar si tu cuenta no está en la partida.
-
-Nunca hay una cuenta de fábrica en el código.
-
-## Uso
-
-```bash
-abrams-coach ayuda      # el ciclo de una sesión, en una pantalla
-abrams-coach listo      # chequeo previo: cuenta, red, captura, overlay, puerto, disco
-abrams-coach demo       # panel con datos de ejemplo, sin abrir el juego
-abrams-coach jugar      # prepara la máquina, abre coach y panel
-abrams-coach esperar    # arranca solo cuando abres Deadlock y archiva al salir
-abrams-coach plan       # antes de jugar: últimas ranked, metas y objetivo de la sesión
-abrams-coach nota       # las reglas de la última partida
-abrams-coach sesion     # al cerrar: qué regla se te fue en la sesión
-abrams-coach estado     # qué corre, cuánta RAM usa, qué leyó
-abrams-coach archivar   # guarda la sesión en la base local
-abrams-coach informe    # resumen de la última partida
-abrams-coach medir      # mide la cadena de latencia
-abrams-coach parar      # cierra todo
-```
-
-Sin instalador:
-
-```bash
-./arrancar.sh simulado && python3 panel_nativo.py
-python3 run.py --fuente vivo                    # HUD, sin cuenta
-python3 run.py --fuente vivo --cuenta TU_ID     # broadcast identificado
-```
-
-Atajos del panel: `1` compra, `2` enemigos, `3` compras, `?` ayuda, `Esc` cerrar. La
-ventana recuerda tamaño y posición.
-
-**Panel web** (sin instalar nada, en cualquier navegador):
-
-```bash
-python3 run.py --fuente vivo --puerto 8090
-# y abre http://127.0.0.1:8090/panel  (o http://<tu-ip>:8090/panel desde otro equipo)
-```
-
-Mismo dato que la app nativa: estado de la economía, compra recomendada con sus razones,
-plan, composición y el histórico de la composición («esta comp ya la jugaste, así te
-fue») con su muestra. No carga nada de fuera: si se cae el coach, lo dice. Ver
-`capturas/panel-web.png`.
-
-### Abrirla sin pensar
-
-- `abrams-coach abrir` abre el coach y el panel ahora, y lo coloca en el monitor
-  secundario. La app vive mientras su ventana viva: al cerrar el panel se apaga el
-  coach (nada de unidad de systemd activa toda la tarde). `ABRAMS_QUEDAR=1` lo deja
-  corriendo, como antes.
-- `abrams-coach esperar` se queda en segundo plano y hace lo mismo **cuando abres
-  Deadlock**; al salir archiva la partida. `instalar.sh` puede dejarlo al iniciar sesión.
-- Atajo global: Ajustes → Atajos → añadir comando → `abrams-coach abrir` (por ejemplo
-  `Meta+J`). Funciona con el juego en primer plano porque lo captura KWin, no el juego.
-- No hay botón *dentro* del juego: sería un overlay y el proyecto no dibuja ni inyecta
-  nada. El atajo y el arranque automático hacen lo mismo sin tocar Deadlock.
-
-#### Que no aparezca nada (modo silencio)
-
-```bash
-touch ~/.abrams-silencio     # el vigilante espera, pero no abre el panel
-rm ~/.abrams-silencio        # vuelve a abrirlo solo
-```
-
-El vigilante también trae dos defensas que salieron de un incidente real (2026-11-09:
-quedó uno viejo corriendo junto al servicio de systemd y cada uno abría su panel):
-
-- **un solo vigilante**: bloqueo exclusivo en `/tmp/abrams-vigilar.lock`; el segundo
-  proceso sale en vez de duplicar ventanas;
-- **freno de reapertura**: si el panel muere solo, no se reabre más de una vez cada
-  5 minutos;
-- la ventana **no pide foco** (`set_visible`, no `present`) y el script de KWin la deja
-  debajo y sin entrada en la barra de tareas.
-
-## Qué te dice
-
-| Sección | Contenido |
+| Section | Content |
 |---|---|
-| Cabecera | reloj, oro sin gastar, patrimonio, ventaja de almas y estado táctico |
-| Compra | el siguiente paso del build, con estado **COMPRAR / AHORRAR / VENDER**, cuánto falta y ETA |
-| Inventario | tus 12 slots y el rendimiento de cada ítem frente a lo esperado |
-| Enemigos | almas y KDA de los cinco rivales |
-| Plan | las compras que suelen seguir, del grafo de partidas públicas |
-| Contra su composición | ítems que la amenaza enemiga justifica, con su fuente |
-| Ventas | cuándo vender rinde más que seguir ahorrando |
-| Pie | latencia real de cada eslabón |
+| Header | clock, unspent gold, net worth, soul lead, tactical state |
+| Purchase | next step of the build with `BUY / SAVE / SELL`, how much is missing, ETA |
+| Inventory | your 12 slots and each item's performance against what was expected |
+| Enemies | souls and KDA of the five opponents |
+| Plan | the purchases that usually follow, from the public match graph |
+| Against their comp | items their threat level justifies, with its source |
+| Sales | when selling beats saving |
+| Footer | measured latency of every link in the chain |
 
-## Cómo funciona
+## How it works
 
-1. **Captura** la pantalla con KWin (D-Bus) y reutiliza el último cuadro entre lectores.
-2. **Lee** el reloj, el oro y el id de partida del HUD con OCR; el marcador, con
-   plantillas del propio juego. Nada de memoria del proceso.
-3. **Engancha** el broadcast público por `deadlock-api` usando el id del HUD o tu cuenta.
-4. **Decide** siguiendo un camino de build: tres aperturas de 800, tres piezas de core
-   (1,600–3,200) y los spikes. Si no alcanza, no te empuja a otro 800: te dice cuánto
-   falta y en cuántos segundos. Los componentes del objetivo se compran siempre.
-5. **Publica** el estado en `http://127.0.0.1:8090`; lo consumen el panel nativo y el
-   panel web (`/panel`).
-6. **Consulta** lo que ya sabe: tus 626 partidas para el camino y un archivo local de
-   partidas públicas para las composiciones («esta comp ya la jugaste, así te fue»).
+1. **Capture** the screen through KWin and reuse the last frame across readers.
+2. **Read** clock, gold and match id from the HUD with OCR; the scoreboard, with templates taken from the game itself.
+3. **Attach** to the public broadcast through `deadlock-api`, using the id from the HUD or your account.
+4. **Decide** along a build path: three 800 openings, three core pieces (1,600–3,200), then the spikes.
+5. **Publish** state on `127.0.0.1:8090`; the native panel and the web panel consume it.
+6. **Look up** what it already knows: your own matches for the path, a local archive of public matches for compositions.
 
-Detalle técnico: [`docs/ARQUITECTURA.md`](docs/ARQUITECTURA.md).
-Qué hace y qué no hace con el juego: [`POLITICA.md`](POLITICA.md).
-Qué viene: [`ROADMAP.md`](ROADMAP.md).
+Details: [docs/ARQUITECTURA.md](docs/ARQUITECTURA.md) · What it does and doesn't do with the game: [POLITICA.md](POLITICA.md)
 
-### El build como camino
+## Measured, not assumed
 
-El motor ya no puntúa ítems sueltos. Arma una secuencia con el grafo de compras reales
-(apertura → core → spike) y en cada lectura te dice el siguiente paso:
+The distinguishing feature of this project is what it **refuses** to claim. Two rules have a demonstrated effect; everything else is reported as what it is.
 
-- **COMPRAR** si lo pagas (o si pagas un componente suyo, que se absorbe al subir).
-- **AHORRAR** si no alcanza: `faltan N almas`, `ETA` en segundos, y si es un ítem caro
-  el modo es `rush`; si el ETA es largo, `farm`.
-- **VENDER** si el slot está lleno: dice **qué ítem** y de qué slot, no un icono suelto.
-- **Rama por composición**: con dos o más móviles entra antimovilidad, con control entra
-  anticontrol, con burst spirit entra antispirit, pero solo si el matchup de 1.9 M de
-  partidas lo respalda. Si los datos no apoyan el counter, no se inventa.
-- El inventario muestra los huecos por categoría (`arma 3/4 · vitalidad 4/4 · espíritu 2/4`).
-- El bonus de categoría (4,800 almas) se vigila y se avisa cuando falta poco, pero no
-  se persigue a ciegas: forzarlo convierte cualquier build en uno genérico.
+| Claim | Evidence | Status |
+|---|---|---|
+| Six deaths or fewer wins more | 76.9% vs 36.2% in 3,538 matches | **used** |
+| 0.40 participation or more wins more | 70.9% vs 12.8% in 3,538 matches | **used** |
+| The 3,200 item is a target | 55.1% vs 53.0% (p=0.20) in 3,935 player-matches | reported, not recommended |
+| Item ranking by "measured value" | 63,680 purchases across 20 patches, no item replicated | **off** — negative result |
+| Enemy souls from the broadcast | arrives 20–25 s late, shown with its age | displayed, never hidden |
 
-Medido sobre 626 partidas reales: **1.39 ítems de 800** de media en los primeros 10
-minutos (máximo 3), 1.8 ms por decisión. Antes eran 4–5.
+Write-ups: [docs/MOTOR-V2.md](docs/MOTOR-V2.md) · [docs/VALIDACION.md](docs/VALIDACION.md)
 
-## Qué añadió la v2 (noviembre 2026)
+## deadlock-api usage
 
-Todo esto se puede comprobar sin abrir el juego con `python3 herramientas/verificar_v2.py`.
+The coach is a well-behaved client of the public [Deadlock API](https://deadlock-api.com). What it asks for, and how often:
 
-| Pieza | Qué hace |
+| Call | Budget | How the coach stays inside it |
+|---|---|---|
+| `GET /v1/matches/{id}/live/url` (spectate **your** match) | 6/hour per IP | one call per match, URL cached 1 h, local token bucket that stops *before* spending |
+| `GET /v1/matches/live/urls` (broadcast listing) | unlimited | refreshed every 30 s; matches listed there resolve **for free** |
+| `GET /v1/analytics/*` | 200/minute per IP | 24 h disk cache, 120 requests/hour self-imposed ceiling |
+| `GET /v1/assets/*` | free | cached for 24 h |
+| `POST /v1/matches/demo/query` | 200/hour per IP | own hourly bucket of 170, polls every 5–15 s |
+
+Every request carries one identifying `User-Agent` with a contact link, so their operators can tell our traffic apart from noise.
+
+## Platforms
+
+| System | Status |
 |---|---|
-| **Captura por caja** | KWin entrega solo la caja del HUD (1–3 ms) en vez de la pantalla entera (415 ms con `spectacle`). Sin autostart: se abre con `arrancar.sh`. |
-| **Estado del juego** | Menú, partida y cierre se leen del `console.log` con un `stat`: `dl_hideout` es menú, `Source2Shutdown` es juego cerrado. El panel no afirma una partida que ya no existe. |
-| **Histórico de composiciones** | `data/historico.json.gz` con 151 653 partidas públicas: cuántas veces viste esa comp y cómo acabó, y qué ítems aparecen en las que ganan contra esos rivales. |
-| **Camino por héroe** | `herramientas/camino_heroe.py` deriva apertura y tramos de cualquier héroe desde sus timelines. Con otro héroe el panel usa su camino y avisa de que la economía sigue siendo la de Abrams. |
-| **Archivo local** | `herramientas/archivo_abrams.py` baja partidas por el endpoint en bloque (1000 por petición, ~1.5 s). 166 653 partidas en 21 MB. |
-| **Panel web** | `/panel`: mismo dato, sin instalar nada y sin dependencias externas. Ver `capturas/panel-web.png`. |
-| **Medición** | `herramientas/medir_impacto.py` mide GPU, CPU y RAM sin overlays; la CPU por diferencia de ticks en `/proc`, porque el `%CPU` de `ps` promedia desde el arranque. |
+| KDE Plasma 6 + Wayland | **tested** (development environment) |
+| KDE Plasma + X11 | untested; capture uses KWin over D-Bus and should work |
+| GNOME / other desktops | **does not work**: no KWin / `org.kde.KWin.ScreenShot2` |
+| Windows | overlay and capture run under Wine (10 checks, GDI capture at 27.7 ms); no native support yet |
 
-Por qué la v2 es así, con números: [`docs/meta-triangulado-2026-11.md`](docs/meta-triangulado-2026-11.md)
-y `RELEVO.md` (local, fuera del repo público).
+The KDE requirement is real: capture goes through `org.kde.KWin.ScreenShot2` (~40 ms per frame, no stutter), with `spectacle` as fallback.
 
-## Privacidad
+## Requirements
 
-- Solo lee píxeles de tu pantalla. No abre el proceso del juego, no lee memoria, no
-  inyecta, no usa overlays ni macros.
-- Las capturas y la base de partidas se quedan en tu máquina (`salida/`, `datos/`).
-- Al API pública solo se le pide el id de partida o tu SteamID64; no se sube nada.
-- La app no tiene telemetría.
+Python 3.11+, GTK 4 with PyGObject, Pillow, NumPy, PyYAML, `tesseract` and `spectacle`.
 
-## Límites conocidos
+```bash
+# Arch / CachyOS / Manjaro (tested)
+sudo pacman -S --needed python-gobject gtk4 tesseract spectacle python-pillow python-numpy python-yaml
 
-- **El contador de almas del HUD no se publica**: `tesseract` no acierta con la fuente
-  del juego (0 de 12 configuraciones) y falta el banco de plantillas propio. El reloj y
-  el id sí se leen.
-- El broadcast llega 20–25 s tarde. Se muestra con su edad; no se disimula.
-- **La puntuación de economía es solo de Abrams**: el camino, los contras y el ranking de
-  ítems salen de sus 626 partidas. Para otro héroe el panel da su apertura y su camino
-  observado (si hay timelines descargados) y lo dice en la cabecera.
-- Solo español.
-- La calibración del HUD depende de la resolución y del parche; hay un calibrador.
-- El marcador solo se lee con Tab abierto.
-- Probar la lectura real necesita tus propias capturas en `verdad/`; sin ellas, esas
-  pruebas se saltan y lo dicen.
+# Debian / Ubuntu
+sudo apt install python3-gi gir1.2-gtk-4.0 libgtk-4-1 tesseract-ocr spectacle python3-pil python3-numpy python3-yaml
+```
 
-## Desarrollo
+Game art is not distributed: on first run the app fetches ~9 MB of icons from the public `deadlock-api` bucket into `data/iconos/` (git-ignored). Code is MIT; Deadlock is a Valve trademark and this project is not affiliated with or endorsed by Valve.
+
+## Docs
+
+| | |
+|---|---|
+| [docs/GUIA.md](docs/GUIA.md) | user guide |
+| [docs/ARQUITECTURA.md](docs/ARQUITECTURA.md) | how the pieces fit |
+| [docs/USO-DIARIO.md](docs/USO-DIARIO.md) | the daily cycle |
+| [docs/DATOS-DEL-JUEGO.md](docs/DATOS-DEL-JUEGO.md) | what the game exposes and what it doesn't |
+| [docs/WINDOWS.md](docs/WINDOWS.md) | the Wine path |
+| [ROADMAP.md](ROADMAP.md) | what's next, and what is explicitly not |
+| [CONTRIBUTING.md](CONTRIBUTING.md) | how to run the tests |
+
+## Development
 
 ```bash
 python3 -m compileall -q coach herramientas tests run.py panel_nativo.py
 python3 -m pytest -q
-python3 coach/iconos.py                                  # baja el arte (una vez)
-python3 herramientas/evaluar_motor.py --partidas 60      # A/B del motor
+python3 coach/iconos.py                                   # fetch game art (once)
+python3 herramientas/validar_camino.py --cache data/replay_muestra.json --partidas 60
 ```
 
-La CI corre en Ubuntu 24.04 con GTK bajo Xvfb, en Python 3.12 y 3.13: descarga los
-iconos y ejecuta la suite completa, incluida la puerta de pintado de la UI.
+CI runs on Ubuntu 24.04 with GTK under Xvfb, on Python 3.12 and 3.13: it downloads the icons, runs the full suite and the paint gate for the UI. Locally: 510+ tests, and the tests that need local data say so instead of failing silently.
 
-### ¿La app abierta es la última?
+## Privacy
 
-El panel no se recarga en caliente: si editas código con la app abierta, sigue
-mostrando lo viejo sin avisar. Se comprueba en un comando:
-
-```bash
-python3 herramientas/version.py    # 0 si está al día, 2 si quedó atrás
-curl -s http://127.0.0.1:8090/api/version   # con la app corriendo
-```
-
-Regla: **si tocas código, reinicia antes de creerle al panel**. Detalle, veredictos y
-limitaciones en [`docs/VERSION.md`](docs/VERSION.md).
-
-## Assets y licencia
-
-Código bajo licencia MIT ([`LICENSE`](LICENSE)). El arte de Deadlock es de Valve y **no**
-se distribuye: ver [`NOTICE`](NOTICE). Deadlock es una marca de Valve Corporation; este
-proyecto no está afiliado ni respaldado por Valve.
+Pixels only. No process memory, no injection, no macros, no telemetry. Captures and the match database stay on your machine (`salida/`, `datos/`). The API only ever receives a match id or your SteamID64.
