@@ -41,7 +41,7 @@ URL_TTL_S = 3600.0
 # `/v1/matches/live/urls` es gratis (100 req/s) y trae el enlace de las partidas que ya
 # están en el escaparate. Se mira ANTES de espectar: lo listado se abre sin gastar nada
 # de la cuota de 6/hora. Medido el 2026-11-18: 39 partidas listadas, 23 con URL.
-LISTA_TTL_S = 120.0
+LISTA_TTL_S = 30.0
 # Con la ventana ya por encima del límite (12 peticiones para un tope de 6), esperar los
 # 90 s del `next_request_in` no sirve: al expirar siguen 6 encima. Se deja drenar.
 PAUSA_SATURADA_S = 1800.0
@@ -226,8 +226,13 @@ def _apuntar(evento, match_id=None, detalle="", rechazo=False, via="api", **camp
 def urls_en_vivo(forzar=False):
     """{match_id: url} de todas las partidas con TV disponible ahora. Gratis, 100 req/s.
 
-    Se cachea `LISTA_TTL_S`: la lista cambia cada pocos minutos y pedirla en cada
-    resolución era tirar peticiones a cambio de nada.
+    Confirmado por el operador de la API (2026-11-18): este listado se puede pedir
+    «however often you want», y **la llamada por partida de los ids que aparecen aquí
+    tampoco cuenta** contra el límite de 6/hora, porque su URL ya está resuelta.
+
+    Por eso el TTL es corto: refrescar es gratis y lo que se gana es ver antes una
+    partida que acaba de empezar a emitir. La caché de la URL de cada partida sigue
+    siendo de una hora (`URL_TTL_S`), que es lo que la propia API cachea.
     """
     ahora = time.time()
     with _lock:

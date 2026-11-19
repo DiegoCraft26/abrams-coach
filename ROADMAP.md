@@ -21,6 +21,14 @@ mida no se marca como hecho.
 
 ## Lo que queda después de la v1.0
 
+- **Vivo con broadcast: gratis, y ahora se sabe por escrito.** El operador confirmó el
+  2026-11-18 que `/v1/matches/live/urls` se puede pedir «however often you want» y que la
+  llamada por partida de los ids que aparecen en el listado **tampoco cuenta** contra las
+  6/hora. Lo que no escala es espectar una partida que **no** está listada (tu ranked), y
+  eso no lo arregla ninguna key. El coach ya consultaba el listado primero y no pedía ficha
+  cuando la URL venía de ahí; `LISTA_TTL_S` bajó de 120 s a 30 s porque refrescarla es
+  gratis. Fijado en `tests/test_cuota_listado.py`.
+
 - **Demos**: el 429 del 2026-11-18 **no era de la API, era nuestro**. La respuesta dice
   `{"type":"IP","quota":{"limit":200,"period":3600},"requests":202,"remaining":0}`: el
   techo documentado de `/demo/query` es 200 peticiones por hora **por IP**, y cada partida

@@ -1,5 +1,23 @@
 # Cambios
 
+## v1.0.2 — 2026-11-19
+
+**Lo que motivó esto:** una respuesta del operador de la API que cambia una conclusión
+que teníamos escrita al revés.
+
+> «/v1/matches/live/urls you can call this however often you want 🙂 and for all match ids
+> on there you can also make the per match call without it counting towards the rate limit»
+
+Es decir: **el vivo con broadcast es gratis e ilimitado**. Lo que no escala es espectar una
+partida que no está en el listado —tu propio ranked—, y eso no lo arregla una API key.
+
+- `LISTA_TTL_S` 120 s → 30 s: refrescar el listado es gratis y lo que se gana es ver antes
+  una partida que acaba de empezar a emitir.
+- `tests/test_cuota_listado.py`: cuatro invariantes. Con URL del listado, `Escucha` no pide
+  ficha (`especta=False`); sin ella, sí (`match_id=` en la consulta).
+- El código no necesitó cambios de lógica: ya resolvía el escaparate antes de gastar. Faltaba
+  saber que era cierto y dejarlo escrito.
+
 ## v1.0.1 — 2026-11-18 (noche, tras la 1.0)
 
 **Lo que motivó esto:** cuatro cosas que no se veían jugando pero sí mirando el repo
