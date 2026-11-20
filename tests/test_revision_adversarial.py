@@ -65,7 +65,10 @@ def test_las_claves_de_seccion_existen_en_el_payload():
     fuente = open(os.path.join(RAIZ, "coach", "ui", "app.py"), encoding="utf-8").read()
     bloque = fuente.split("self._secciones = {")[1].split("\n        }")[0]
     assert '("historial",)' in bloque
-    assert '"contra_composicion"' in bloque
+    # La caja «CONTRA SU COMPOSICIÓN» se eliminó en v1.0.4 (el counter entró al camino y
+    # `contra.py` se borró). Esta prueba pedía lo contrario y llevaba desde entonces en
+    # rojo: fijaba una sección que ya no existe.
+    assert '"contra_composicion"' not in bloque
     # las claves inventadas del pasado ya no deciden visibilidad
     assert '("tendencia",' not in bloque and '("serie",' not in bloque
     assert '("sugerencia_items", "amenazas", "contra")' not in bloque
